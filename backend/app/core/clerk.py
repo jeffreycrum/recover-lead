@@ -1,5 +1,5 @@
 import structlog
-from clerk_backend_api import Clerk
+from clerk_backend_api import AuthenticateRequestOptions, Clerk
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -11,6 +11,7 @@ clerk_client = Clerk(bearer_auth=settings.clerk_secret_key) if settings.clerk_se
 
 
 async def get_clerk_user_id(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> str:
     """Verify Clerk JWT and return the user's clerk_id."""
@@ -21,18 +22,22 @@ async def get_clerk_user_id(
         )
 
     try:
-        token = credentials.credentials
-        # Verify the session token with Clerk
-        claims = clerk_client.sessions.verify_session(
-            session_id="",  # Not needed for JWT verification
-            body={"token": token},
+        # Build a request-like object for the SDK
+        request_state = clerk_client.authenticate_request(
+            request,
+            AuthenticateRequestOptions(
+                authorized_parties=settings.cors_origin_list,
+            ),
         )
-        if not claims or not claims.id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={"code": "INVALID_TOKEN", "message": "Invalid or expired token"},
-            )
-        return claims.sub  # clerk user id
+
+        if request_state.is_signed_in:
+            return request_state.payload["sub"]  # clerk user id
+
+        logger.warning("clerk_auth_not_signed_in", reason=request_state.reason)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "INVALID_TOKEN", "message": "Invalid or expired token"},
+        )
     except HTTPException:
         raise
     except Exception as e:
