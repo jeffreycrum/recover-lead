@@ -67,6 +67,10 @@ class PdfScraper(BaseScraper):
             # Parse surplus amount
             surplus_amount = self._parse_amount(surplus_str)
 
+            # Skip rows with zero surplus (likely headers or empty rows)
+            if surplus_amount <= 0:
+                return None
+
             return RawLead(
                 case_number=case_number,
                 owner_name=owner_name,
