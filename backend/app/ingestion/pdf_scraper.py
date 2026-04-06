@@ -46,28 +46,37 @@ class PdfScraper(BaseScraper):
         return leads
 
     def _parse_row(self, row: list[str | None]) -> RawLead | None:
-        """Parse a single table row into a RawLead. Override per county."""
+        """Parse a single table row into a RawLead using config-based column mapping."""
         if not row or len(row) < 3:
             return None
 
-        # Filter empty rows
         if all(not cell or not cell.strip() for cell in row):
             return None
 
-        # Default column mapping — override in county-specific subclasses
+        # Column mapping from config, with defaults
+        col_map = self.config.get("columns", {})
+        case_col = col_map.get("case_number", 0)
+        owner_col = col_map.get("owner_name", 1)
+        surplus_col = col_map.get("surplus_amount", 2)
+        address_col = col_map.get("property_address", 3)
+        skip_rows_containing = self.config.get("skip_rows_containing", [])
+
         try:
-            case_number = (row[0] or "").strip()
+            case_number = (row[case_col] or "").strip() if case_col < len(row) else ""
             if not case_number:
                 return None
 
-            owner_name = (row[1] or "").strip() if len(row) > 1 else None
-            surplus_str = (row[2] or "").strip() if len(row) > 2 else "0"
-            property_address = (row[3] or "").strip() if len(row) > 3 else None
+            # Skip header/metadata rows
+            for skip_text in skip_rows_containing:
+                if skip_text.lower() in case_number.lower():
+                    return None
 
-            # Parse surplus amount
+            owner_name = (row[owner_col] or "").strip() if owner_col < len(row) else None
+            surplus_str = (row[surplus_col] or "").strip() if surplus_col < len(row) else "0"
+            property_address = (row[address_col] or "").strip() if address_col is not None and address_col < len(row) else None
+
             surplus_amount = self._parse_amount(surplus_str)
 
-            # Skip rows with zero surplus (likely headers or empty rows)
             if surplus_amount <= 0:
                 return None
 

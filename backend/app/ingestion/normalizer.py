@@ -79,14 +79,14 @@ async def normalize_and_store(
                 source_hash=source_hash,
                 raw_data=raw.raw_data,
             )
-            session.add(lead)
+            # Use savepoint to isolate each insert — failed inserts don't kill the transaction
+            async with session.begin_nested():
+                session.add(lead)
             inserted += 1
 
         except Exception as e:
-            logger.error("lead_normalize_failed", case_number=raw.case_number, error=str(e))
+            logger.debug("lead_normalize_failed", case_number=raw.case_number, error=str(e))
             errors += 1
-
-    await session.flush()
 
     result = {"inserted": inserted, "skipped": skipped, "errors": errors, "total": len(raw_leads)}
     logger.info("normalize_complete", county_id=str(county_id), **result)

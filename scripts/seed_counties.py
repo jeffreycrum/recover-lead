@@ -25,7 +25,11 @@ ACTIVE_COUNTIES = [
         "scraper_class": "PdfScraper",
         "scrape_schedule": "0 2 * * *",
         "is_active": True,
-        "config": {"notes": "30-page PDF, updated regularly. Main page: https://www.clerk.org/tax-deeds.aspx"},
+        "config": {
+            "notes": "30-page PDF, updated regularly. Main page: https://www.clerk.org/tax-deeds.aspx",
+            "columns": {"case_number": 2, "owner_name": 1, "surplus_amount": 3, "property_address": None},
+            "skip_rows_containing": ["CLERK OF THE CIRCUIT", "TAX DEED SURPLUS", "Fee calculator", "Deposit amount", "Date Surplus"],
+        },
     },
     {
         "name": "Hillsborough",
