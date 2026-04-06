@@ -110,7 +110,7 @@ Ordered by phase and severity. Check off tasks as completed.
 - [x] React Query provider
 - [x] API client: fetch wrapper with Clerk token interceptor
 - [x] App shell: sidebar (collapsible) + header + breadcrumbs
-- [ ] Onboarding wizard: county select → polling progress → top 10 leads → generate letter → edit → download
+- [x] Onboarding wizard: county select → polling progress → top 10 leads → generate letter → edit → download
 - [x] Lead browse page: data table with server-side pagination, filters (county, surplus range, sale date)
 - [x] My Leads page: claimed leads table with status, quality score filters
 - [x] Lead detail drawer: property info, owner, surplus amount, quality score, letters, activities
@@ -118,13 +118,13 @@ Ordered by phase and severity. Check off tasks as completed.
 - [x] Letter preview: view generated letter content
 - [x] Letter inline editor: edit content before approving
 - [x] Letter approve + PDF download flow
-- [ ] Letter batch dialog: select multiple leads, generate batch
+- [x] Letter batch dialog: select multiple leads, generate batch
 - [x] Billing: plan selector with tier comparison
 - [x] Billing: subscription status + credit usage display
 - [x] Billing: usage warning banner at 80%, hard prompt at 100%
 - [x] County browser: list with lead counts, last scraped timestamp
 - [x] Settings page: profile, subscription management
-- [ ] Skip trace button: "Coming soon" disabled state
+- [x] Skip trace button: "Coming soon" disabled state
 - [x] Empty states: all pages (helpful CTAs)
 - [x] Error states: all pages (retry button + support message)
 - [x] Loading states: skeleton UI on all data-fetching pages
