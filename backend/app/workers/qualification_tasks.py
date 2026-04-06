@@ -84,7 +84,9 @@ async def _qualify_single(user_id: str, lead_id: str, task) -> dict:
 
             conn = await session.connection()
             raw_conn = await conn.get_raw_connection()
-            similar_rows = await raw_conn.connection.fetch(
+            # Access the underlying asyncpg connection through SQLAlchemy's adapter
+            asyncpg_conn = raw_conn.dbapi_connection._connection
+            similar_rows = await asyncpg_conn.fetch(
                 """
                 SELECT case_number, owner_name, surplus_amount, sale_type, property_city
                 FROM leads
