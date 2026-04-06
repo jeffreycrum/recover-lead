@@ -31,14 +31,13 @@ async def get_current_user(
         logger.info("auto_provisioning_user", clerk_id=clerk_id)
         user = User(clerk_id=clerk_id, email=f"{clerk_id}@pending.recoverlead.com")
         session.add(user)
+        await session.flush()  # Flush to get user.id assigned
 
-        # Create free subscription + empty credits
+        # Now create related records with the real user.id
         session.add(Subscription(user_id=user.id, plan="free", status="active"))
         session.add(SkipTraceCredits(user_id=user.id, credits_remaining=0))
-
         await session.flush()
 
-        # Clerk webhook will update email/name when it fires
         logger.info("user_auto_provisioned", user_id=str(user.id), clerk_id=clerk_id)
 
     if not user.is_active:
