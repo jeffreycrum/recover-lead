@@ -73,10 +73,17 @@ async def create_checkout_session(
     customer_id: str | None,
     plan: str,
     interval: str,
-    success_url: str = "https://app.recoverlead.com/settings?session_id={CHECKOUT_SESSION_ID}",
-    cancel_url: str = "https://app.recoverlead.com/settings",
+    success_url: str | None = None,
+    cancel_url: str | None = None,
 ) -> str:
     """Create a Stripe Checkout session and return the URL."""
+    from app.config import settings
+    base_url = settings.cors_origin_list[0] if settings.cors_origin_list else "http://localhost:3000"
+    if not success_url:
+        success_url = f"{base_url}/settings?session_id={{CHECKOUT_SESSION_ID}}"
+    if not cancel_url:
+        cancel_url = f"{base_url}/settings"
+
     price_id = get_price_id(plan, interval)
 
     params: dict = {
@@ -89,8 +96,7 @@ async def create_checkout_session(
 
     if customer_id:
         params["customer"] = customer_id
-    else:
-        params["customer_creation"] = "always"
+    # In subscription mode, Stripe auto-creates a customer — no need for customer_creation
 
     session = stripe.checkout.Session.create(**params)
     logger.info("checkout_session_created", plan=plan, interval=interval)
