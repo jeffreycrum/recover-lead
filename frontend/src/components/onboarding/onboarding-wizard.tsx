@@ -32,7 +32,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
   const [_selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
 
   useEffect(() => {
-    getToken().then((token) => api.setToken(token));
+    api.setTokenFn(getToken);
   }, [getToken]);
 
   const activeCounties = counties?.filter((c: any) => c.is_active && c.lead_count > 0) ?? [];

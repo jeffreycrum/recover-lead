@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 export function useSubscription() {
   const { getToken } = useAuth();
   useEffect(() => {
-    getToken().then((token) => api.setToken(token));
+    api.setTokenFn(getToken);
   }, [getToken]);
 
   return useQuery({
@@ -18,7 +18,7 @@ export function useSubscription() {
 export function useCounties() {
   const { getToken } = useAuth();
   useEffect(() => {
-    getToken().then((token) => api.setToken(token));
+    api.setTokenFn(getToken);
   }, [getToken]);
 
   return useQuery({

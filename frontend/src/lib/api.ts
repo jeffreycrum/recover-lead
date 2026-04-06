@@ -7,23 +7,26 @@ export interface ApiError {
 }
 
 export class ApiClient {
-  private token: string | null = null;
+  private getTokenFn: (() => Promise<string | null>) | null = null;
 
-  setToken(token: string | null) {
-    this.token = token;
+  setTokenFn(fn: () => Promise<string | null>) {
+    this.getTokenFn = fn;
   }
 
   private async request<T>(
     path: string,
     options: RequestInit = {}
   ): Promise<T> {
+    // Get a fresh token for every request (handles expiry automatically)
+    const token = this.getTokenFn ? await this.getTokenFn() : null;
+
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...(options.headers as Record<string, string>),
     };
 
-    if (this.token) {
-      headers["Authorization"] = `Bearer ${this.token}`;
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
     }
 
     const response = await fetch(`${API_BASE}${path}`, {
@@ -127,9 +130,10 @@ export class ApiClient {
   }
 
   async downloadLetterPdf(id: string): Promise<Blob> {
+    const token = this.getTokenFn ? await this.getTokenFn() : null;
     const headers: Record<string, string> = {};
-    if (this.token) {
-      headers["Authorization"] = `Bearer ${this.token}`;
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
     }
     const response = await fetch(`${API_BASE}/letters/${id}/pdf`, { headers });
     if (!response.ok) throw new Error("Failed to download PDF");

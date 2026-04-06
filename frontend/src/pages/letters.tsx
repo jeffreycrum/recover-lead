@@ -14,7 +14,7 @@ export function LettersPage() {
   const [showBatchDialog, setShowBatchDialog] = useState(false);
 
   useEffect(() => {
-    getToken().then((token) => api.setToken(token));
+    api.setTokenFn(getToken);
   }, [getToken]);
 
   const [selectedLetter, setSelectedLetter] = useState<any>(null);

@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 function useApiToken() {
   const { getToken } = useAuth();
   useEffect(() => {
-    getToken().then((token) => api.setToken(token));
+    api.setTokenFn(getToken);
   }, [getToken]);
 }
 

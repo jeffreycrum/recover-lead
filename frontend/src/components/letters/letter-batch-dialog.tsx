@@ -22,7 +22,7 @@ export function LetterBatchDialog({ open, onClose }: LetterBatchDialogProps) {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    getToken().then((token) => api.setToken(token));
+    api.setTokenFn(getToken);
   }, [getToken]);
 
   if (!open) return null;
