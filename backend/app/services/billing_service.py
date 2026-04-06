@@ -19,22 +19,22 @@ PLAN_CONFIG = {
         "qualifications": 200,
         "letters": 100,
         "skip_traces": 25,
-        "monthly_price_id": "",  # Set after creating in Stripe
-        "annual_price_id": "",
+        "monthly_price_id": "price_1TJ4bqEKnJ1LQqTEpm6Ick1t",
+        "annual_price_id": "price_1TJ4cvEKnJ1LQqTENeBIUFwK",
     },
     "pro": {
         "qualifications": 1000,
         "letters": 500,
         "skip_traces": 100,
-        "monthly_price_id": "",
-        "annual_price_id": "",
+        "monthly_price_id": "price_1TJ4deEKnJ1LQqTEmQOLQJJe",
+        "annual_price_id": "price_1TJ4eFEKnJ1LQqTEgKA1UICi",
     },
     "agency": {
         "qualifications": 5000,
         "letters": 2000,
         "skip_traces": 500,
-        "monthly_price_id": "",
-        "annual_price_id": "",
+        "monthly_price_id": "price_1TJ4eqEKnJ1LQqTEsOAy1a74",
+        "annual_price_id": "price_1TJ4fJEKnJ1LQqTEVfif0hqn",
     },
 }
 
