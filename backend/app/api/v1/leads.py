@@ -316,7 +316,7 @@ async def update_lead(
 
 
 @router.post("/{lead_id}/qualify", status_code=status.HTTP_202_ACCEPTED)
-async def qualify_lead(
+async def qualify_lead_endpoint(
     lead_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
     user: User = Depends(get_current_user),
@@ -333,11 +333,10 @@ async def qualify_lead(
     if not user_lead:
         raise NotFoundError("Claimed lead")
 
-    # TODO: check usage limits, dispatch Celery task
-    # from app.workers.qualification_tasks import qualify_lead_task
-    # task = qualify_lead_task.delay(str(user.id), str(lead_id))
+    from app.workers.qualification_tasks import qualify_single
+    task = qualify_single.delay(str(user.id), str(lead_id))
 
-    return {"task_id": "placeholder", "status": "queued", "message": "Qualification queued"}
+    return {"task_id": task.id, "status": "queued", "message": "Qualification queued"}
 
 
 @router.post("/bulk-qualify", status_code=status.HTTP_202_ACCEPTED)
@@ -353,9 +352,11 @@ async def bulk_qualify(
             detail={"code": "NO_LEADS", "message": "Provide at least one lead_id"},
         )
 
-    # TODO: check usage limits, dispatch Celery task
+    from app.workers.qualification_tasks import qualify_batch
+    task = qualify_batch.delay(str(user.id), [str(lid) for lid in lead_ids])
+
     return {
-        "task_id": "placeholder",
+        "task_id": task.id,
         "status": "queued",
         "lead_count": len(lead_ids),
         "message": "Bulk qualification queued",

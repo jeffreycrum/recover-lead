@@ -107,11 +107,10 @@ async def trigger_ingest(
     if not county:
         raise NotFoundError("County")
 
-    # TODO: dispatch Celery task
-    # from app.workers.ingestion_tasks import scrape_county
-    # task = scrape_county.delay(str(county_id))
+    from app.workers.ingestion_tasks import scrape_county
+    task = scrape_county.delay(str(county_id))
 
-    return {"task_id": "placeholder", "status": "queued", "county": county.name}
+    return {"task_id": task.id, "status": "queued", "county": county.name}
 
 
 @router.get("/{county_id}/status")

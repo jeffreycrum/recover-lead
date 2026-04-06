@@ -1,12 +1,14 @@
 import structlog
-from fastapi import APIRouter, Depends, Request
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Request, status
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clerk import verify_clerk_webhook
 from app.db.session import get_async_session
 from app.dependencies import get_current_user
-from app.models.billing import SkipTraceCredits, Subscription
+from app.models.billing import LLMUsage, SkipTraceCredits, Subscription
+from app.models.lead import LeadActivity, UserLead
+from app.models.letter import Letter
 from app.models.user import User
 
 logger = structlog.get_logger()
@@ -19,7 +21,6 @@ async def get_me(
     session: AsyncSession = Depends(get_async_session),
 ) -> dict:
     """Get current user profile and subscription."""
-    # Get active subscription
     result = await session.execute(
         select(Subscription).where(
             Subscription.user_id == user.id,
@@ -28,7 +29,6 @@ async def get_me(
     )
     subscription = result.scalar_one_or_none()
 
-    # Get credits
     result = await session.execute(
         select(SkipTraceCredits).where(SkipTraceCredits.user_id == user.id)
     )
@@ -54,6 +54,35 @@ async def get_me(
     }
 
 
+@router.delete("/me", status_code=status.HTTP_202_ACCEPTED)
+async def delete_account(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+) -> dict:
+    """Delete user account and all associated data (CCPA compliance).
+
+    Deactivates immediately, full data deletion within 30 days.
+    """
+    # Delete user-specific data
+    await session.execute(delete(Letter).where(Letter.user_id == user.id))
+    await session.execute(delete(LeadActivity).where(LeadActivity.user_id == user.id))
+    await session.execute(delete(UserLead).where(UserLead.user_id == user.id))
+    await session.execute(delete(LLMUsage).where(LLMUsage.user_id == user.id))
+    await session.execute(delete(SkipTraceCredits).where(SkipTraceCredits.user_id == user.id))
+    await session.execute(delete(Subscription).where(Subscription.user_id == user.id))
+
+    # Deactivate user (keep record for 30-day grace period)
+    user.is_active = False
+    user.email = f"deleted_{user.id}@recoverlead.com"
+    user.full_name = ""
+    user.company_name = None
+    user.phone = None
+
+    logger.info("account_deletion_requested", user_id=str(user.id))
+
+    return {"message": "Account scheduled for deletion. Data will be fully removed within 30 days."}
+
+
 @router.post("/webhook")
 async def clerk_webhook(
     request: Request,
@@ -75,11 +104,9 @@ async def clerk_webhook(
         )
         session.add(user)
 
-        # Create free subscription
         subscription = Subscription(user_id=user.id, plan="free", status="active")
         session.add(subscription)
 
-        # Create empty credits
         credits = SkipTraceCredits(user_id=user.id, credits_remaining=0)
         session.add(credits)
 

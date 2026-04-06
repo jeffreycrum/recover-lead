@@ -101,9 +101,13 @@ async def generate_batch(
             detail={"code": "NO_LEADS", "message": "Provide at least one lead_id"},
         )
 
-    # TODO: dispatch Celery task
+    from app.workers.letter_tasks import generate_batch_task
+    task = generate_batch_task.delay(
+        str(user.id), [str(lid) for lid in req.lead_ids], req.letter_type
+    )
+
     return {
-        "task_id": "placeholder",
+        "task_id": task.id,
         "status": "queued",
         "lead_count": len(req.lead_ids),
         "message": "Batch letter generation queued",
