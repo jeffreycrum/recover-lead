@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # Encryption
     encryption_key: str = ""  # Fernet key for PII column encryption
 
+    # Storage
+    scraper_artifacts_dir: str = "/data/scraper_artifacts"
+
     # App
     environment: str = "development"
 

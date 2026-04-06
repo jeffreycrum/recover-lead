@@ -1,12 +1,17 @@
 import hashlib
+import os
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from decimal import Decimal
+from pathlib import Path
 
 import structlog
 
 logger = structlog.get_logger()
+
+ARTIFACTS_DIR = Path(os.environ.get("SCRAPER_ARTIFACTS_DIR", "/data/scraper_artifacts"))
 
 
 @dataclass
@@ -88,11 +93,31 @@ class BaseScraper(ABC):
             lead.owner_last_known_address = sanitize_text(lead.owner_last_known_address)
         return leads
 
+    def _save_artifact(self, raw_data: bytes) -> Path | None:
+        """Save raw scrape data to disk for audit trail and debugging."""
+        try:
+            county_dir = ARTIFACTS_DIR / self.state.lower() / self.county_name.lower().replace(" ", "_")
+            county_dir.mkdir(parents=True, exist_ok=True)
+
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            ext = {"pdf": ".pdf", "html": ".html", "csv": ".csv"}.get(
+                getattr(self, "source_type", ""), ".bin"
+            )
+            filepath = county_dir / f"{timestamp}{ext}"
+            filepath.write_bytes(raw_data)
+
+            self.logger.info("artifact_saved", path=str(filepath), size=len(raw_data))
+            return filepath
+        except Exception as e:
+            self.logger.warning("artifact_save_failed", error=str(e))
+            return None
+
     async def scrape(self) -> list[RawLead]:
-        """Full scrape pipeline: fetch → parse → sanitize."""
+        """Full scrape pipeline: fetch → save artifact → parse → sanitize."""
         self.logger.info("scrape_started")
         try:
             raw_data = await self.fetch()
+            self._save_artifact(raw_data)
             leads = self.parse(raw_data)
             leads = self.sanitize(leads)
             self.logger.info("scrape_completed", lead_count=len(leads))
