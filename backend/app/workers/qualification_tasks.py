@@ -77,32 +77,36 @@ async def _qualify_single(user_id: str, lead_id: str, task) -> dict:
             embedding = generate_lead_embedding(lead_text)
 
             # Find similar leads via pgvector
+            # Use raw connection to avoid asyncpg's parameter binding conflicting with pgvector's <=> operator
             embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
-            similar_result = await session.execute(
-                text("""
-                    SELECT case_number, owner_name, surplus_amount, sale_type, property_city
-                    FROM leads
-                    WHERE embedding IS NOT NULL
-                      AND county_id = :county_id
-                      AND id != :lead_id
-                    ORDER BY embedding <=> :embedding::vector
-                    LIMIT 5
-                """),
-                {
-                    "county_id": str(lead.county_id),
-                    "lead_id": str(lead.id),
-                    "embedding": embedding_str,
-                },
+            county_id_str = str(lead.county_id)
+            lead_id_str = str(lead.id)
+
+            conn = await session.connection()
+            raw_conn = await conn.get_raw_connection()
+            similar_rows = await raw_conn.connection.fetch(
+                """
+                SELECT case_number, owner_name, surplus_amount, sale_type, property_city
+                FROM leads
+                WHERE embedding IS NOT NULL
+                  AND county_id = $1::uuid
+                  AND id != $2::uuid
+                ORDER BY embedding <=> $3::vector
+                LIMIT 5
+                """,
+                county_id_str,
+                lead_id_str,
+                embedding_str,
             )
             similar_leads = [
                 {
-                    "case_number": r.case_number,
-                    "owner_name": r.owner_name,
-                    "surplus_amount": float(r.surplus_amount) if r.surplus_amount else 0,
-                    "sale_type": r.sale_type,
-                    "property_city": r.property_city,
+                    "case_number": r["case_number"],
+                    "owner_name": r["owner_name"],
+                    "surplus_amount": float(r["surplus_amount"]) if r["surplus_amount"] else 0,
+                    "sale_type": r["sale_type"],
+                    "property_city": r["property_city"],
                 }
-                for r in similar_result.fetchall()
+                for r in similar_rows
             ]
 
             # Call Claude for qualification (if API key is set)
