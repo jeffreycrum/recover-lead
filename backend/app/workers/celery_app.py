@@ -37,7 +37,8 @@ celery_app.conf.update(
     worker_max_tasks_per_child=100,
 )
 
-# Auto-discover tasks
-celery_app.autodiscover_tasks([
-    "app.workers",
-])
+# Explicitly import all task modules so Celery registers them
+import app.workers.ingestion_tasks  # noqa: F401, E402
+import app.workers.qualification_tasks  # noqa: F401, E402
+import app.workers.letter_tasks  # noqa: F401, E402
+import app.workers.scheduled  # noqa: F401, E402
