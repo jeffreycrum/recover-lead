@@ -4,6 +4,7 @@ from datetime import datetime
 from sqlalchemy import String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.encryption import EncryptedString
 from app.db.base import Base
 
 
@@ -13,9 +14,9 @@ class User(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     clerk_id: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    full_name: Mapped[str] = mapped_column(String(255), default="")
-    company_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    full_name: Mapped[str] = mapped_column(EncryptedString(1024), default="")
+    company_name: Mapped[str | None] = mapped_column(EncryptedString(1024), nullable=True)
+    phone: Mapped[str | None] = mapped_column(EncryptedString(512), nullable=True)
     role: Mapped[str] = mapped_column(String(20), default="agent")  # agent|attorney|admin
     is_active: Mapped[bool] = mapped_column(default=True)
     stripe_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)

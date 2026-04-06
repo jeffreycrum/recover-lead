@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Index, Integer, String, func
+from sqlalchemy import JSON, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -70,7 +70,7 @@ class FailedTask(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     task_id: Mapped[str] = mapped_column(String(255))
     task_name: Mapped[str] = mapped_column(String(255))
-    args: Mapped[dict | None] = mapped_column("args", type_=type(None), nullable=True)
-    exception: Mapped[str | None] = mapped_column(type_=String(1000), nullable=True)
-    traceback: Mapped[str | None] = mapped_column(type_=type(None), nullable=True)
+    args: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    exception: Mapped[str | None] = mapped_column(Text, nullable=True)
+    traceback: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

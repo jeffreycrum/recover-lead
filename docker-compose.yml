@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: recoverlead_dev
       POSTGRES_DB: recoverlead
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

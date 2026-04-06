@@ -17,6 +17,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.encryption import EncryptedString
 from app.db.base import Base
 
 
@@ -45,9 +46,9 @@ class Lead(Base):
     sale_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     sale_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # tax_deed|foreclosure|lien
 
-    # Owner
-    owner_name: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    owner_last_known_address: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Owner (encrypted PII)
+    owner_name: Mapped[str | None] = mapped_column(EncryptedString(1024), nullable=True)
+    owner_last_known_address: Mapped[str | None] = mapped_column(EncryptedString(2048), nullable=True)
 
     # Metadata
     source_hash: Mapped[str] = mapped_column(String(64))  # SHA-256
@@ -103,7 +104,7 @@ class LeadContact(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     lead_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("leads.id"))
     contact_type: Mapped[str] = mapped_column(String(20))  # phone|email|address
-    contact_value: Mapped[str] = mapped_column(String(500))
+    contact_value: Mapped[str] = mapped_column(EncryptedString(1024))
     source: Mapped[str | None] = mapped_column(String(100), nullable=True)
     confidence: Mapped[float] = mapped_column(default=0.0)
     is_verified: Mapped[bool] = mapped_column(default=False)

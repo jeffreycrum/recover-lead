@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: str = "http://localhost:3000"
 
+    # Encryption
+    encryption_key: str = ""  # Fernet key for PII column encryption
+
     # App
     environment: str = "development"
 
@@ -40,7 +43,7 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         return self.environment == "production"
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": ("../.env", ".env"), "env_file_encoding": "utf-8"}
 
 
 settings = Settings()
