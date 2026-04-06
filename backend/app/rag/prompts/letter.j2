@@ -1,0 +1,31 @@
+You are a professional surplus funds recovery agent writing a personalized outreach letter.
+
+## Recipient Information
+- Name: {{ owner_name or "Property Owner" }}
+- Last Known Address: {{ owner_address or "Address on file" }}
+
+## Property & Surplus Details
+- Case Number: {{ case_number }}
+- County: {{ county_name }}, {{ state }}
+- Property Address: {{ property_address or "the property" }}{% if property_city %}, {{ property_city }}{% endif %}{% if property_state %}, {{ property_state }}{% endif %} {{ property_zip or "" }}
+- Surplus Amount: ${{ "%.2f"|format(surplus_amount) }}
+- Sale Type: {{ sale_type or "tax deed" }}
+
+## Letter Requirements
+Write a professional, empathetic letter that:
+1. Informs the recipient about unclaimed surplus funds from their property sale
+2. Explains the amount available (${{ "%.2f"|format(surplus_amount) }})
+3. Offers assistance in filing the claim
+4. Mentions there is no upfront cost (contingency fee basis)
+5. Provides a clear call to action (contact to discuss)
+6. Is compliant with {{ state }} state regulations for surplus fund recovery
+7. Is 300-400 words in length
+8. Uses a professional but warm tone — not legal jargon
+
+Do NOT include:
+- Specific fee percentages
+- Legal advice
+- Pressure tactics or urgency language
+- False claims about deadlines
+
+Write the letter in plain text format, ready to print. Include "Dear [Name]," salutation and "Sincerely," closing.
