@@ -13,7 +13,8 @@ def get_embedding_model() -> SentenceTransformer:
     global _model
     if _model is None:
         logger.info("loading_embedding_model", model=settings.embedding_model)
-        _model = SentenceTransformer(settings.embedding_model)
+        # Force CPU to avoid MPS segfaults in forked Celery workers
+        _model = SentenceTransformer(settings.embedding_model, device="cpu")
         logger.info("embedding_model_loaded", dimension=_model.get_sentence_embedding_dimension())
     return _model
 
