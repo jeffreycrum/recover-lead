@@ -1,5 +1,4 @@
 import hashlib
-import os
 
 from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import String
@@ -7,8 +6,10 @@ from sqlalchemy.types import TypeDecorator
 
 
 def get_encryption_key() -> bytes:
-    """Read ENCRYPTION_KEY from environment and return as bytes."""
-    key = os.getenv("ENCRYPTION_KEY")
+    """Read ENCRYPTION_KEY from settings and return as bytes."""
+    from app.config import settings
+
+    key = settings.encryption_key
     if not key:
         raise RuntimeError("ENCRYPTION_KEY environment variable is not set")
     key_bytes = key.encode() if isinstance(key, str) else key
