@@ -28,17 +28,25 @@ async def get_current_user(
 
     if not user:
         # Auto-provision user on first API call (webhook may not have fired yet)
-        logger.info("auto_provisioning_user", clerk_id=clerk_id)
-        user = User(clerk_id=clerk_id, email=f"{clerk_id}@pending.recoverlead.com")
-        session.add(user)
-        await session.flush()  # Flush to get user.id assigned
+        # Use a retry loop to handle race conditions from concurrent requests
+        try:
+            logger.info("auto_provisioning_user", clerk_id=clerk_id)
+            user = User(clerk_id=clerk_id, email=f"{clerk_id}@pending.recoverlead.com")
+            session.add(user)
+            await session.flush()
 
-        # Now create related records with the real user.id
-        session.add(Subscription(user_id=user.id, plan="free", status="active"))
-        session.add(SkipTraceCredits(user_id=user.id, credits_remaining=0))
-        await session.flush()
+            session.add(Subscription(user_id=user.id, plan="free", status="active"))
+            session.add(SkipTraceCredits(user_id=user.id, credits_remaining=0))
+            await session.flush()
 
-        logger.info("user_auto_provisioned", user_id=str(user.id), clerk_id=clerk_id)
+            logger.info("user_auto_provisioned", user_id=str(user.id), clerk_id=clerk_id)
+        except Exception:
+            # Race condition: another request already created this user
+            await session.rollback()
+            result = await session.execute(select(User).where(User.clerk_id == clerk_id))
+            user = result.scalar_one_or_none()
+            if not user:
+                raise
 
     if not user.is_active:
         raise ForbiddenError()
