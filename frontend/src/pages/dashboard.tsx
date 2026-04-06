@@ -1,13 +1,40 @@
+import { useState } from "react";
 import { useSubscription, useCounties } from "@/hooks/use-subscription";
 import { useMyLeads } from "@/hooks/use-leads";
 import { formatPercent } from "@/lib/utils";
 import { BarChart3, FileText, Map, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
+import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
 
 export function DashboardPage() {
   const { data: sub } = useSubscription();
   const { data: myLeads } = useMyLeads();
   const { data: counties } = useCounties();
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    return !localStorage.getItem("recoverlead_onboarded");
+  });
+
+  const handleOnboardingComplete = () => {
+    localStorage.setItem("recoverlead_onboarded", "true");
+    setShowOnboarding(false);
+  };
+
+  // Show onboarding wizard for first-time users
+  if (showOnboarding && (myLeads?.items?.length ?? 0) === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center mb-4">
+          <h1 className="text-2xl font-bold">
+            Welcome to <span className="text-emerald">Recover</span>Lead
+          </h1>
+          <p className="text-muted-foreground">
+            Let's get you started with your first qualified lead and outreach letter.
+          </p>
+        </div>
+        <OnboardingWizard onComplete={handleOnboardingComplete} />
+      </div>
+    );
+  }
 
   const stats = [
     {
@@ -63,7 +90,6 @@ export function DashboardPage() {
         ))}
       </div>
 
-      {/* Usage warnings */}
       {sub?.usage && sub.usage.qualifications_pct >= 80 && (
         <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
           <p className="text-sm text-amber-800">
@@ -81,7 +107,6 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* Quick actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Link
           to="/leads"

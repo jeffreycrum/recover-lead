@@ -5,11 +5,13 @@ import { useEffect } from "react";
 import { api } from "@/lib/api";
 import { EmptyState } from "@/components/common/empty-state";
 import { formatDate } from "@/lib/utils";
-import { FileText, Download, Trash2, Check } from "lucide-react";
+import { FileText, Download, Trash2, Check, Plus } from "lucide-react";
+import { LetterBatchDialog } from "@/components/letters/letter-batch-dialog";
 
 export function LettersPage() {
   const { getToken } = useAuth();
   const qc = useQueryClient();
+  const [showBatchDialog, setShowBatchDialog] = useState(false);
 
   useEffect(() => {
     getToken().then((token) => api.setToken(token));
@@ -56,10 +58,20 @@ export function LettersPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold">Letters</h1>
-        <p className="text-muted-foreground">Generated outreach letters</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Letters</h1>
+          <p className="text-muted-foreground">Generated outreach letters</p>
+        </div>
+        <button
+          onClick={() => setShowBatchDialog(true)}
+          className="px-4 py-2 bg-emerald text-white rounded-md hover:bg-emerald/90 text-sm font-medium flex items-center gap-2"
+        >
+          <Plus size={16} /> Batch Generate
+        </button>
       </div>
+
+      <LetterBatchDialog open={showBatchDialog} onClose={() => setShowBatchDialog(false)} />
 
       {isLoading ? (
         <div className="py-16 text-center text-muted-foreground">Loading...</div>

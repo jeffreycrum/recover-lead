@@ -126,6 +126,19 @@ export function LeadDetail({ leadId, onClose }: LeadDetailProps) {
             </>
           )}
         </div>
+
+        {/* Skip trace — coming soon */}
+        {isClaimed && (
+          <div className="pt-2">
+            <button
+              disabled
+              className="w-full px-4 py-2 border border-dashed rounded-md text-sm text-muted-foreground cursor-not-allowed"
+              title="Skip trace coming soon"
+            >
+              Skip Trace — Coming Soon
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
