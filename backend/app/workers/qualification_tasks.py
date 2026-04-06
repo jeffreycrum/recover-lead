@@ -2,15 +2,27 @@ import asyncio
 import uuid
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.db.engine import async_session_factory
+from app.config import settings
 from app.models.county import County
 from app.models.lead import Lead, UserLead
-from app.rag.lead_qualifier import qualify_lead
+from app.rag.embeddings import build_lead_text, generate_lead_embedding
 from app.workers.celery_app import celery_app
 
 logger = structlog.get_logger()
+
+
+def _get_worker_session() -> AsyncSession:
+    """Create a fresh async engine + session for this worker process.
+
+    asyncpg connections can't be shared across forked processes, so each
+    task creates its own engine instead of using the shared one.
+    """
+    engine = create_async_engine(settings.database_url, pool_size=2, max_overflow=0)
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    return factory()
 
 
 @celery_app.task(
@@ -27,77 +39,140 @@ def qualify_single(self, user_id: str, lead_id: str) -> dict:
 
 
 async def _qualify_single(user_id: str, lead_id: str, task) -> dict:
-    async with async_session_factory() as session:
-        # Get lead + county
-        result = await session.execute(
-            select(Lead, County.name.label("county_name"))
-            .join(County, Lead.county_id == County.id)
-            .where(Lead.id == uuid.UUID(lead_id))
-        )
-        row = result.one_or_none()
-        if not row:
-            return {"error": "Lead not found"}
-
-        lead, county_name = row
-
-        # Get user_lead
-        result = await session.execute(
-            select(UserLead).where(
-                UserLead.user_id == uuid.UUID(user_id),
-                UserLead.lead_id == uuid.UUID(lead_id),
+    async with _get_worker_session() as session:
+        async with session.begin():
+            # Get lead + county
+            result = await session.execute(
+                select(Lead, County.name.label("county_name"))
+                .join(County, Lead.county_id == County.id)
+                .where(Lead.id == uuid.UUID(lead_id))
             )
-        )
-        user_lead = result.scalar_one_or_none()
-        if not user_lead:
-            return {"error": "Lead not claimed by user"}
+            row = result.one_or_none()
+            if not row:
+                return {"error": "Lead not found"}
 
-        # Build lead data dict
-        lead_data = {
-            "case_number": lead.case_number,
-            "owner_name": lead.owner_name,
-            "property_address": lead.property_address,
-            "property_city": lead.property_city,
-            "property_state": lead.property_state,
-            "surplus_amount": lead.surplus_amount,
-            "sale_type": lead.sale_type,
-            "sale_date": str(lead.sale_date) if lead.sale_date else None,
-            "county_id": lead.county_id,
-        }
+            lead, county_name = row
 
-        # Qualify
-        result = qualify_lead(
-            session=session,
-            user_id=uuid.UUID(user_id),
-            lead_id=uuid.UUID(lead_id),
-            lead_data=lead_data,
-            county_name=county_name,
-        )
-        # qualify_lead is not async itself but calls sync Anthropic SDK
-        # We're already in an async context via asyncio.run
-        qual_result = await result if asyncio.iscoroutine(result) else result
+            # Get user_lead
+            result = await session.execute(
+                select(UserLead).where(
+                    UserLead.user_id == uuid.UUID(user_id),
+                    UserLead.lead_id == uuid.UUID(lead_id),
+                )
+            )
+            user_lead = result.scalar_one_or_none()
+            if not user_lead:
+                return {"error": "Lead not claimed by user"}
 
-        # Update user_lead
-        user_lead.quality_score = qual_result["quality_score"]
-        user_lead.quality_reasoning = qual_result["reasoning"]
-        user_lead.status = "qualified"
+            # Build embedding
+            lead_text = build_lead_text(
+                case_number=lead.case_number,
+                owner_name=lead.owner_name,
+                property_address=lead.property_address,
+                property_city=lead.property_city,
+                surplus_amount=float(lead.surplus_amount),
+                sale_type=lead.sale_type,
+                county_name=county_name,
+            )
+            embedding = generate_lead_embedding(lead_text)
 
-        # Update lead embedding if returned
-        if "embedding" in qual_result and qual_result["embedding"]:
-            lead.embedding = qual_result["embedding"]
+            # Find similar leads via pgvector
+            embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
+            similar_result = await session.execute(
+                text("""
+                    SELECT case_number, owner_name, surplus_amount, sale_type, property_city
+                    FROM leads
+                    WHERE embedding IS NOT NULL
+                      AND county_id = :county_id
+                      AND id != :lead_id
+                    ORDER BY embedding <=> :embedding::vector
+                    LIMIT 5
+                """),
+                {
+                    "county_id": str(lead.county_id),
+                    "lead_id": str(lead.id),
+                    "embedding": embedding_str,
+                },
+            )
+            similar_leads = [
+                {
+                    "case_number": r.case_number,
+                    "owner_name": r.owner_name,
+                    "surplus_amount": float(r.surplus_amount) if r.surplus_amount else 0,
+                    "sale_type": r.sale_type,
+                    "property_city": r.property_city,
+                }
+                for r in similar_result.fetchall()
+            ]
 
-        await session.commit()
+            # Call Claude for qualification (if API key is set)
+            quality_score = 5
+            reasoning = "Qualification pending — Anthropic API key not configured"
 
-        logger.info(
-            "lead_qualified",
-            lead_id=lead_id,
-            score=qual_result["quality_score"],
-        )
+            if settings.anthropic_api_key:
+                import anthropic
+                from jinja2 import Environment, FileSystemLoader
 
-        return {
-            "lead_id": lead_id,
-            "quality_score": qual_result["quality_score"],
-            "reasoning": qual_result["reasoning"],
-        }
+                env = Environment(loader=FileSystemLoader("app/rag/prompts"), autoescape=False)
+                template = env.get_template("qualification.j2")
+                prompt = template.render(
+                    case_number=lead.case_number,
+                    county_name=county_name,
+                    state=lead.property_state or "FL",
+                    owner_name=lead.owner_name,
+                    property_address=lead.property_address,
+                    surplus_amount=float(lead.surplus_amount),
+                    sale_type=lead.sale_type,
+                    sale_date=str(lead.sale_date) if lead.sale_date else None,
+                    similar_leads=similar_leads,
+                )
+
+                client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+                response = client.messages.create(
+                    model="claude-sonnet-4-20250514",
+                    max_tokens=500,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+
+                import json
+                import re
+                raw_text = response.content[0].text.strip()
+                try:
+                    data = json.loads(raw_text)
+                except json.JSONDecodeError:
+                    match = re.search(r"\{.*\}", raw_text, re.DOTALL)
+                    data = json.loads(match.group()) if match else {"quality_score": 5, "reasoning": raw_text[:500]}
+
+                quality_score = max(1, min(10, int(data.get("quality_score", 5))))
+                reasoning = data.get("reasoning", "No reasoning provided")[:2000]
+
+                # Log LLM usage
+                from app.models.billing import LLMUsage
+                usage = LLMUsage(
+                    user_id=uuid.UUID(user_id),
+                    task_type="qualification",
+                    model="claude-sonnet-4-20250514",
+                    input_tokens=response.usage.input_tokens,
+                    output_tokens=response.usage.output_tokens,
+                    estimated_cost=(response.usage.input_tokens * 0.003 + response.usage.output_tokens * 0.015) / 1000,
+                )
+                session.add(usage)
+
+            # Update user_lead
+            user_lead.quality_score = quality_score
+            user_lead.quality_reasoning = reasoning
+            user_lead.status = "qualified"
+
+            # Update lead embedding
+            lead.embedding = embedding
+
+            logger.info("lead_qualified", lead_id=lead_id, score=quality_score)
+
+            return {
+                "lead_id": lead_id,
+                "quality_score": quality_score,
+                "reasoning": reasoning,
+            }
 
 
 @celery_app.task(
@@ -112,29 +187,21 @@ async def _qualify_single(user_id: str, lead_id: str, task) -> dict:
 )
 def qualify_batch(self, user_id: str, lead_ids: list[str]) -> dict:
     """Qualify a batch of leads."""
-    return asyncio.run(_qualify_batch(user_id, lead_ids, self))
-
-
-async def _qualify_batch(user_id: str, lead_ids: list[str], task) -> dict:
     results = {"qualified": 0, "errors": 0, "total": len(lead_ids)}
 
     for i, lead_id in enumerate(lead_ids):
         try:
-            # Update progress
-            task.update_state(
+            self.update_state(
                 state="PROGRESS",
-                meta={"completed": i, "total": len(lead_ids), "current_lead": lead_id},
+                meta={"completed": i, "total": len(lead_ids)},
             )
-
-            # Qualify each lead individually (sequential to respect rate limits)
-            result = await _qualify_single(user_id, lead_id, task)
+            result = asyncio.run(_qualify_single(user_id, lead_id, self))
             if "error" in result:
                 results["errors"] += 1
             else:
                 results["qualified"] += 1
-
         except Exception as e:
-            logger.error("batch_qualify_lead_failed", lead_id=lead_id, error=str(e))
+            logger.error("batch_qualify_failed", lead_id=lead_id, error=str(e))
             results["errors"] += 1
 
     return results
