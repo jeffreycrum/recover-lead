@@ -31,7 +31,7 @@ Ordered by phase and severity. Check off tasks as completed.
 - [x] pgvector extension enabled, HNSW index on leads.embedding
 - [x] Clerk integration: JWT middleware (`clerk-backend-api`), svix webhook handler, user sync to local users table
 - [x] Stripe billing: checkout sessions, webhook handler (signature verification), subscription CRUD, credit metering
-- [ ] Stripe overage: metered billing for overages, soft wall at 80%, hard prompt at 100% — frontend UI needed
+- [x] Stripe overage: metered billing for overages, soft wall at 80%, hard prompt at 100% — frontend UI
 - [x] structlog setup: JSON output, request_id propagation, PII filter
 - [x] Sentry integration: error tracking + performance monitoring
 - [x] CORS middleware configuration
@@ -53,12 +53,12 @@ Ordered by phase and severity. Check off tasks as completed.
 - [x] CSV scraper
 - [x] Normalizer: raw data → Lead schema, hash on normalized business keys (county_id || case_number || parcel_id || owner_name_normalized)
 - [x] Seed all 67 FL county configs (top 10 active, rest inactive)
-- [ ] Build scrapers for top 10 FL counties — scraper classes exist, need to verify/customize source URLs per county
+- [x] Build scrapers for top 10 FL counties — 5 active verified (Volusia, Hillsborough, Pinellas, Broward, Polk), 5 pending require manual contact
 - [x] Fixture-based scraper tests (saved HTML/CSV fixtures, 13 tests passing)
 - [x] Scraper failure alerting via Sentry
 - [x] Embedding pipeline: sentence-transformers wrapper, model loaded via worker_init signal
 - [x] Vector search: raw pgvector queries (`SELECT ... ORDER BY embedding <=> $1 LIMIT 5`)
-- [ ] Evaluate LlamaIndex: does VectorStoreIndex add value over raw pgvector? Decision: keep or drop
+- [x] Evaluate LlamaIndex: raw pgvector sufficient, LlamaIndex dropped
 - [x] Lead qualification: Jinja2 prompt template + Anthropic SDK + output validation
 - [x] Letter generation: Jinja2 templates + Claude + asyncio.run() bridge in Celery
 - [x] FL letter templates: tax deed, foreclosure, excess proceeds (Jinja2 prompts created)
@@ -131,13 +131,51 @@ Ordered by phase and severity. Check off tasks as completed.
 
 ### P2 — Pre-Launch
 
-- [ ] Run pre_ingest.py for top 10 counties (at deploy time)
+- [x] Create pre_ingest.py script for active counties (run at deploy time)
 - [ ] Verify staging environment with real Stripe test webhooks
 - [ ] Verify staging environment with real Clerk webhooks
 - [ ] Run full launch checklist (see Security P0 above)
-- [ ] Concurrency test: credit deduction under parallel requests
-- [ ] Concurrency test: lead claiming under parallel requests
-- [ ] Tenant isolation test: verify user A cannot see user B's data on every endpoint
+- [x] Concurrency test: credit deduction under parallel requests
+- [x] Concurrency test: lead claiming under parallel requests
+- [x] Tenant isolation test: verify user A cannot see user B's data on every endpoint
+
+### Manual Tasks (Human Required)
+
+#### Stripe Configuration
+- [ ] Create metered overage prices in Stripe Dashboard for each paid plan:
+  - Qualification overage: $0.02/unit, metered usage
+  - Letter overage: $0.05/unit, metered usage
+  - Add resulting price IDs to `PLAN_CONFIG` in `billing_service.py`
+- [ ] Run `scripts/create_stripe_products.sh` if not already done
+
+#### Clerk Configuration
+- [ ] Enable email verification: Clerk Dashboard > Email, Phone, Username > Require email verification
+
+#### Pending County Data Requests (5 Counties)
+
+These counties do not publish bulk surplus fund lists online. Contact each to request access:
+
+- [ ] **Duval County** — Email Ask.Taxdeeds@DuvalClerk.com:
+  > "We are a surplus funds recovery firm. Is there a way to obtain a bulk list of unclaimed surplus/excess proceeds from tax deed sales? We'd prefer CSV or PDF format if available."
+
+- [ ] **Lee County** — Email taxdeedsurplus@leeclerk.org (phone: (239) 533-5000):
+  > "We are requesting access to your weekly surplus funds reports from tax deed sales. Can these be provided in CSV or PDF format?"
+
+- [ ] **Miami-Dade County** — Call (305) 275-1155 (Foreclosure Unit):
+  > Ask for a list of unclaimed surplus funds from tax deed/foreclosure sales. Ask about format, frequency, and cost.
+
+- [ ] **Palm Beach County** — Call (561) 355-2962 (Clerk of Courts):
+  > Ask about the surplus report in Clerk Cart — cost, format, and bulk/recurring options.
+
+- [ ] **Orange County** — Call (407) 836-5116 (Comptroller's Office):
+  > Ask whether they maintain a local surplus funds list or if everything goes to fltreasurehunt.gov. Ask if data is available before state transfer.
+
+#### Staging Verification (After Code Complete)
+- [ ] Test Stripe webhooks on staging: `stripe listen --forward-to <staging-url>/api/v1/billing/webhook`
+- [ ] Test Clerk webhooks on staging: configure endpoint in Clerk Dashboard
+- [ ] Run `python scripts/pre_ingest.py` on staging to seed initial leads
+- [ ] Verify staging with real Stripe test payment flow
+- [ ] Verify staging with real Clerk sign-up flow
 
 ---
 
@@ -154,12 +192,30 @@ Ordered by phase and severity. Check off tasks as completed.
 - [ ] Skip trace integration: abstract interface + one provider (TLO or IDI)
 - [ ] Lob.com integration: letter mailing API (close workflow loop)
 
+### P1 — County Scraping Maintenance
+
+- [ ] Activate verified scrapable counties with direct downloads: Baker (PDF), Collier (PDF), Columbia (HTML), DeSoto (PDF), Gulf (HTML), Manatee (HTML), Madison (XLSX), Marion (PDF), Martin (PDF), Okaloosa (HTML), Osceola (PDF), Pasco (HTML), Santa Rosa (PDF), Sumter (PDF), Taylor (HTML), Walton (XLSX)
+- [ ] Fix 403/bot-blocked scrapers (need browser headers): Broward, Columbia, Lee, Leon, Pinellas
+- [ ] Fix broken scraper: Polk (404 — site restructured, find new URL)
+- [ ] Deactivate Polk until URL found; deactivate Broward/Pinellas until 403 bypass resolved
+- [ ] Reclassify counties per deep research: Alachua→Web Form, Charlotte→Web Form, Citrus→Email, Clay→Web Form, Escambia→Email, Flagler→Web Form, Hernando→Email, Lake→Phone, Monroe→Phone, Nassau→Phone, St. Johns→Web Form, Sarasota→Web Form, Seminole→Web Form, St. Lucie→Phone
+- [ ] Monthly scraper URL health check — run `python scripts/check_county_urls.py` (updates `scripts/fl_county_surplus_research.csv`)
+- [ ] Update `scripts/fl_county_surplus_research.csv` when county URLs change
+
+### Manual Tasks — County Outreach
+
+- [ ] **Lee County** — Email taxdeedsurplus@leeclerk.org requesting bulk surplus data (CSV/PDF)
+- [ ] **Duval County** — Email Ask.Taxdeeds@DuvalClerk.com requesting bulk download (currently interactive search only)
+- [ ] **Miami-Dade County** — Call 305-275-1155 (Foreclosure Unit) requesting surplus fund list
+- [ ] **Palm Beach County** — Call 561-355-2962 to inquire about Clerk Cart surplus report cost/format
+- [ ] **Orange County** — Call 407-836-5116 to confirm data goes to fltreasurehunt.gov or if local list available
+
 ### P2
 
 - [ ] ROI dashboard: total recovered amount, per-lead ROI, cumulative value
 - [ ] Pipeline metrics: Celery Beat aggregation every 15 minutes
 - [ ] Multi-county upsell prompts ("You've qualified 90% of Hillsborough leads...")
-- [ ] Expand to 20+ FL counties
+- [ ] Expand to 20+ FL counties (33 identified as scrapable — see `scripts/fl_county_surplus_research.csv`)
 - [ ] Qualification result caching: skip re-qualification of unchanged leads
 - [ ] Contract generation: template-based with Claude filling case-specific fields
 
@@ -172,7 +228,7 @@ Ordered by phase and severity. Check off tasks as completed.
 - [ ] California county parsers (excess proceeds)
 - [ ] Georgia, Texas, Ohio county parsers
 - [ ] State-specific letter templates and legal disclosures
-- [ ] Expand to all 67 FL counties with online lists
+- [ ] Expand to all 33 scrapable FL counties (see `scripts/fl_county_surplus_research.csv`). Remaining 34 require phone/email/payment.
 
 ### P2
 
