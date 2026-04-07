@@ -28,7 +28,7 @@ ACTIVE_COUNTIES = [
         "config": {
             "notes": "30-page PDF, updated regularly. Main page: https://www.clerk.org/tax-deeds.aspx",
             "columns": {"case_number": 2, "owner_name": 1, "surplus_amount": 3, "property_address": None},
-            "skip_rows_containing": ["CLERK OF THE CIRCUIT", "TAX DEED SURPLUS", "Fee calculator", "Deposit amount", "Date Surplus"],
+            "skip_rows_containing": ["CLERK OF THE CIRCUIT", "TAX DEED SURPLUS", "Fee calculator", "Deposit amount", "Date Surplus", "Amt of Deposit"],
         },
     },
     {
@@ -36,11 +36,15 @@ ACTIVE_COUNTIES = [
         "state": "FL",
         "fips_code": "12057",
         "source_url": "https://www.hillsclerk.com/documents/d/guest/ada-accessible-td-claim-info-master-10-13-2025-2-?download=true",
-        "source_type": "csv",
-        "scraper_class": "CsvScraper",
+        "source_type": "xlsx",
+        "scraper_class": "XlsxScraper",
         "scrape_schedule": "0 2 * * *",
         "is_active": True,
-        "config": {"notes": "Excel/CSV spreadsheet download. Main page: https://hillsclerk.com/taxdeeds"},
+        "config": {
+            "notes": "Excel spreadsheet. Claims tracking format: File #, Claims Filed, Claims Paid. Main page: https://hillsclerk.com/taxdeeds",
+            "column_mapping": {"case_number": 0, "owner_name": 1, "surplus_amount": 1},
+            "extract_from_claims": True,
+        },
     },
     {
         "name": "Pinellas",
@@ -50,8 +54,8 @@ ACTIVE_COUNTIES = [
         "source_type": "pdf",
         "scraper_class": "PdfScraper",
         "scrape_schedule": "0 2 * * *",
-        "is_active": True,
-        "config": {"notes": "Annual PDF by year. Main page: https://www.mypinellasclerk.gov/Unclaimed-Monies. URL pattern: change year in path."},
+        "is_active": False,
+        "config": {"notes": "DEACTIVATED: 403 Cloudflare. Annual PDF by year. Main page: https://www.mypinellasclerk.gov/Unclaimed-Monies."},
     },
     {
         "name": "Broward",
@@ -61,8 +65,8 @@ ACTIVE_COUNTIES = [
         "source_type": "html",
         "scraper_class": "HtmlTableScraper",
         "scrape_schedule": "0 2 * * *",
-        "is_active": True,
-        "config": {"notes": "Excel/CSV download links on page. Overbid files and surplus disbursements."},
+        "is_active": False,
+        "config": {"notes": "DEACTIVATED: 404. Excel/CSV download links on page. Overbid files and surplus disbursements."},
     },
     {
         "name": "Polk",
@@ -72,8 +76,8 @@ ACTIVE_COUNTIES = [
         "source_type": "html",
         "scraper_class": "HtmlTableScraper",
         "scrape_schedule": "0 2 * * *",
-        "is_active": True,
-        "config": {"notes": "HTML table on page. May 403 to bots — may need browser headers."},
+        "is_active": False,
+        "config": {"notes": "DEACTIVATED: 404. Site restructured."},
     },
 ]
 
