@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     # Stripe
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
+    stripe_qualification_overage_price_id: str = ""
+    stripe_letter_overage_price_id: str = ""
+    stripe_skip_trace_overage_price_id: str = ""
+
+    # Tracerfy
+    tracerfy_api_key: str = ""
+    tracerfy_base_url: str = "https://tracerfy.com/v1/api"
 
     # Embedding
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"

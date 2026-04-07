@@ -33,12 +33,25 @@ def _get_worker_session() -> AsyncSession:
     max_retries=3,
     queue="rag",
 )
-def qualify_single(self, user_id: str, lead_id: str) -> dict:
+def qualify_single(
+    self, user_id: str, lead_id: str,
+    is_overage: bool = False, period_start_iso: str = "",
+) -> dict:
     """Qualify a single lead via Claude."""
-    return asyncio.run(_qualify_single(user_id, lead_id, self))
+    try:
+        result = asyncio.run(_qualify_single(user_id, lead_id, self, is_overage))
+        # Release reservation on success (usage now committed to DB)
+        from app.services.billing_service import release_reservation
+        release_reservation(uuid.UUID(user_id), "qualification", 1, period_start_iso or None)
+        return result
+    except Exception:
+        if self.request.retries >= self.max_retries:
+            from app.services.billing_service import release_reservation
+            release_reservation(uuid.UUID(user_id), "qualification", 1, period_start_iso or None)
+        raise
 
 
-async def _qualify_single(user_id: str, lead_id: str, task) -> dict:
+async def _qualify_single(user_id: str, lead_id: str, task, is_overage: bool = False) -> dict:
     async with _get_worker_session() as session:
         async with session.begin():
             # Get lead + county
@@ -174,11 +187,19 @@ async def _qualify_single(user_id: str, lead_id: str, task) -> dict:
 
             logger.info("lead_qualified", lead_id=lead_id, score=quality_score)
 
-            return {
-                "lead_id": lead_id,
-                "quality_score": quality_score,
-                "reasoning": reasoning,
-            }
+        # Record overage AFTER transaction commits (avoids blocking
+        # the DB transaction with synchronous Stripe HTTP calls)
+        if is_overage:
+            from app.services.billing_service import record_overage_usage
+            await record_overage_usage(
+                session, uuid.UUID(user_id), "qualification",
+            )
+
+        return {
+            "lead_id": lead_id,
+            "quality_score": quality_score,
+            "reasoning": reasoning,
+        }
 
 
 @celery_app.task(
@@ -191,9 +212,13 @@ async def _qualify_single(user_id: str, lead_id: str, task) -> dict:
     soft_time_limit=540,
     time_limit=600,
 )
-def qualify_batch(self, user_id: str, lead_ids: list[str]) -> dict:
+def qualify_batch(
+    self, user_id: str, lead_ids: list[str],
+    overage_count: int = 0, period_start_iso: str = "",
+) -> dict:
     """Qualify a batch of leads."""
     results = {"qualified": 0, "errors": 0, "total": len(lead_ids)}
+    overage_start = len(lead_ids) - overage_count
 
     for i, lead_id in enumerate(lead_ids):
         try:
@@ -201,7 +226,8 @@ def qualify_batch(self, user_id: str, lead_ids: list[str]) -> dict:
                 state="PROGRESS",
                 meta={"completed": i, "total": len(lead_ids)},
             )
-            result = asyncio.run(_qualify_single(user_id, lead_id, self))
+            is_overage = i >= overage_start
+            result = asyncio.run(_qualify_single(user_id, lead_id, self, is_overage))
             if "error" in result:
                 results["errors"] += 1
             else:
@@ -210,4 +236,10 @@ def qualify_batch(self, user_id: str, lead_ids: list[str]) -> dict:
             logger.error("batch_qualify_failed", lead_id=lead_id, error=str(e))
             results["errors"] += 1
 
+    # Release all reservations on batch completion
+    from app.services.billing_service import release_reservation
+    release_reservation(
+        uuid.UUID(user_id), "qualification",
+        len(lead_ids), period_start_iso or None,
+    )
     return results

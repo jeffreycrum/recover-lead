@@ -22,63 +22,90 @@ logger = structlog.get_logger()
     max_retries=3,
     queue="rag",
 )
-def generate_letter_task(self, user_id: str, lead_id: str, letter_type: str = "tax_deed") -> dict:
+def generate_letter_task(
+    self, user_id: str, lead_id: str,
+    letter_type: str = "tax_deed", is_overage: bool = False,
+    period_start_iso: str = "",
+) -> dict:
     """Generate a single letter via Claude."""
-    return asyncio.run(_generate_letter(user_id, lead_id, letter_type))
+    try:
+        result = asyncio.run(
+            _generate_letter(user_id, lead_id, letter_type, is_overage)
+        )
+        # Release reservation on success (usage now committed to DB)
+        from app.services.billing_service import release_reservation
+        release_reservation(uuid.UUID(user_id), "letter", 1, period_start_iso or None)
+        return result
+    except Exception:
+        if self.request.retries >= self.max_retries:
+            # Final failure — release the reservation
+            from app.services.billing_service import release_reservation
+            release_reservation(uuid.UUID(user_id), "letter", 1, period_start_iso or None)
+        raise
 
 
-async def _generate_letter(user_id: str, lead_id: str, letter_type: str) -> dict:
+async def _generate_letter(
+    user_id: str, lead_id: str,
+    letter_type: str, is_overage: bool = False,
+) -> dict:
     async with async_session_factory() as session:
-        # Get lead + county
-        result = await session.execute(
-            select(Lead, County.name.label("county_name"))
-            .join(County, Lead.county_id == County.id)
-            .where(Lead.id == uuid.UUID(lead_id))
-        )
-        row = result.one_or_none()
-        if not row:
-            return {"error": "Lead not found"}
-
-        lead, county_name = row
-
-        # Verify claimed
-        result = await session.execute(
-            select(UserLead).where(
-                UserLead.user_id == uuid.UUID(user_id),
-                UserLead.lead_id == uuid.UUID(lead_id),
+        async with session.begin():
+            # Get lead + county
+            result = await session.execute(
+                select(Lead, County.name.label("county_name"))
+                .join(County, Lead.county_id == County.id)
+                .where(Lead.id == uuid.UUID(lead_id))
             )
-        )
-        if not result.scalar_one_or_none():
-            return {"error": "Lead not claimed"}
+            row = result.one_or_none()
+            if not row:
+                return {"error": "Lead not found"}
 
-        lead_data = {
-            "case_number": lead.case_number,
-            "owner_name": lead.owner_name,
-            "owner_last_known_address": lead.owner_last_known_address,
-            "property_address": lead.property_address,
-            "property_city": lead.property_city,
-            "property_state": lead.property_state,
-            "property_zip": lead.property_zip,
-            "surplus_amount": lead.surplus_amount,
-        }
+            lead, county_name = row
 
-        content = await generate_letter_content(
-            session=session,
-            user_id=uuid.UUID(user_id),
-            lead_data=lead_data,
-            county_name=county_name,
-            letter_type=letter_type,
-        )
+            # Verify claimed
+            result = await session.execute(
+                select(UserLead).where(
+                    UserLead.user_id == uuid.UUID(user_id),
+                    UserLead.lead_id == uuid.UUID(lead_id),
+                )
+            )
+            if not result.scalar_one_or_none():
+                return {"error": "Lead not claimed"}
 
-        letter = Letter(
-            lead_id=uuid.UUID(lead_id),
-            user_id=uuid.UUID(user_id),
-            letter_type=letter_type,
-            content=content,
-            status="draft",
-        )
-        session.add(letter)
-        await session.commit()
+            lead_data = {
+                "case_number": lead.case_number,
+                "owner_name": lead.owner_name,
+                "owner_last_known_address": lead.owner_last_known_address,
+                "property_address": lead.property_address,
+                "property_city": lead.property_city,
+                "property_state": lead.property_state,
+                "property_zip": lead.property_zip,
+                "surplus_amount": lead.surplus_amount,
+            }
+
+            content = await generate_letter_content(
+                session=session,
+                user_id=uuid.UUID(user_id),
+                lead_data=lead_data,
+                county_name=county_name,
+                letter_type=letter_type,
+            )
+
+            letter = Letter(
+                lead_id=uuid.UUID(lead_id),
+                user_id=uuid.UUID(user_id),
+                letter_type=letter_type,
+                content=content,
+                status="draft",
+            )
+            session.add(letter)
+
+        # Record overage AFTER transaction commits
+        if is_overage:
+            from app.services.billing_service import record_overage_usage
+            await record_overage_usage(
+                session, uuid.UUID(user_id), "letter",
+            )
 
         logger.info("letter_generated", lead_id=lead_id, letter_id=str(letter.id))
 
@@ -99,13 +126,30 @@ async def _generate_letter(user_id: str, lead_id: str, letter_type: str) -> dict
     soft_time_limit=540,
     time_limit=600,
 )
-def generate_batch_task(self, user_id: str, lead_ids: list[str], letter_type: str = "tax_deed") -> dict:
+def generate_batch_task(
+    self, user_id: str, lead_ids: list[str],
+    letter_type: str = "tax_deed", overage_count: int = 0,
+    period_start_iso: str = "",
+) -> dict:
     """Generate letters for a batch of leads."""
-    return asyncio.run(_generate_batch(user_id, lead_ids, letter_type, self))
+    result = asyncio.run(
+        _generate_batch(user_id, lead_ids, letter_type, overage_count, self)
+    )
+    # Release all reservations on completion (both successes and failures)
+    from app.services.billing_service import release_reservation
+    release_reservation(
+        uuid.UUID(user_id), "letter",
+        len(lead_ids), period_start_iso or None,
+    )
+    return result
 
 
-async def _generate_batch(user_id: str, lead_ids: list[str], letter_type: str, task) -> dict:
+async def _generate_batch(
+    user_id: str, lead_ids: list[str],
+    letter_type: str, overage_count: int, task,
+) -> dict:
     results = {"generated": 0, "errors": 0, "total": len(lead_ids)}
+    overage_start = len(lead_ids) - overage_count
 
     for i, lead_id in enumerate(lead_ids):
         try:
@@ -114,7 +158,10 @@ async def _generate_batch(user_id: str, lead_ids: list[str], letter_type: str, t
                 meta={"completed": i, "total": len(lead_ids)},
             )
 
-            result = await _generate_letter(user_id, lead_id, letter_type)
+            is_overage = i >= overage_start
+            result = await _generate_letter(
+                user_id, lead_id, letter_type, is_overage,
+            )
             if "error" in result:
                 results["errors"] += 1
             else:

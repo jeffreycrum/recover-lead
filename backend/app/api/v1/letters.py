@@ -6,7 +6,7 @@ from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ForbiddenError, NotFoundError
+from app.core.exceptions import ForbiddenError, InsufficientCreditsError, NotFoundError
 from app.db.session import get_async_session
 from app.dependencies import get_current_user
 from app.models.county import County
@@ -30,13 +30,13 @@ DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 100
 
 
-@router.post("/generate", response_model=LetterResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/generate", status_code=status.HTTP_202_ACCEPTED)
 async def generate_letter(
     req: LetterGenerateRequest,
     session: AsyncSession = Depends(get_async_session),
     user: User = Depends(get_current_user),
-) -> LetterResponse:
-    """Generate a letter for a lead. Synchronous for single letters."""
+) -> dict:
+    """Generate a letter for a lead. Async via Celery task."""
     # Verify lead is claimed by this user
     result = await session.execute(
         select(UserLead).where(
@@ -48,44 +48,26 @@ async def generate_letter(
     if not user_lead:
         raise NotFoundError("Claimed lead")
 
-    # Get lead + county
-    result = await session.execute(
-        select(Lead, County.name.label("county_name"))
-        .join(County, Lead.county_id == County.id)
-        .where(Lead.id == req.lead_id)
-    )
-    row = result.one_or_none()
-    if not row:
-        raise NotFoundError("Lead")
-    lead, county_name = row
+    from app.services.billing_service import reserve_usage
+    reservation = await reserve_usage(session, user.id, "letter", count=1)
+    if not reservation.allowed:
+        raise InsufficientCreditsError()
 
-    # TODO: replace with actual LLM generation via Celery task
-    # For now, generate a placeholder letter
-    content = _generate_placeholder_letter(lead, county_name, req.letter_type)
-
-    letter = Letter(
-        lead_id=req.lead_id,
-        user_id=user.id,
-        letter_type=req.letter_type,
-        content=content,
-        status="draft",
+    from app.workers.letter_tasks import generate_letter_task
+    task = generate_letter_task.delay(
+        str(user.id), str(req.lead_id),
+        req.letter_type, reservation.overage_count > 0,
+        reservation.period_start_iso,
     )
-    session.add(letter)
-    await session.flush()
 
-    return LetterResponse(
-        id=letter.id,
-        lead_id=letter.lead_id,
-        letter_type=letter.letter_type,
-        content=letter.content,
-        status=letter.status,
-        sent_at=letter.sent_at,
-        created_at=letter.created_at,
-        case_number=lead.case_number,
-        county_name=county_name,
-        owner_name=lead.owner_name,
-        surplus_amount=float(lead.surplus_amount),
-    )
+    return {
+        "task_id": task.id,
+        "status": "queued",
+        "message": "Letter generation queued",
+    }
+
+
+MAX_BATCH_SIZE = 100
 
 
 @router.post("/generate-batch", status_code=status.HTTP_202_ACCEPTED)
@@ -100,10 +82,22 @@ async def generate_batch(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"code": "NO_LEADS", "message": "Provide at least one lead_id"},
         )
+    if len(req.lead_ids) > MAX_BATCH_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "BATCH_TOO_LARGE", "message": f"Maximum {MAX_BATCH_SIZE} leads per batch"},
+        )
+
+    from app.services.billing_service import reserve_usage
+    reservation = await reserve_usage(session, user.id, "letter", count=len(req.lead_ids))
+    if not reservation.allowed:
+        raise InsufficientCreditsError()
 
     from app.workers.letter_tasks import generate_batch_task
     task = generate_batch_task.delay(
-        str(user.id), [str(lid) for lid in req.lead_ids], req.letter_type
+        str(user.id), [str(lid) for lid in req.lead_ids],
+        req.letter_type, reservation.overage_count,
+        reservation.period_start_iso,
     )
 
     return {
@@ -316,33 +310,3 @@ async def download_pdf(
     )
 
 
-def _generate_placeholder_letter(lead: Lead, county_name: str, letter_type: str) -> str:
-    """Generate a placeholder letter until LLM integration is complete."""
-    return f"""Dear {lead.owner_name or "Property Owner"},
-
-Re: Surplus Funds - Case #{lead.case_number}
-{county_name} County, {lead.property_state or "FL"}
-
-I am writing to inform you that you may be entitled to surplus funds in the amount of ${lead.surplus_amount:,.2f} resulting from a {letter_type.replace('_', ' ')} sale of property located at:
-
-{lead.property_address or "Address on file"}
-{lead.property_city or ""}, {lead.property_state or "FL"} {lead.property_zip or ""}
-
-These funds are currently being held by {county_name} County and are available for claim by the rightful owner or their legal representative.
-
-I specialize in helping property owners recover surplus funds from tax and foreclosure sales. My services include:
-
-- Researching and verifying your entitlement to these funds
-- Preparing and filing all necessary claim documents
-- Coordinating with the county clerk's office on your behalf
-
-There is no upfront cost for my services. My fee is based on a percentage of the funds recovered, and is only collected upon successful recovery.
-
-If you would like to discuss this matter further, please contact me at your earliest convenience.
-
-Sincerely,
-
-[Your Name]
-[Your Company]
-[Your Phone]
-[Your Email]"""

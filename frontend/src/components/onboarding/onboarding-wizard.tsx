@@ -98,7 +98,13 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
     setStep("letter");
     try {
       const result = await api.generateLetter(leadId);
-      setGeneratedLetterId(result.id);
+      if (result.task_id) {
+        const taskResult = await pollTask(result.task_id);
+        // Use the letter_id from the task result directly
+        if (taskResult?.letter_id) {
+          setGeneratedLetterId(taskResult.letter_id);
+        }
+      }
       setStep("done");
     } catch {
       setStep("done");
@@ -116,12 +122,14 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
     URL.revokeObjectURL(url);
   };
 
-  const pollTask = async (taskId: string, maxAttempts = 30): Promise<void> => {
+  const pollTask = async (taskId: string, maxAttempts = 30): Promise<any> => {
     for (let i = 0; i < maxAttempts; i++) {
       await new Promise((r) => setTimeout(r, 2000));
       const status = await api.getTaskStatus(taskId);
-      if (status.status === "SUCCESS" || status.status === "FAILURE") return;
+      if (status.status === "SUCCESS") return status.result;
+      if (status.status === "FAILURE") return null;
     }
+    return null;
   };
 
   const steps = [

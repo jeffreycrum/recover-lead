@@ -87,6 +87,10 @@ class CursorPage(BaseModel):
     has_more: bool
 
 
+class BulkQualifyRequest(BaseModel):
+    lead_ids: list[uuid.UUID]
+
+
 class ClaimResponse(BaseModel):
     user_lead_id: uuid.UUID
     lead_id: uuid.UUID

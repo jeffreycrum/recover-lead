@@ -43,14 +43,27 @@ async def claim_lead(
     if existing:
         return existing  # Idempotent — return existing claim
 
-    # Create user_lead record
+    # Create user_lead record — handle concurrent duplicate via savepoint
+    from sqlalchemy.exc import IntegrityError
+
     user_lead = UserLead(
         user_id=user_id,
         lead_id=lead_id,
         status="new",
     )
-    session.add(user_lead)
-    await session.flush()
+    try:
+        async with session.begin_nested():
+            session.add(user_lead)
+            await session.flush()
+    except IntegrityError:
+        # Savepoint rolled back; outer transaction intact
+        result = await session.execute(
+            select(UserLead).where(
+                UserLead.user_id == user_id,
+                UserLead.lead_id == lead_id,
+            )
+        )
+        return result.scalar_one()
 
     logger.info("lead_claimed", user_id=str(user_id), lead_id=str(lead_id))
     return user_lead

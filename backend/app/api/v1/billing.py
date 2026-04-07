@@ -17,6 +17,7 @@ from app.schemas.billing import (
     UsageResponse,
 )
 from app.services.billing_service import (
+    OVERAGE_PRICES,
     create_billing_portal_session,
     create_checkout_session,
     get_plan_limits,
@@ -100,6 +101,13 @@ async def get_subscription(
     qual_limit = limits["qualifications"]
     letter_limit = limits["letters"]
 
+    qual_overage = max(0, qualifications_used - qual_limit)
+    letter_overage = max(0, letters_used - letter_limit)
+    overage_cost = (
+        qual_overage * OVERAGE_PRICES["qualification"]
+        + letter_overage * OVERAGE_PRICES["letter"]
+    )
+
     return SubscriptionResponse(
         plan=plan,
         status=subscription.status if subscription else "active",
@@ -115,9 +123,12 @@ async def get_subscription(
             qualifications_used=qualifications_used,
             qualifications_limit=qual_limit,
             qualifications_pct=round(qualifications_used / qual_limit * 100, 1) if qual_limit > 0 else 0,
+            qualifications_overage=qual_overage,
             letters_used=letters_used,
             letters_limit=letter_limit,
             letters_pct=round(letters_used / letter_limit * 100, 1) if letter_limit > 0 else 0,
+            letters_overage=letter_overage,
+            overage_cost_estimate=round(overage_cost, 2),
         ),
     )
 
