@@ -1,3 +1,5 @@
+from datetime import UTC
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, select
@@ -80,9 +82,13 @@ async def get_subscription(
     period_start = subscription.current_period_start if subscription else None
 
     # Count qualifications this period (LLM usage with task_type=qualification)
-    qual_query = select(func.count()).select_from(LLMUsage).where(
-        LLMUsage.user_id == user.id,
-        LLMUsage.task_type == "qualification",
+    qual_query = (
+        select(func.count())
+        .select_from(LLMUsage)
+        .where(
+            LLMUsage.user_id == user.id,
+            LLMUsage.task_type == "qualification",
+        )
     )
     if period_start:
         qual_query = qual_query.where(LLMUsage.created_at >= period_start)
@@ -90,8 +96,12 @@ async def get_subscription(
     qualifications_used = result.scalar() or 0
 
     # Count letters this period
-    letter_query = select(func.count()).select_from(Letter).where(
-        Letter.user_id == user.id,
+    letter_query = (
+        select(func.count())
+        .select_from(Letter)
+        .where(
+            Letter.user_id == user.id,
+        )
     )
     if period_start:
         letter_query = letter_query.where(Letter.created_at >= period_start)
@@ -104,8 +114,7 @@ async def get_subscription(
     qual_overage = max(0, qualifications_used - qual_limit)
     letter_overage = max(0, letters_used - letter_limit)
     overage_cost = (
-        qual_overage * OVERAGE_PRICES["qualification"]
-        + letter_overage * OVERAGE_PRICES["letter"]
+        qual_overage * OVERAGE_PRICES["qualification"] + letter_overage * OVERAGE_PRICES["letter"]
     )
 
     return SubscriptionResponse(
@@ -113,7 +122,9 @@ async def get_subscription(
         status=subscription.status if subscription else "active",
         billing_interval=subscription.billing_interval if subscription else None,
         current_period_end=(
-            subscription.current_period_end.isoformat() if subscription and subscription.current_period_end else None
+            subscription.current_period_end.isoformat()
+            if subscription and subscription.current_period_end
+            else None
         ),
         credits=CreditsResponse(
             skip_traces_remaining=credits.credits_remaining if credits else 0,
@@ -122,7 +133,9 @@ async def get_subscription(
         usage=UsageResponse(
             qualifications_used=qualifications_used,
             qualifications_limit=qual_limit,
-            qualifications_pct=round(qualifications_used / qual_limit * 100, 1) if qual_limit > 0 else 0,
+            qualifications_pct=round(qualifications_used / qual_limit * 100, 1)
+            if qual_limit > 0
+            else 0,
             qualifications_overage=qual_overage,
             letters_used=letters_used,
             letters_limit=letter_limit,
@@ -147,7 +160,10 @@ async def stripe_webhook(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "INVALID_SIGNATURE", "message": "Webhook signature verification failed"},
+            detail={
+                "code": "INVALID_SIGNATURE",
+                "message": "Webhook signature verification failed",
+            },
         )
 
     event_type = event["type"]
@@ -192,18 +208,14 @@ async def _handle_checkout_completed(data: dict, session: AsyncSession) -> None:
         return
 
     # Find user by stripe_customer_id, or update it
-    result = await session.execute(
-        select(User).where(User.stripe_customer_id == customer_id)
-    )
+    result = await session.execute(select(User).where(User.stripe_customer_id == customer_id))
     user = result.scalar_one_or_none()
 
     if not user:
         # Try matching by email from checkout
         customer_email = data.get("customer_details", {}).get("email")
         if customer_email:
-            result = await session.execute(
-                select(User).where(User.email == customer_email)
-            )
+            result = await session.execute(select(User).where(User.email == customer_email))
             user = result.scalar_one_or_none()
             if user:
                 user.stripe_customer_id = customer_id
@@ -214,6 +226,7 @@ async def _handle_checkout_completed(data: dict, session: AsyncSession) -> None:
 
     # Fetch the Stripe subscription to get plan details
     import stripe
+
     stripe_sub = stripe.Subscription.retrieve(subscription_id)
     price_id = stripe_sub["items"]["data"][0]["price"]["id"]
     plan = _price_id_to_plan(price_id)
@@ -231,15 +244,16 @@ async def _handle_checkout_completed(data: dict, session: AsyncSession) -> None:
         existing.status = "canceled"
 
     # Create new subscription
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     sub = Subscription(
         user_id=user.id,
         stripe_subscription_id=subscription_id,
         plan=plan,
         status="active",
         billing_interval="annual" if interval == "year" else "monthly",
-        current_period_start=datetime.fromtimestamp(stripe_sub["current_period_start"], tz=timezone.utc),
-        current_period_end=datetime.fromtimestamp(stripe_sub["current_period_end"], tz=timezone.utc),
+        current_period_start=datetime.fromtimestamp(stripe_sub["current_period_start"], tz=UTC),
+        current_period_end=datetime.fromtimestamp(stripe_sub["current_period_end"], tz=UTC),
         skip_trace_credits_monthly=get_plan_limits(plan)["skip_traces"],
     )
     session.add(sub)
@@ -253,10 +267,12 @@ async def _handle_checkout_completed(data: dict, session: AsyncSession) -> None:
         credits.credits_remaining = get_plan_limits(plan)["skip_traces"]
         credits.credits_used_this_month = 0
     else:
-        session.add(SkipTraceCredits(
-            user_id=user.id,
-            credits_remaining=get_plan_limits(plan)["skip_traces"],
-        ))
+        session.add(
+            SkipTraceCredits(
+                user_id=user.id,
+                credits_remaining=get_plan_limits(plan)["skip_traces"],
+            )
+        )
 
     logger.info("subscription_created", user_id=str(user.id), plan=plan)
 
@@ -276,12 +292,13 @@ async def _handle_subscription_updated(data: dict, session: AsyncSession) -> Non
     plan = _price_id_to_plan(price_id)
     interval = data["items"]["data"][0]["price"]["recurring"]["interval"]
 
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     sub.plan = plan
     sub.status = data.get("status", "active")
     sub.billing_interval = "annual" if interval == "year" else "monthly"
-    sub.current_period_start = datetime.fromtimestamp(data["current_period_start"], tz=timezone.utc)
-    sub.current_period_end = datetime.fromtimestamp(data["current_period_end"], tz=timezone.utc)
+    sub.current_period_start = datetime.fromtimestamp(data["current_period_start"], tz=UTC)
+    sub.current_period_end = datetime.fromtimestamp(data["current_period_end"], tz=UTC)
     sub.skip_trace_credits_monthly = get_plan_limits(plan)["skip_traces"]
 
     logger.info("subscription_updated", stripe_sub_id=stripe_sub_id, plan=plan)

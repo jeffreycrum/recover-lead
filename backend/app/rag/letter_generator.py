@@ -68,7 +68,8 @@ async def generate_letter_content(
         model="claude-sonnet-4-20250514",
         input_tokens=response.usage.input_tokens,
         output_tokens=response.usage.output_tokens,
-        estimated_cost=(response.usage.input_tokens * 0.003 + response.usage.output_tokens * 0.015) / 1000,
+        estimated_cost=(response.usage.input_tokens * 0.003 + response.usage.output_tokens * 0.015)
+        / 1000,
     )
     session.add(usage)
 
@@ -108,16 +109,20 @@ async def generate_letters_batch(
                 lead_id=str(lead.get("id")),
                 error=str(result),
             )
-            generated.append({
-                "lead_id": str(lead.get("id")),
-                "status": "error",
-                "error": str(result),
-            })
+            generated.append(
+                {
+                    "lead_id": str(lead.get("id")),
+                    "status": "error",
+                    "error": str(result),
+                }
+            )
         else:
-            generated.append({
-                "lead_id": str(lead.get("id")),
-                "status": "success",
-                "content": result,
-            })
+            generated.append(
+                {
+                    "lead_id": str(lead.get("id")),
+                    "status": "success",
+                    "content": result,
+                }
+            )
 
     return generated

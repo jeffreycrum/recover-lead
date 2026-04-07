@@ -11,7 +11,9 @@ from app.ingestion.base_scraper import BaseScraper, RawLead
 class CsvScraper(BaseScraper):
     """Scraper for counties that provide surplus fund lists as CSV downloads."""
 
-    def __init__(self, county_name: str, source_url: str, state: str = "FL", config: dict | None = None):
+    def __init__(
+        self, county_name: str, source_url: str, state: str = "FL", config: dict | None = None
+    ):
         super().__init__(county_name, state)
         self.source_url = source_url
         self.config = config or {}
@@ -44,15 +46,17 @@ class CsvScraper(BaseScraper):
             surplus_str = row.get(amount_col, "0").strip()
             surplus_amount = self._parse_amount(surplus_str)
 
-            leads.append(RawLead(
-                case_number=case_number,
-                parcel_id=row.get(parcel_col, "").strip() or None,
-                owner_name=row.get(owner_col, "").strip() or None,
-                surplus_amount=surplus_amount,
-                property_address=row.get(address_col, "").strip() or None,
-                sale_type="tax_deed",
-                raw_data=dict(row),
-            ))
+            leads.append(
+                RawLead(
+                    case_number=case_number,
+                    parcel_id=row.get(parcel_col, "").strip() or None,
+                    owner_name=row.get(owner_col, "").strip() or None,
+                    surplus_amount=surplus_amount,
+                    property_address=row.get(address_col, "").strip() or None,
+                    sale_type="tax_deed",
+                    raw_data=dict(row),
+                )
+            )
 
         return leads
 

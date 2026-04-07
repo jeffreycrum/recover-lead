@@ -50,7 +50,9 @@ async def list_counties(
             "fips_code": county.fips_code,
             "source_type": county.source_type,
             "is_active": county.is_active,
-            "last_scraped_at": county.last_scraped_at.isoformat() if county.last_scraped_at else None,
+            "last_scraped_at": county.last_scraped_at.isoformat()
+            if county.last_scraped_at
+            else None,
             "lead_count": lead_count,
         }
         for county, lead_count in rows
@@ -71,7 +73,9 @@ async def get_county(
 
     # Get lead count
     result = await session.execute(
-        select(func.count()).select_from(Lead).where(
+        select(func.count())
+        .select_from(Lead)
+        .where(
             Lead.county_id == county_id,
             Lead.archived_at.is_(None),
         )
@@ -100,6 +104,7 @@ async def trigger_ingest(
     """Trigger a scrape for a county. Admin only."""
     if user.role != "admin":
         from app.core.exceptions import ForbiddenError
+
         raise ForbiddenError()
 
     result = await session.execute(select(County).where(County.id == county_id))
@@ -108,6 +113,7 @@ async def trigger_ingest(
         raise NotFoundError("County")
 
     from app.workers.ingestion_tasks import scrape_county
+
     task = scrape_county.delay(str(county_id))
 
     return {"task_id": task.id, "status": "queued", "county": county.name}

@@ -1,6 +1,6 @@
 """Shared test fixtures."""
+
 import os
-import uuid
 
 import pytest
 from httpx import ASGITransport, AsyncClient

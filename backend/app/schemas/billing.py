@@ -28,6 +28,7 @@ class UsageCheckResult(BaseModel):
 
 class ReservationResult(BaseModel):
     """Result of an atomic usage reservation."""
+
     allowed: bool
     plan: str
     limit: int

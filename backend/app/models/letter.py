@@ -33,9 +33,7 @@ class Letter(Base):
     )
     letter_type: Mapped[str] = mapped_column(String(50))
     content: Mapped[str] = mapped_column(Text)
-    status: Mapped[str] = mapped_column(
-        String(20), default="draft"
-    )  # draft|approved|sent|returned
+    status: Mapped[str] = mapped_column(String(20), default="draft")  # draft|approved|sent|returned
     sent_at: Mapped[datetime | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 

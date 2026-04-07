@@ -5,7 +5,7 @@ from io import BytesIO
 import httpx
 import openpyxl
 
-from app.ingestion.base_scraper import BaseScraper, RawLead, SCRAPER_HEADERS
+from app.ingestion.base_scraper import SCRAPER_HEADERS, BaseScraper, RawLead
 
 
 class XlsxScraper(BaseScraper):
@@ -16,8 +16,11 @@ class XlsxScraper(BaseScraper):
     """
 
     def __init__(
-        self, county_name: str, source_url: str,
-        state: str = "FL", config: dict | None = None,
+        self,
+        county_name: str,
+        source_url: str,
+        state: str = "FL",
+        config: dict | None = None,
     ):
         super().__init__(county_name, state)
         self.source_url = source_url
@@ -25,8 +28,10 @@ class XlsxScraper(BaseScraper):
 
     async def fetch(self) -> bytes:
         async with httpx.AsyncClient(
-            timeout=60.0, headers=SCRAPER_HEADERS,
-            follow_redirects=True, verify=False,
+            timeout=60.0,
+            headers=SCRAPER_HEADERS,
+            follow_redirects=True,
+            verify=False,
         ) as client:
             response = await client.get(self.source_url)
             response.raise_for_status()
@@ -36,7 +41,9 @@ class XlsxScraper(BaseScraper):
         """Parse Excel data into leads."""
         leads = []
         wb = openpyxl.load_workbook(
-            BytesIO(raw_data), read_only=True, data_only=True,
+            BytesIO(raw_data),
+            read_only=True,
+            data_only=True,
         )
         ws = wb.active
 
@@ -68,13 +75,15 @@ class XlsxScraper(BaseScraper):
             if surplus_amount <= 0:
                 continue
 
-            leads.append(RawLead(
-                case_number=case_number,
-                owner_name=owner_name,
-                surplus_amount=surplus_amount,
-                sale_type="tax_deed",
-                raw_data={"row": cells},
-            ))
+            leads.append(
+                RawLead(
+                    case_number=case_number,
+                    owner_name=owner_name,
+                    surplus_amount=surplus_amount,
+                    sale_type="tax_deed",
+                    raw_data={"row": cells},
+                )
+            )
 
         wb.close()
         return leads

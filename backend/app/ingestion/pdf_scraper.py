@@ -1,12 +1,12 @@
 import re
 from decimal import Decimal
+from io import BytesIO
 
 import httpx
 import pdfplumber
 import structlog
-from io import BytesIO
 
-from app.ingestion.base_scraper import BaseScraper, RawLead, SCRAPER_HEADERS
+from app.ingestion.base_scraper import SCRAPER_HEADERS, BaseScraper, RawLead
 
 logger = structlog.get_logger()
 
@@ -14,7 +14,9 @@ logger = structlog.get_logger()
 class PdfScraper(BaseScraper):
     """Scraper for counties that publish surplus fund lists as PDFs."""
 
-    def __init__(self, county_name: str, source_url: str, state: str = "FL", config: dict | None = None):
+    def __init__(
+        self, county_name: str, source_url: str, state: str = "FL", config: dict | None = None
+    ):
         super().__init__(county_name, state)
         self.source_url = source_url
         self.config = config or {}
@@ -22,8 +24,10 @@ class PdfScraper(BaseScraper):
     async def fetch(self) -> bytes:
         """Download the PDF from the county website."""
         async with httpx.AsyncClient(
-            timeout=60.0, headers=SCRAPER_HEADERS,
-            follow_redirects=True, verify=False,
+            timeout=60.0,
+            headers=SCRAPER_HEADERS,
+            follow_redirects=True,
+            verify=False,
         ) as client:
             response = await client.get(self.source_url)
             response.raise_for_status()
@@ -76,7 +80,11 @@ class PdfScraper(BaseScraper):
 
             owner_name = (row[owner_col] or "").strip() if owner_col < len(row) else None
             surplus_str = (row[surplus_col] or "").strip() if surplus_col < len(row) else "0"
-            property_address = (row[address_col] or "").strip() if address_col is not None and address_col < len(row) else None
+            property_address = (
+                (row[address_col] or "").strip()
+                if address_col is not None and address_col < len(row)
+                else None
+            )
 
             surplus_amount = self._parse_amount(surplus_str)
 

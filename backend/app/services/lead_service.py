@@ -1,7 +1,7 @@
 import uuid
 
 import structlog
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
@@ -22,9 +22,7 @@ VALID_TRANSITIONS = {
 VALID_PRIORITIES = {"low", "medium", "high"}
 
 
-async def claim_lead(
-    session: AsyncSession, user_id: uuid.UUID, lead_id: uuid.UUID
-) -> UserLead:
+async def claim_lead(session: AsyncSession, user_id: uuid.UUID, lead_id: uuid.UUID) -> UserLead:
     """Atomically claim a lead for a user. Creates a user_lead record."""
     # Check lead exists
     result = await session.execute(select(Lead).where(Lead.id == lead_id))
@@ -69,9 +67,7 @@ async def claim_lead(
     return user_lead
 
 
-async def release_lead(
-    session: AsyncSession, user_id: uuid.UUID, lead_id: uuid.UUID
-) -> None:
+async def release_lead(session: AsyncSession, user_id: uuid.UUID, lead_id: uuid.UUID) -> None:
     """Release a claimed lead."""
     result = await session.execute(
         select(UserLead).where(

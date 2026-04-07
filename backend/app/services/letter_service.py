@@ -1,8 +1,7 @@
 import io
-import uuid
 
 import structlog
-from reportlab.lib.pagesizes import letter as LETTER_SIZE
+from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
@@ -15,7 +14,7 @@ def generate_pdf(content: str, case_number: str = "") -> bytes:
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
-        pagesize=LETTER_SIZE,
+        pagesize=letter,
         leftMargin=1 * inch,
         rightMargin=1 * inch,
         topMargin=1 * inch,

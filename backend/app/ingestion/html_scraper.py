@@ -4,13 +4,15 @@ from decimal import Decimal
 import httpx
 from bs4 import BeautifulSoup
 
-from app.ingestion.base_scraper import BaseScraper, RawLead, SCRAPER_HEADERS
+from app.ingestion.base_scraper import SCRAPER_HEADERS, BaseScraper, RawLead
 
 
 class HtmlTableScraper(BaseScraper):
     """Scraper for counties that publish surplus fund lists as HTML tables."""
 
-    def __init__(self, county_name: str, source_url: str, state: str = "FL", config: dict | None = None):
+    def __init__(
+        self, county_name: str, source_url: str, state: str = "FL", config: dict | None = None
+    ):
         super().__init__(county_name, state)
         self.source_url = source_url
         self.config = config or {}
@@ -18,8 +20,10 @@ class HtmlTableScraper(BaseScraper):
     async def fetch(self) -> bytes:
         """Download the HTML page from the county website."""
         async with httpx.AsyncClient(
-            timeout=60.0, headers=SCRAPER_HEADERS,
-            follow_redirects=True, verify=False,
+            timeout=60.0,
+            headers=SCRAPER_HEADERS,
+            follow_redirects=True,
+            verify=False,
         ) as client:
             response = await client.get(self.source_url)
             response.raise_for_status()

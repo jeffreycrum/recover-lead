@@ -2,7 +2,7 @@ import json
 
 import redis.asyncio as redis
 import structlog
-from fastapi import Request, Response
+from fastapi import Request
 
 from app.config import settings
 
@@ -31,9 +31,7 @@ async def get_cached_response(idempotency_key: str) -> dict | None:
     return None
 
 
-async def cache_response(
-    idempotency_key: str, status_code: int, body: dict
-) -> None:
+async def cache_response(idempotency_key: str, status_code: int, body: dict) -> None:
     """Cache a response for an idempotency key."""
     r = get_idempotency_redis()
     data = json.dumps({"status_code": status_code, "body": body})

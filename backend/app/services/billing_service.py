@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC
 
 import redis as redis_lib
 import stripe
@@ -25,6 +26,7 @@ def get_usage_redis() -> redis_lib.Redis:
 def _usage_key(user_id: uuid.UUID, usage_type: str, period_start) -> str:
     period_str = period_start.strftime("%Y%m%d") if period_start else "rolling"
     return f"usage_reserve:{user_id}:{usage_type}:{period_str}"
+
 
 stripe.api_key = settings.stripe_secret_key
 
@@ -99,7 +101,10 @@ async def create_checkout_session(
 ) -> str:
     """Create a Stripe Checkout session and return the URL."""
     from app.config import settings
-    base_url = settings.cors_origin_list[0] if settings.cors_origin_list else "http://localhost:3000"
+
+    base_url = (
+        settings.cors_origin_list[0] if settings.cors_origin_list else "http://localhost:3000"
+    )
     if not success_url:
         success_url = f"{base_url}/settings?session_id={{CHECKOUT_SESSION_ID}}"
     if not cancel_url:
@@ -134,29 +139,47 @@ async def create_billing_portal_session(customer_id: str) -> str:
 
 
 async def get_current_usage(
-    session: AsyncSession, user_id: uuid.UUID, usage_type: str, period_start=None,
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    usage_type: str,
+    period_start=None,
 ) -> int:
     """Count usage for a given type within the current billing period."""
     if usage_type == "qualification":
         from app.models.billing import LLMUsage
-        query = select(func.count()).select_from(LLMUsage).where(
-            LLMUsage.user_id == user_id,
-            LLMUsage.task_type == "qualification",
+
+        query = (
+            select(func.count())
+            .select_from(LLMUsage)
+            .where(
+                LLMUsage.user_id == user_id,
+                LLMUsage.task_type == "qualification",
+            )
         )
         if period_start:
             query = query.where(LLMUsage.created_at >= period_start)
     elif usage_type == "letter":
         from app.models.letter import Letter
-        query = select(func.count()).select_from(Letter).where(
-            Letter.user_id == user_id,
+
+        query = (
+            select(func.count())
+            .select_from(Letter)
+            .where(
+                Letter.user_id == user_id,
+            )
         )
         if period_start:
             query = query.where(Letter.created_at >= period_start)
     elif usage_type == "skip_trace":
         from app.models.skip_trace import SkipTraceResult
-        query = select(func.count()).select_from(SkipTraceResult).where(
-            SkipTraceResult.user_id == user_id,
-            SkipTraceResult.status == "hit",
+
+        query = (
+            select(func.count())
+            .select_from(SkipTraceResult)
+            .where(
+                SkipTraceResult.user_id == user_id,
+                SkipTraceResult.status == "hit",
+            )
         )
         if period_start:
             query = query.where(SkipTraceResult.created_at >= period_start)
@@ -168,7 +191,9 @@ async def get_current_usage(
 
 
 async def check_usage_limit(
-    session: AsyncSession, user_id: uuid.UUID, usage_type: str,
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    usage_type: str,
 ):
     """Check if user can perform an action given their plan limits.
 
@@ -190,13 +215,18 @@ async def check_usage_limit(
     period_start = subscription.current_period_start if subscription else None
 
     limits = get_plan_limits(plan)
-    limit_key = {"qualification": "qualifications", "letter": "letters", "skip_trace": "skip_traces"}.get(usage_type, usage_type)
+    limit_key = {
+        "qualification": "qualifications",
+        "letter": "letters",
+        "skip_trace": "skip_traces",
+    }.get(usage_type, usage_type)
     limit = limits[limit_key]
 
     # Free tier: use 30-day rolling window so limits reset monthly
     if period_start is None:
-        from datetime import datetime, timedelta, timezone
-        period_start = datetime.now(timezone.utc) - timedelta(days=30)
+        from datetime import datetime, timedelta
+
+        period_start = datetime.now(UTC) - timedelta(days=30)
 
     current = await get_current_usage(session, user_id, usage_type, period_start)
     pct = round(current / limit * 100, 1) if limit > 0 else 0
@@ -205,19 +235,30 @@ async def check_usage_limit(
     # Paid tiers: allow overage
     if current >= limit and plan == "free":
         return UsageCheckResult(
-            allowed=False, current=current, limit=limit,
-            pct=pct, is_overage=False, plan=plan,
+            allowed=False,
+            current=current,
+            limit=limit,
+            pct=pct,
+            is_overage=False,
+            plan=plan,
         )
 
     is_overage = current >= limit and plan != "free"
     return UsageCheckResult(
-        allowed=True, current=current, limit=limit,
-        pct=pct, is_overage=is_overage, plan=plan,
+        allowed=True,
+        current=current,
+        limit=limit,
+        pct=pct,
+        is_overage=is_overage,
+        plan=plan,
     )
 
 
 async def reserve_usage(
-    session: AsyncSession, user_id: uuid.UUID, usage_type: str, count: int = 1,
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    usage_type: str,
+    count: int = 1,
 ):
     """Atomically reserve usage slots via Redis INCR.
 
@@ -242,11 +283,16 @@ async def reserve_usage(
     period_start = subscription.current_period_start if subscription else None
 
     if period_start is None:
-        from datetime import datetime, timedelta, timezone
-        period_start = datetime.now(timezone.utc) - timedelta(days=30)
+        from datetime import datetime, timedelta
+
+        period_start = datetime.now(UTC) - timedelta(days=30)
 
     limits = get_plan_limits(plan)
-    limit_key = {"qualification": "qualifications", "letter": "letters", "skip_trace": "skip_traces"}.get(usage_type, usage_type)
+    limit_key = {
+        "qualification": "qualifications",
+        "letter": "letters",
+        "skip_trace": "skip_traces",
+    }.get(usage_type, usage_type)
     limit = limits[limit_key]
 
     db_usage = await get_current_usage(session, user_id, usage_type, period_start)
@@ -294,18 +340,21 @@ async def reserve_usage(
 
 
 def release_reservation(
-    user_id: uuid.UUID, usage_type: str, count: int = 1, period_start_iso: str | None = None,
+    user_id: uuid.UUID,
+    usage_type: str,
+    count: int = 1,
+    period_start_iso: str | None = None,
 ) -> None:
     """Release reservation slots. Called on BOTH success (after DB commit) and failure.
 
     This is a sync function so it can be called from Celery workers without asyncio.
     """
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     if period_start_iso:
         period_start = datetime.fromisoformat(period_start_iso)
     else:
-        period_start = datetime.now(timezone.utc) - timedelta(days=30)
+        period_start = datetime.now(UTC) - timedelta(days=30)
 
     try:
         r = get_usage_redis()
@@ -315,13 +364,18 @@ def release_reservation(
             r.set(key, 0)
     except redis_lib.RedisError as e:
         logger.error(
-            "reservation_release_failed", error=str(e),
-            user_id=str(user_id), usage_type=usage_type,
+            "reservation_release_failed",
+            error=str(e),
+            user_id=str(user_id),
+            usage_type=usage_type,
         )
 
 
 async def record_overage_usage(
-    session: AsyncSession, user_id: uuid.UUID, usage_type: str, count: int = 1,
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    usage_type: str,
+    count: int = 1,
 ) -> None:
     """Record overage usage in Stripe against the correct metered subscription item."""
     from app.models.billing import Subscription
@@ -356,7 +410,9 @@ async def record_overage_usage(
         for item in stripe_sub["items"]["data"]:
             if item["price"]["id"] == target_price_id:
                 stripe.SubscriptionItem.create_usage_record(
-                    item["id"], quantity=count, action="increment",
+                    item["id"],
+                    quantity=count,
+                    action="increment",
                 )
                 logger.info(
                     "overage_recorded",
@@ -378,9 +434,7 @@ async def record_overage_usage(
 def verify_webhook_signature(payload: bytes, sig_header: str) -> dict:
     """Verify Stripe webhook signature and return the event."""
     try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, settings.stripe_webhook_secret
-        )
+        event = stripe.Webhook.construct_event(payload, sig_header, settings.stripe_webhook_secret)
         return event
     except stripe.error.SignatureVerificationError as e:
         logger.warning("stripe_webhook_signature_failed", error=str(e))

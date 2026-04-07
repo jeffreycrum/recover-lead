@@ -1,15 +1,15 @@
 import asyncio
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 
 import structlog
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from app.db.engine import async_session_factory
 from app.ingestion.normalizer import normalize_and_store
 from app.models.county import County
-from app.rag.embeddings import build_lead_text, generate_lead_embedding
 from app.models.lead import Lead
+from app.rag.embeddings import build_lead_text, generate_lead_embedding
 from app.workers.celery_app import celery_app
 
 logger = structlog.get_logger()
@@ -31,9 +31,7 @@ def scrape_county(self, county_id: str) -> dict:
 async def _scrape_county(county_id: str, task) -> dict:
     async with async_session_factory() as session:
         # Get county config
-        result = await session.execute(
-            select(County).where(County.id == uuid.UUID(county_id))
-        )
+        result = await session.execute(select(County).where(County.id == uuid.UUID(county_id)))
         county = result.scalar_one_or_none()
         if not county:
             return {"error": f"County {county_id} not found"}
@@ -66,15 +64,15 @@ async def _scrape_county(county_id: str, task) -> dict:
         }
 
 
-async def _generate_embeddings_for_county(
-    session, county_id: uuid.UUID, county_name: str
-) -> int:
+async def _generate_embeddings_for_county(session, county_id: uuid.UUID, county_name: str) -> int:
     """Generate embeddings for leads that don't have them yet."""
     result = await session.execute(
-        select(Lead).where(
+        select(Lead)
+        .where(
             Lead.county_id == county_id,
             Lead.embedding.is_(None),
-        ).limit(500)
+        )
+        .limit(500)
     )
     leads = result.scalars().all()
 
@@ -110,9 +108,7 @@ def scrape_all_active_counties() -> dict:
 
 async def _scrape_all() -> dict:
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(County.id).where(County.is_active.is_(True))
-        )
+        result = await session.execute(select(County.id).where(County.is_active.is_(True)))
         county_ids = [str(row[0]) for row in result.all()]
 
     # Dispatch individual scrape tasks
@@ -124,9 +120,9 @@ async def _scrape_all() -> dict:
 
 def _get_scraper(county: County):
     """Instantiate a scraper based on county config."""
-    from app.ingestion.pdf_scraper import PdfScraper
-    from app.ingestion.html_scraper import HtmlTableScraper
     from app.ingestion.csv_scraper import CsvScraper
+    from app.ingestion.html_scraper import HtmlTableScraper
+    from app.ingestion.pdf_scraper import PdfScraper
     from app.ingestion.xlsx_scraper import XlsxScraper
 
     scraper_map = {

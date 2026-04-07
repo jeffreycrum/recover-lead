@@ -113,9 +113,7 @@ async def clerk_webhook(
         logger.info("user_created", clerk_id=data["id"])
 
     elif event_type == "user.updated":
-        result = await session.execute(
-            select(User).where(User.clerk_id == data["id"])
-        )
+        result = await session.execute(select(User).where(User.clerk_id == data["id"]))
         user = result.scalar_one_or_none()
         if user:
             email = (data.get("email_addresses") or [{}])[0].get("email_address", "")
@@ -124,9 +122,7 @@ async def clerk_webhook(
             logger.info("user_updated", clerk_id=data["id"])
 
     elif event_type == "user.deleted":
-        result = await session.execute(
-            select(User).where(User.clerk_id == data["id"])
-        )
+        result = await session.execute(select(User).where(User.clerk_id == data["id"]))
         user = result.scalar_one_or_none()
         if user:
             user.is_active = False

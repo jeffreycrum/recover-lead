@@ -6,7 +6,7 @@ from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ForbiddenError, InsufficientCreditsError, NotFoundError
+from app.core.exceptions import InsufficientCreditsError, NotFoundError
 from app.db.session import get_async_session
 from app.dependencies import get_current_user
 from app.models.county import County
@@ -49,14 +49,18 @@ async def generate_letter(
         raise NotFoundError("Claimed lead")
 
     from app.services.billing_service import reserve_usage
+
     reservation = await reserve_usage(session, user.id, "letter", count=1)
     if not reservation.allowed:
         raise InsufficientCreditsError()
 
     from app.workers.letter_tasks import generate_letter_task
+
     task = generate_letter_task.delay(
-        str(user.id), str(req.lead_id),
-        req.letter_type, reservation.overage_count > 0,
+        str(user.id),
+        str(req.lead_id),
+        req.letter_type,
+        reservation.overage_count > 0,
         reservation.period_start_iso,
     )
 
@@ -85,18 +89,25 @@ async def generate_batch(
     if len(req.lead_ids) > MAX_BATCH_SIZE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "BATCH_TOO_LARGE", "message": f"Maximum {MAX_BATCH_SIZE} leads per batch"},
+            detail={
+                "code": "BATCH_TOO_LARGE",
+                "message": f"Maximum {MAX_BATCH_SIZE} leads per batch",
+            },
         )
 
     from app.services.billing_service import reserve_usage
+
     reservation = await reserve_usage(session, user.id, "letter", count=len(req.lead_ids))
     if not reservation.allowed:
         raise InsufficientCreditsError()
 
     from app.workers.letter_tasks import generate_batch_task
+
     task = generate_batch_task.delay(
-        str(user.id), [str(lid) for lid in req.lead_ids],
-        req.letter_type, reservation.overage_count,
+        str(user.id),
+        [str(lid) for lid in req.lead_ids],
+        req.letter_type,
+        reservation.overage_count,
         reservation.period_start_iso,
     )
 
@@ -177,7 +188,13 @@ async def get_letter(
 ) -> LetterResponse:
     """Get letter detail."""
     result = await session.execute(
-        select(Letter, Lead.case_number, County.name.label("county_name"), Lead.owner_name, Lead.surplus_amount)
+        select(
+            Letter,
+            Lead.case_number,
+            County.name.label("county_name"),
+            Lead.owner_name,
+            Lead.surplus_amount,
+        )
         .join(Lead, Letter.lead_id == Lead.id)
         .join(County, Lead.county_id == County.id)
         .where(Letter.id == letter_id, Letter.user_id == user.id)
@@ -243,7 +260,9 @@ async def update_letter(
         .where(Lead.id == ltr.lead_id)
     )
     lead_row = result.one_or_none()
-    case_number, county_name, owner_name, surplus_amount = lead_row if lead_row else (None, None, None, None)
+    case_number, county_name, owner_name, surplus_amount = (
+        lead_row if lead_row else (None, None, None, None)
+    )
 
     return LetterResponse(
         id=ltr.id,
@@ -308,5 +327,3 @@ async def download_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
-
-

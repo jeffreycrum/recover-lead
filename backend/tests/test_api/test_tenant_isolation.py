@@ -4,12 +4,12 @@ Verifies that user A cannot access user B's data.
 """
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.services.lead_service import validate_status_transition, validate_priority
 from app.core.exceptions import ConflictError
+from app.services.lead_service import validate_priority, validate_status_transition
 
 
 class TestStatusTransitions:
@@ -54,8 +54,8 @@ class TestTenantIsolationConcept:
     @pytest.mark.asyncio
     async def test_claim_lead_requires_lead_exists(self):
         """claim_lead should raise NotFoundError for nonexistent lead."""
-        from app.services.lead_service import claim_lead
         from app.core.exceptions import NotFoundError
+        from app.services.lead_service import claim_lead
 
         session = AsyncMock()
         mock_result = MagicMock()
@@ -68,8 +68,8 @@ class TestTenantIsolationConcept:
     @pytest.mark.asyncio
     async def test_release_lead_requires_ownership(self):
         """release_lead should raise NotFoundError if user doesn't own the lead."""
-        from app.services.lead_service import release_lead
         from app.core.exceptions import NotFoundError
+        from app.services.lead_service import release_lead
 
         session = AsyncMock()
         mock_result = MagicMock()

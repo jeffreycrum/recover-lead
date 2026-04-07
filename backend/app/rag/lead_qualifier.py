@@ -86,7 +86,8 @@ async def qualify_lead(
         model="claude-sonnet-4-20250514",
         input_tokens=response.usage.input_tokens,
         output_tokens=response.usage.output_tokens,
-        estimated_cost=(response.usage.input_tokens * 0.003 + response.usage.output_tokens * 0.015) / 1000,
+        estimated_cost=(response.usage.input_tokens * 0.003 + response.usage.output_tokens * 0.015)
+        / 1000,
     )
     session.add(usage)
 

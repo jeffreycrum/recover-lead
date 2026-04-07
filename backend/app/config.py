@@ -3,7 +3,9 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # Database
-    database_url: str = "postgresql+asyncpg://recoverlead:recoverlead_dev@localhost:5432/recoverlead"
+    database_url: str = (
+        "postgresql+asyncpg://recoverlead:recoverlead_dev@localhost:5432/recoverlead"
+    )
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"

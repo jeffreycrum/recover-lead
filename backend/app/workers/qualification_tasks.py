@@ -2,7 +2,7 @@ import asyncio
 import uuid
 
 import structlog
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
@@ -34,19 +34,24 @@ def _get_worker_session() -> AsyncSession:
     queue="rag",
 )
 def qualify_single(
-    self, user_id: str, lead_id: str,
-    is_overage: bool = False, period_start_iso: str = "",
+    self,
+    user_id: str,
+    lead_id: str,
+    is_overage: bool = False,
+    period_start_iso: str = "",
 ) -> dict:
     """Qualify a single lead via Claude."""
     try:
         result = asyncio.run(_qualify_single(user_id, lead_id, self, is_overage))
         # Release reservation on success (usage now committed to DB)
         from app.services.billing_service import release_reservation
+
         release_reservation(uuid.UUID(user_id), "qualification", 1, period_start_iso or None)
         return result
     except Exception:
         if self.request.retries >= self.max_retries:
             from app.services.billing_service import release_reservation
+
             release_reservation(uuid.UUID(user_id), "qualification", 1, period_start_iso or None)
         raise
 
@@ -90,7 +95,8 @@ async def _qualify_single(user_id: str, lead_id: str, task, is_overage: bool = F
             embedding = generate_lead_embedding(lead_text)
 
             # Find similar leads via pgvector
-            # Use raw connection to avoid asyncpg's parameter binding conflicting with pgvector's <=> operator
+            # Use raw connection to avoid asyncpg's parameter binding
+            # conflicting with pgvector's <=> operator
             embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
             county_id_str = str(lead.county_id)
             lead_id_str = str(lead.id)
@@ -155,25 +161,34 @@ async def _qualify_single(user_id: str, lead_id: str, task, is_overage: bool = F
 
                 import json
                 import re
+
                 raw_text = response.content[0].text.strip()
                 try:
                     data = json.loads(raw_text)
                 except json.JSONDecodeError:
                     match = re.search(r"\{.*\}", raw_text, re.DOTALL)
-                    data = json.loads(match.group()) if match else {"quality_score": 5, "reasoning": raw_text[:500]}
+                    data = (
+                        json.loads(match.group())
+                        if match
+                        else {"quality_score": 5, "reasoning": raw_text[:500]}
+                    )
 
                 quality_score = max(1, min(10, int(data.get("quality_score", 5))))
                 reasoning = data.get("reasoning", "No reasoning provided")[:2000]
 
                 # Log LLM usage
                 from app.models.billing import LLMUsage
+
                 usage = LLMUsage(
                     user_id=uuid.UUID(user_id),
                     task_type="qualification",
                     model="claude-sonnet-4-20250514",
                     input_tokens=response.usage.input_tokens,
                     output_tokens=response.usage.output_tokens,
-                    estimated_cost=(response.usage.input_tokens * 0.003 + response.usage.output_tokens * 0.015) / 1000,
+                    estimated_cost=(
+                        response.usage.input_tokens * 0.003 + response.usage.output_tokens * 0.015
+                    )
+                    / 1000,
                 )
                 session.add(usage)
 
@@ -191,8 +206,11 @@ async def _qualify_single(user_id: str, lead_id: str, task, is_overage: bool = F
         # the DB transaction with synchronous Stripe HTTP calls)
         if is_overage:
             from app.services.billing_service import record_overage_usage
+
             await record_overage_usage(
-                session, uuid.UUID(user_id), "qualification",
+                session,
+                uuid.UUID(user_id),
+                "qualification",
             )
 
         return {
@@ -213,8 +231,11 @@ async def _qualify_single(user_id: str, lead_id: str, task, is_overage: bool = F
     time_limit=600,
 )
 def qualify_batch(
-    self, user_id: str, lead_ids: list[str],
-    overage_count: int = 0, period_start_iso: str = "",
+    self,
+    user_id: str,
+    lead_ids: list[str],
+    overage_count: int = 0,
+    period_start_iso: str = "",
 ) -> dict:
     """Qualify a batch of leads."""
     results = {"qualified": 0, "errors": 0, "total": len(lead_ids)}
@@ -238,8 +259,11 @@ def qualify_batch(
 
     # Release all reservations on batch completion
     from app.services.billing_service import release_reservation
+
     release_reservation(
-        uuid.UUID(user_id), "qualification",
-        len(lead_ids), period_start_iso or None,
+        uuid.UUID(user_id),
+        "qualification",
+        len(lead_ids),
+        period_start_iso or None,
     )
     return results

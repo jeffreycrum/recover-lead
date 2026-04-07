@@ -1,7 +1,7 @@
 """Tests for billing endpoints and usage enforcement."""
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -37,6 +37,7 @@ class TestCheckoutEndpoint:
     @pytest.mark.asyncio
     async def test_checkout_invalid_plan(self, mock_user):
         from app.dependencies import get_current_user
+
         app.dependency_overrides[get_current_user] = lambda: mock_user
         try:
             transport = ASGITransport(app=app)
@@ -52,6 +53,7 @@ class TestCheckoutEndpoint:
     @pytest.mark.asyncio
     async def test_checkout_invalid_interval(self, mock_user):
         from app.dependencies import get_current_user
+
         app.dependency_overrides[get_current_user] = lambda: mock_user
         try:
             transport = ASGITransport(app=app)

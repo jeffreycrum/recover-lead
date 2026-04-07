@@ -1,15 +1,20 @@
 """Tests for skip trace API endpoints."""
 
-import json
 import uuid
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
-from app.services.skip_trace import SkipTraceLookupResponse, PersonResult, PhoneResult, EmailResult, AddressResult
+from app.services.skip_trace import (
+    AddressResult,
+    EmailResult,
+    PersonResult,
+    PhoneResult,
+    SkipTraceLookupResponse,
+)
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 
@@ -35,9 +40,13 @@ def _make_hit_response():
                 deceased=False,
                 property_owner=True,
                 litigator=False,
-                mailing_address=AddressResult(street="456 Oak Ave", city="Tampa", state="FL", zip_code="33602"),
+                mailing_address=AddressResult(
+                    street="456 Oak Ave", city="Tampa", state="FL", zip_code="33602"
+                ),
                 phones=[
-                    PhoneResult(number="8135551234", type="cell", dnc=False, carrier="T-Mobile", rank=1),
+                    PhoneResult(
+                        number="8135551234", type="cell", dnc=False, carrier="T-Mobile", rank=1
+                    ),
                 ],
                 emails=[
                     EmailResult(email="jsmith@gmail.com", rank=1),
@@ -58,6 +67,7 @@ class TestSkipTraceEndpoint:
         """Skip trace on an unclaimed lead should return 404."""
         user = _make_mock_user()
         from app.dependencies import get_current_user
+
         app.dependency_overrides[get_current_user] = lambda: user
 
         try:
@@ -117,6 +127,7 @@ class TestBulkSkipTraceEndpoint:
     async def test_empty_lead_ids_returns_400(self):
         user = _make_mock_user()
         from app.dependencies import get_current_user
+
         app.dependency_overrides[get_current_user] = lambda: user
 
         try:
@@ -134,6 +145,7 @@ class TestBulkSkipTraceEndpoint:
     async def test_batch_too_large_returns_400(self):
         user = _make_mock_user()
         from app.dependencies import get_current_user
+
         app.dependency_overrides[get_current_user] = lambda: user
 
         try:

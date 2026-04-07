@@ -41,11 +41,13 @@ class TestClaimConcurrency:
         mock_existing = MagicMock()
         mock_existing.scalar_one.return_value = existing_claim
 
-        session.execute = AsyncMock(side_effect=[
-            mock_lead_result,
-            mock_no_claim,
-            mock_existing,  # after savepoint rollback
-        ])
+        session.execute = AsyncMock(
+            side_effect=[
+                mock_lead_result,
+                mock_no_claim,
+                mock_existing,  # after savepoint rollback
+            ]
+        )
 
         # Simulate IntegrityError on flush inside begin_nested savepoint
         session.flush = AsyncMock(
@@ -56,6 +58,7 @@ class TestClaimConcurrency:
         class MockSavepoint:
             async def __aenter__(self):
                 return self
+
             async def __aexit__(self, exc_type, exc_val, exc_tb):
                 # Savepoint catches IntegrityError (re-raises for caller)
                 return False

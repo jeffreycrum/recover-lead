@@ -1,7 +1,7 @@
 """Tracerfy skip trace provider implementation."""
 
-import structlog
 import httpx
+import structlog
 
 from app.services.skip_trace import (
     AddressResult,

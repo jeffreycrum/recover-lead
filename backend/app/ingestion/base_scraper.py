@@ -3,7 +3,7 @@ import os
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -15,7 +15,11 @@ ARTIFACTS_DIR = Path(os.environ.get("SCRAPER_ARTIFACTS_DIR", "/data/scraper_arti
 
 # Browser-like headers to avoid bot blocking on county clerk websites
 SCRAPER_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.5",
 }
@@ -58,7 +62,9 @@ def normalize_name(name: str | None) -> str:
     return re.sub(r"\s+", " ", name.lower().strip())
 
 
-def compute_source_hash(county_id: str, case_number: str, parcel_id: str | None, owner_name: str | None) -> str:
+def compute_source_hash(
+    county_id: str, case_number: str, parcel_id: str | None, owner_name: str | None
+) -> str:
     """Compute SHA-256 hash of normalized business keys for deduplication."""
     parts = [
         county_id,
@@ -103,10 +109,12 @@ class BaseScraper(ABC):
     def _save_artifact(self, raw_data: bytes) -> Path | None:
         """Save raw scrape data to disk for audit trail and debugging."""
         try:
-            county_dir = ARTIFACTS_DIR / self.state.lower() / self.county_name.lower().replace(" ", "_")
+            county_dir = (
+                ARTIFACTS_DIR / self.state.lower() / self.county_name.lower().replace(" ", "_")
+            )
             county_dir.mkdir(parents=True, exist_ok=True)
 
-            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
             ext = {"pdf": ".pdf", "html": ".html", "csv": ".csv"}.get(
                 getattr(self, "source_type", ""), ".bin"
             )

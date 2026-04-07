@@ -146,7 +146,9 @@ class TestTracerfyProvider:
         mock_response = MagicMock()
         mock_response.status_code = 429
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "rate limited", request=MagicMock(), response=mock_response,
+            "rate limited",
+            request=MagicMock(),
+            response=mock_response,
         )
 
         with patch("httpx.AsyncClient") as mock_client_cls:

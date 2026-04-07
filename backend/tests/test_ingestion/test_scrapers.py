@@ -3,7 +3,6 @@
 These tests use saved HTML/CSV files — never hit real county websites.
 """
 
-import os
 from decimal import Decimal
 from pathlib import Path
 
@@ -114,10 +113,19 @@ class TestVolusiaScraper:
             raw_data = f.read()
 
         config = {
-            "columns": {"case_number": 2, "owner_name": 1, "surplus_amount": 3, "property_address": None},
+            "columns": {
+                "case_number": 2,
+                "owner_name": 1,
+                "surplus_amount": 3,
+                "property_address": None,
+            },
             "skip_rows_containing": [
-                "CLERK OF THE CIRCUIT", "TAX DEED SURPLUS", "Fee calculator",
-                "Deposit amount", "Date Surplus", "Amt of Deposit",
+                "CLERK OF THE CIRCUIT",
+                "TAX DEED SURPLUS",
+                "Fee calculator",
+                "Deposit amount",
+                "Date Surplus",
+                "Amt of Deposit",
             ],
         }
         scraper = PdfScraper("Volusia", "http://example.com", config=config)
@@ -139,10 +147,19 @@ class TestVolusiaScraper:
             raw_data = f.read()
 
         config = {
-            "columns": {"case_number": 2, "owner_name": 1, "surplus_amount": 3, "property_address": None},
+            "columns": {
+                "case_number": 2,
+                "owner_name": 1,
+                "surplus_amount": 3,
+                "property_address": None,
+            },
             "skip_rows_containing": [
-                "CLERK OF THE CIRCUIT", "TAX DEED SURPLUS", "Fee calculator",
-                "Deposit amount", "Date Surplus", "Amt of Deposit",
+                "CLERK OF THE CIRCUIT",
+                "TAX DEED SURPLUS",
+                "Fee calculator",
+                "Deposit amount",
+                "Date Surplus",
+                "Amt of Deposit",
             ],
         }
         scraper = PdfScraper("Volusia", "http://example.com", config=config)

@@ -44,11 +44,15 @@ class Lead(Base):
     property_zip: Mapped[str | None] = mapped_column(String(10), nullable=True)
     surplus_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"))
     sale_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    sale_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # tax_deed|foreclosure|lien
+    sale_type: Mapped[str | None] = mapped_column(
+        String(20), nullable=True
+    )  # tax_deed|foreclosure|lien
 
     # Owner (encrypted PII)
     owner_name: Mapped[str | None] = mapped_column(EncryptedString(1024), nullable=True)
-    owner_last_known_address: Mapped[str | None] = mapped_column(EncryptedString(2048), nullable=True)
+    owner_last_known_address: Mapped[str | None] = mapped_column(
+        EncryptedString(2048), nullable=True
+    )
 
     # Metadata
     source_hash: Mapped[str] = mapped_column(String(64))  # SHA-256
@@ -98,9 +102,7 @@ class UserLead(Base):
 
 class LeadContact(Base):
     __tablename__ = "lead_contacts"
-    __table_args__ = (
-        CheckConstraint("confidence BETWEEN 0 AND 1", name="ck_contact_confidence"),
-    )
+    __table_args__ = (CheckConstraint("confidence BETWEEN 0 AND 1", name="ck_contact_confidence"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     lead_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("leads.id"))

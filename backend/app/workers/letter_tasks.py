@@ -23,30 +23,35 @@ logger = structlog.get_logger()
     queue="rag",
 )
 def generate_letter_task(
-    self, user_id: str, lead_id: str,
-    letter_type: str = "tax_deed", is_overage: bool = False,
+    self,
+    user_id: str,
+    lead_id: str,
+    letter_type: str = "tax_deed",
+    is_overage: bool = False,
     period_start_iso: str = "",
 ) -> dict:
     """Generate a single letter via Claude."""
     try:
-        result = asyncio.run(
-            _generate_letter(user_id, lead_id, letter_type, is_overage)
-        )
+        result = asyncio.run(_generate_letter(user_id, lead_id, letter_type, is_overage))
         # Release reservation on success (usage now committed to DB)
         from app.services.billing_service import release_reservation
+
         release_reservation(uuid.UUID(user_id), "letter", 1, period_start_iso or None)
         return result
     except Exception:
         if self.request.retries >= self.max_retries:
             # Final failure — release the reservation
             from app.services.billing_service import release_reservation
+
             release_reservation(uuid.UUID(user_id), "letter", 1, period_start_iso or None)
         raise
 
 
 async def _generate_letter(
-    user_id: str, lead_id: str,
-    letter_type: str, is_overage: bool = False,
+    user_id: str,
+    lead_id: str,
+    letter_type: str,
+    is_overage: bool = False,
 ) -> dict:
     async with async_session_factory() as session:
         async with session.begin():
@@ -103,8 +108,11 @@ async def _generate_letter(
         # Record overage AFTER transaction commits
         if is_overage:
             from app.services.billing_service import record_overage_usage
+
             await record_overage_usage(
-                session, uuid.UUID(user_id), "letter",
+                session,
+                uuid.UUID(user_id),
+                "letter",
             )
 
         logger.info("letter_generated", lead_id=lead_id, letter_id=str(letter.id))
@@ -127,26 +135,33 @@ async def _generate_letter(
     time_limit=600,
 )
 def generate_batch_task(
-    self, user_id: str, lead_ids: list[str],
-    letter_type: str = "tax_deed", overage_count: int = 0,
+    self,
+    user_id: str,
+    lead_ids: list[str],
+    letter_type: str = "tax_deed",
+    overage_count: int = 0,
     period_start_iso: str = "",
 ) -> dict:
     """Generate letters for a batch of leads."""
-    result = asyncio.run(
-        _generate_batch(user_id, lead_ids, letter_type, overage_count, self)
-    )
+    result = asyncio.run(_generate_batch(user_id, lead_ids, letter_type, overage_count, self))
     # Release all reservations on completion (both successes and failures)
     from app.services.billing_service import release_reservation
+
     release_reservation(
-        uuid.UUID(user_id), "letter",
-        len(lead_ids), period_start_iso or None,
+        uuid.UUID(user_id),
+        "letter",
+        len(lead_ids),
+        period_start_iso or None,
     )
     return result
 
 
 async def _generate_batch(
-    user_id: str, lead_ids: list[str],
-    letter_type: str, overage_count: int, task,
+    user_id: str,
+    lead_ids: list[str],
+    letter_type: str,
+    overage_count: int,
+    task,
 ) -> dict:
     results = {"generated": 0, "errors": 0, "total": len(lead_ids)}
     overage_start = len(lead_ids) - overage_count
@@ -160,7 +175,10 @@ async def _generate_batch(
 
             is_overage = i >= overage_start
             result = await _generate_letter(
-                user_id, lead_id, letter_type, is_overage,
+                user_id,
+                lead_id,
+                letter_type,
+                is_overage,
             )
             if "error" in result:
                 results["errors"] += 1

@@ -40,7 +40,7 @@ celery_app.conf.update(
 
 # Explicitly import all task modules so Celery registers them
 import app.workers.ingestion_tasks  # noqa: F401, E402
-import app.workers.qualification_tasks  # noqa: F401, E402
 import app.workers.letter_tasks  # noqa: F401, E402
-import app.workers.skip_trace_tasks  # noqa: F401, E402
+import app.workers.qualification_tasks  # noqa: F401, E402
 import app.workers.scheduled  # noqa: F401, E402
+import app.workers.skip_trace_tasks  # noqa: F401, E402
