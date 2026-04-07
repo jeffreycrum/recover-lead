@@ -63,6 +63,7 @@ class Lead(Base):
     contacts: Mapped[list["LeadContact"]] = relationship(back_populates="lead")
     activities: Mapped[list["LeadActivity"]] = relationship(back_populates="lead")
     letters: Mapped[list["Letter"]] = relationship(back_populates="lead")  # noqa: F821
+    skip_trace_results: Mapped[list["SkipTraceResult"]] = relationship(back_populates="lead")  # noqa: F821
 
 
 class UserLead(Base):

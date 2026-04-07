@@ -1,0 +1,46 @@
+{
+  "results": [
+    {
+      "first_name": "John",
+      "last_name": "Smith",
+      "full_name": "John A Smith",
+      "dob": "1975-03-15",
+      "age": 51,
+      "deceased": false,
+      "property_owner": true,
+      "litigator": false,
+      "mailing_address": {
+        "street": "456 Oak Avenue",
+        "city": "Tampa",
+        "state": "FL",
+        "zip": "33602"
+      },
+      "phones": [
+        {
+          "number": "8135551234",
+          "type": "cell",
+          "dnc": false,
+          "carrier": "T-Mobile",
+          "rank": 1
+        },
+        {
+          "number": "8135555678",
+          "type": "landline",
+          "dnc": true,
+          "carrier": "AT&T",
+          "rank": 2
+        }
+      ],
+      "emails": [
+        {
+          "email": "jsmith75@gmail.com",
+          "rank": 1
+        },
+        {
+          "email": "john.smith@work.com",
+          "rank": 2
+        }
+      ]
+    }
+  ]
+}
