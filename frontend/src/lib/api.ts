@@ -166,6 +166,18 @@ export class ApiClient {
     return this.request<{ portal_url: string }>("/billing/portal");
   }
 
+  // Skip Trace
+  skipTraceLead(leadId: string) {
+    return this.request<any>(`/leads/${leadId}/skip-trace`, { method: "POST" });
+  }
+
+  bulkSkipTrace(leadIds: string[]) {
+    return this.request<any>("/leads/bulk-skip-trace", {
+      method: "POST",
+      body: JSON.stringify({ lead_ids: leadIds }),
+    });
+  }
+
   // Tasks
   getTaskStatus(taskId: string) {
     return this.request<any>(`/tasks/${taskId}`);

@@ -75,10 +75,29 @@ export function SettingsPage() {
             </div>
           )}
 
+          {sub.usage && sub.usage.overage_cost_estimate > 0 && sub.plan !== "free" && (
+            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+              Estimated overage charges this period:{" "}
+              <span className="font-semibold">
+                ${sub.usage.overage_cost_estimate.toFixed(2)}
+              </span>
+              {sub.usage.qualifications_overage > 0 && (
+                <span className="ml-1">
+                  ({sub.usage.qualifications_overage} extra qualification{sub.usage.qualifications_overage !== 1 ? "s" : ""})
+                </span>
+              )}
+              {sub.usage.letters_overage > 0 && (
+                <span className="ml-1">
+                  ({sub.usage.letters_overage} extra letter{sub.usage.letters_overage !== 1 ? "s" : ""})
+                </span>
+              )}
+            </div>
+          )}
+
           {sub.plan !== "free" && (
             <button
               onClick={handleManageBilling}
-              className="text-sm text-emerald hover:underline"
+              className="text-sm text-emerald hover:underline mt-3"
             >
               Manage billing
             </button>

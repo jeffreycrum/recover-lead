@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { useLead, useClaimLead, useReleaseLead, useQualifyLead } from "@/hooks/use-leads";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { api } from "@/lib/api";
 import { LeadScoreBadge } from "./lead-score-badge";
-import { X, MapPin, User, DollarSign,  Zap } from "lucide-react";
+import { SkipTraceResults } from "./skip-trace-results";
+import { X, MapPin, User, DollarSign, Zap, Search, Loader2 } from "lucide-react";
 
 interface LeadDetailProps {
   leadId: string;
@@ -127,19 +130,61 @@ export function LeadDetail({ leadId, onClose }: LeadDetailProps) {
           )}
         </div>
 
-        {/* Skip trace — coming soon */}
+        {/* Skip Trace */}
         {isClaimed && (
-          <div className="pt-2">
-            <button
-              disabled
-              className="w-full px-4 py-2 border border-dashed rounded-md text-sm text-muted-foreground cursor-not-allowed"
-              title="Skip trace coming soon"
-            >
-              Skip Trace — Coming Soon
-            </button>
-          </div>
+          <SkipTraceSection leadId={leadId} skipTraceResults={lead.skip_trace_results} />
         )}
       </div>
+    </div>
+  );
+}
+
+
+function SkipTraceSection({ leadId, skipTraceResults }: { leadId: string; skipTraceResults?: any[] }) {
+  const [isRunning, setIsRunning] = useState(false);
+  const [results, setResults] = useState(skipTraceResults || []);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSkipTrace = async () => {
+    setIsRunning(true);
+    setError(null);
+    try {
+      const result = await api.skipTraceLead(leadId);
+      setResults([result, ...results]);
+    } catch (e: any) {
+      const detail = e?.detail || e?.message || "Skip trace failed";
+      setError(typeof detail === "string" ? detail : detail.message || "Skip trace failed");
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  return (
+    <div className="pt-2">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+          <Search size={14} /> Skip Trace
+        </h3>
+        <button
+          onClick={handleSkipTrace}
+          disabled={isRunning}
+          className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50 flex items-center gap-1"
+        >
+          {isRunning ? (
+            <>
+              <Loader2 size={12} className="animate-spin" /> Running...
+            </>
+          ) : results.length > 0 ? (
+            "Re-run Skip Trace"
+          ) : (
+            "Run Skip Trace"
+          )}
+        </button>
+      </div>
+      {error && (
+        <p className="text-xs text-red-600 mb-2">{error}</p>
+      )}
+      <SkipTraceResults results={results} />
     </div>
   );
 }
