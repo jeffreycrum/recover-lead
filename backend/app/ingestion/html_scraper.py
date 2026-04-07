@@ -4,7 +4,7 @@ from decimal import Decimal
 import httpx
 from bs4 import BeautifulSoup
 
-from app.ingestion.base_scraper import BaseScraper, RawLead
+from app.ingestion.base_scraper import BaseScraper, RawLead, SCRAPER_HEADERS
 
 
 class HtmlTableScraper(BaseScraper):
@@ -17,7 +17,10 @@ class HtmlTableScraper(BaseScraper):
 
     async def fetch(self) -> bytes:
         """Download the HTML page from the county website."""
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(
+            timeout=60.0, headers=SCRAPER_HEADERS,
+            follow_redirects=True, verify=False,
+        ) as client:
             response = await client.get(self.source_url)
             response.raise_for_status()
             return response.content

@@ -6,7 +6,7 @@ import pdfplumber
 import structlog
 from io import BytesIO
 
-from app.ingestion.base_scraper import BaseScraper, RawLead
+from app.ingestion.base_scraper import BaseScraper, RawLead, SCRAPER_HEADERS
 
 logger = structlog.get_logger()
 
@@ -21,7 +21,10 @@ class PdfScraper(BaseScraper):
 
     async def fetch(self) -> bytes:
         """Download the PDF from the county website."""
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(
+            timeout=60.0, headers=SCRAPER_HEADERS,
+            follow_redirects=True, verify=False,
+        ) as client:
             response = await client.get(self.source_url)
             response.raise_for_status()
             return response.content

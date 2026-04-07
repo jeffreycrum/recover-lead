@@ -53,7 +53,7 @@ async def _scrape_county(county_id: str, task) -> dict:
         result = await normalize_and_store(session, county.id, raw_leads)
 
         # Update county metadata
-        county.last_scraped_at = datetime.now(timezone.utc)
+        county.last_scraped_at = datetime.utcnow()
         county.last_lead_count = result["inserted"] + result["skipped"]
         await session.commit()
 
@@ -127,11 +127,13 @@ def _get_scraper(county: County):
     from app.ingestion.pdf_scraper import PdfScraper
     from app.ingestion.html_scraper import HtmlTableScraper
     from app.ingestion.csv_scraper import CsvScraper
+    from app.ingestion.xlsx_scraper import XlsxScraper
 
     scraper_map = {
         "PdfScraper": PdfScraper,
         "HtmlTableScraper": HtmlTableScraper,
         "CsvScraper": CsvScraper,
+        "XlsxScraper": XlsxScraper,
     }
 
     scraper_cls = scraper_map.get(county.scraper_class)
