@@ -8,12 +8,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Python dependencies
+# Python dependencies (cached unless pyproject.toml changes)
 COPY backend/pyproject.toml .
-COPY backend/app/ app/
-RUN pip install --no-cache-dir "."
+RUN pip install --no-cache-dir ".[prod]" 2>/dev/null || pip install --no-cache-dir "."
 
-# Alembic config
+# Application code (changes here don't bust the pip cache)
+COPY backend/app/ app/
 COPY backend/alembic.ini .
 COPY backend/alembic/ alembic/
 
