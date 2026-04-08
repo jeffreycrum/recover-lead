@@ -9,11 +9,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Python dependencies
-COPY pyproject.toml .
-RUN pip install --no-cache-dir -e ".[dev]"
+COPY backend/pyproject.toml .
+COPY backend/app/ app/
+RUN pip install --no-cache-dir "."
 
-# Application code
-COPY . .
+# Alembic config
+COPY backend/alembic.ini .
+COPY backend/alembic/ alembic/
 
 EXPOSE 8000
 
