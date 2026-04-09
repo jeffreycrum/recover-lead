@@ -11,12 +11,16 @@ from app.core.exceptions import InsufficientCreditsError, NotFoundError
 from app.db.session import get_async_session
 from app.dependencies import get_current_user
 from app.models.county import County
-from app.models.lead import Lead, LeadContact, UserLead
+from app.models.lead import Lead, LeadActivity, LeadContact, UserLead
 from app.models.user import User
 from app.schemas.lead import (
+    ActivityCreateRequest,
     BulkQualifyRequest,
     ClaimResponse,
     CursorPage,
+    DealCloseRequest,
+    DealPayRequest,
+    LeadActivityResponse,
     LeadBrowseResponse,
     LeadContactResponse,
     LeadDetailResponse,
@@ -27,6 +31,7 @@ from app.schemas.lead import (
 from app.schemas.skip_trace import BulkSkipTraceRequest
 from app.services.lead_service import (
     claim_lead,
+    record_activity,
     release_lead,
     validate_priority,
     validate_status_transition,
@@ -260,6 +265,7 @@ async def claim(
 ) -> ClaimResponse:
     """Claim a lead for your pipeline."""
     user_lead = await claim_lead(session, user.id, lead_id)
+    await record_activity(session, lead_id, user.id, "claimed", "Lead claimed")
     return ClaimResponse(
         user_lead_id=user_lead.id,
         lead_id=lead_id,
@@ -274,6 +280,7 @@ async def release(
     user: User = Depends(get_current_user),
 ) -> None:
     """Release a claimed lead from your pipeline."""
+    await record_activity(session, lead_id, user.id, "released", "Lead released")
     await release_lead(session, user.id, lead_id)
 
 
@@ -296,6 +303,8 @@ async def update_lead(
     if not user_lead:
         raise NotFoundError("Claimed lead")
 
+    old_status = user_lead.status
+
     if req.status is not None:
         validate_status_transition(user_lead.status, req.status)
         user_lead.status = req.status
@@ -304,7 +313,111 @@ async def update_lead(
         validate_priority(req.priority)
         user_lead.priority = req.priority
 
+    if req.status is not None:
+        await record_activity(
+            session, lead_id, user.id, "status_change",
+            f"Status changed from {old_status} to {req.status}",
+            {"from": old_status, "to": req.status},
+        )
+
     await session.flush()
+
+    return UserLeadResponse(
+        id=user_lead.id,
+        status=user_lead.status,
+        quality_score=user_lead.quality_score,
+        quality_reasoning=user_lead.quality_reasoning,
+        priority=user_lead.priority,
+        created_at=user_lead.created_at,
+        updated_at=user_lead.updated_at,
+    )
+
+
+@router.post("/{lead_id}/pay", response_model=UserLeadResponse, status_code=status.HTTP_200_OK)
+async def pay_lead(
+    lead_id: uuid.UUID,
+    req: DealPayRequest,
+    session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(get_current_user),
+) -> UserLeadResponse:
+    """Mark a filed lead as paid with recovery outcome."""
+    result = await session.execute(
+        select(UserLead).where(
+            UserLead.user_id == user.id,
+            UserLead.lead_id == lead_id,
+        )
+    )
+    user_lead = result.scalar_one_or_none()
+    if not user_lead:
+        raise NotFoundError("Claimed lead")
+
+    validate_status_transition(user_lead.status, "paid")
+
+    fee_amount = req.outcome_amount * req.fee_percentage / Decimal("100")
+    user_lead.status = "paid"
+    user_lead.outcome_amount = req.outcome_amount
+    user_lead.fee_percentage = req.fee_percentage
+    user_lead.fee_amount = fee_amount
+    user_lead.outcome_notes = req.notes
+
+    await session.flush()
+
+    await record_activity(
+        session, lead_id, user.id, "deal_paid",
+        f"Deal paid: {req.outcome_amount} recovered, {req.fee_percentage}% fee",
+        {
+            "outcome_amount": str(req.outcome_amount),
+            "fee_percentage": str(req.fee_percentage),
+            "fee_amount": str(fee_amount),
+        },
+    )
+
+    return UserLeadResponse(
+        id=user_lead.id,
+        status=user_lead.status,
+        quality_score=user_lead.quality_score,
+        quality_reasoning=user_lead.quality_reasoning,
+        priority=user_lead.priority,
+        created_at=user_lead.created_at,
+        updated_at=user_lead.updated_at,
+    )
+
+
+@router.post("/{lead_id}/close", response_model=UserLeadResponse, status_code=status.HTTP_200_OK)
+async def close_lead(
+    lead_id: uuid.UUID,
+    req: DealCloseRequest,
+    session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(get_current_user),
+) -> UserLeadResponse:
+    """Close a deal — success (from paid) or failure (from filed/contacted)."""
+    from datetime import UTC, datetime
+
+    result = await session.execute(
+        select(UserLead).where(
+            UserLead.user_id == user.id,
+            UserLead.lead_id == lead_id,
+        )
+    )
+    user_lead = result.scalar_one_or_none()
+    if not user_lead:
+        raise NotFoundError("Claimed lead")
+
+    validate_status_transition(user_lead.status, "closed")
+
+    user_lead.status = "closed"
+    user_lead.closed_at = datetime.now(UTC)
+    user_lead.closed_reason = req.closed_reason
+    if req.notes:
+        user_lead.outcome_notes = req.notes
+
+    await session.flush()
+
+    await record_activity(
+        session, lead_id, user.id, "deal_closed",
+        f"Deal closed: {req.closed_reason}",
+        {"closed_reason": req.closed_reason},
+    )
 
     return UserLeadResponse(
         id=user_lead.id,
@@ -349,6 +462,8 @@ async def qualify_lead_endpoint(
         reservation.overage_count > 0,
         reservation.period_start_iso,
     )
+
+    await record_activity(session, lead_id, user.id, "qualify_started", "AI qualification started")
 
     return {"task_id": task.id, "status": "queued", "message": "Qualification queued"}
 
@@ -592,6 +707,110 @@ async def skip_trace(
         cost=float(cost),
         created_at=skip_result.created_at,
     ).model_dump()
+
+
+@router.get("/{lead_id}/activities", response_model=CursorPage)
+async def get_lead_activities(
+    lead_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(get_current_user),
+    cursor: str | None = Query(None),
+    limit: int = Query(DEFAULT_PAGE_SIZE, le=MAX_PAGE_SIZE),
+) -> CursorPage:
+    """Get activity timeline for a claimed lead."""
+    # Verify claimed by this user
+    result = await session.execute(
+        select(UserLead).where(
+            UserLead.user_id == user.id,
+            UserLead.lead_id == lead_id,
+        )
+    )
+    if not result.scalar_one_or_none():
+        raise NotFoundError("Claimed lead")
+
+    query = (
+        select(LeadActivity)
+        .where(
+            LeadActivity.lead_id == lead_id,
+            LeadActivity.user_id == user.id,
+        )
+        .order_by(LeadActivity.created_at.desc(), LeadActivity.id)
+    )
+
+    if cursor:
+        try:
+            cursor_uuid = uuid.UUID(cursor)
+            cursor_result = await session.execute(
+                select(LeadActivity.created_at).where(LeadActivity.id == cursor_uuid)
+            )
+            cursor_time = cursor_result.scalar_one_or_none()
+            if cursor_time is not None:
+                query = query.where(
+                    (LeadActivity.created_at < cursor_time)
+                    | (
+                        (LeadActivity.created_at == cursor_time)
+                        & (LeadActivity.id > cursor_uuid)
+                    )
+                )
+        except ValueError:
+            pass
+
+    query = query.limit(limit + 1)
+    result = await session.execute(query)
+    activities = result.scalars().all()
+
+    has_more = len(activities) > limit
+    items = list(activities[:limit])
+
+    return CursorPage(
+        items=[
+            LeadActivityResponse(
+                id=a.id,
+                activity_type=a.activity_type,
+                description=a.description,
+                metadata_=a.metadata_,
+                created_at=a.created_at,
+            )
+            for a in items
+        ],
+        next_cursor=str(items[-1].id) if has_more and items else None,
+        has_more=has_more,
+    )
+
+
+@router.post(
+    "/{lead_id}/activities",
+    response_model=LeadActivityResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_lead_activity(
+    lead_id: uuid.UUID,
+    req: ActivityCreateRequest,
+    session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(get_current_user),
+) -> LeadActivityResponse:
+    """Add a manual note to a lead's activity timeline."""
+    # Verify claimed
+    result = await session.execute(
+        select(UserLead).where(
+            UserLead.user_id == user.id,
+            UserLead.lead_id == lead_id,
+        )
+    )
+    if not result.scalar_one_or_none():
+        raise NotFoundError("Claimed lead")
+
+    activity = await record_activity(
+        session, lead_id, user.id, "note", req.description,
+    )
+
+    return LeadActivityResponse(
+        id=activity.id,
+        activity_type=activity.activity_type,
+        description=activity.description,
+        metadata_=activity.metadata_,
+        created_at=activity.created_at,
+    )
 
 
 MAX_BULK_SKIP_TRACE_SIZE = 100

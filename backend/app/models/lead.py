@@ -77,6 +77,10 @@ class UserLead(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "lead_id", name="uq_user_lead"),
         CheckConstraint("quality_score BETWEEN 1 AND 10", name="ck_user_lead_quality_score"),
+        CheckConstraint(
+            "fee_percentage IS NULL OR fee_percentage BETWEEN 0 AND 100",
+            name="ck_user_lead_fee_pct",
+        ),
         Index("ix_user_leads_user_status", "user_id", "status"),
         Index("ix_user_leads_quality_score", "quality_score", postgresql_using="btree"),
     )
@@ -92,6 +96,15 @@ class UserLead(Base):
     quality_score: Mapped[int | None] = mapped_column(nullable=True)
     quality_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
     priority: Mapped[str | None] = mapped_column(String(10), nullable=True)  # low|medium|high
+
+    # Deal outcome
+    outcome_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    fee_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    fee_percentage: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    outcome_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    closed_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 

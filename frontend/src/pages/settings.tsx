@@ -1,4 +1,6 @@
+import { useState, useEffect } from "react";
 import { UserProfile } from "@clerk/clerk-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSubscription } from "@/hooks/use-subscription";
 import { api } from "@/lib/api";
 
@@ -11,6 +13,27 @@ const PLANS = [
 
 export function SettingsPage() {
   const { data: sub } = useSubscription();
+  const qc = useQueryClient();
+  const { data: me } = useQuery({
+    queryKey: ["me"],
+    queryFn: () => api.getMe(),
+  });
+
+  const [alertEnabled, setAlertEnabled] = useState(true);
+  const [minAmount, setMinAmount] = useState("");
+
+  useEffect(() => {
+    if (me?.user) {
+      setAlertEnabled(me.user.alert_enabled ?? true);
+      setMinAmount(me.user.min_alert_amount?.toString() || "");
+    }
+  }, [me]);
+
+  const prefMutation = useMutation({
+    mutationFn: (data: { alert_enabled?: boolean; min_alert_amount?: number | null }) =>
+      api.updatePreferences(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["me"] }),
+  });
 
   const handleUpgrade = async (plan: string) => {
     const { checkout_url } = await api.createCheckout(plan);
@@ -104,6 +127,52 @@ export function SettingsPage() {
           )}
         </section>
       )}
+
+      {/* Email Alerts */}
+      <section className="p-6 bg-white rounded-lg border">
+        <h2 className="text-lg font-semibold mb-4">Email Alerts</h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Get daily emails about new high-value leads in your counties.
+        </p>
+        <div className="space-y-4">
+          <label className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              checked={alertEnabled}
+              onChange={(e) => {
+                setAlertEnabled(e.target.checked);
+                prefMutation.mutate({ alert_enabled: e.target.checked });
+              }}
+              className="w-4 h-4 rounded border-gray-300 text-emerald focus:ring-emerald"
+            />
+            <span className="text-sm">Enable daily lead alerts</span>
+          </label>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Minimum surplus amount
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">$</span>
+              <input
+                type="number"
+                min="0"
+                step="1000"
+                value={minAmount}
+                onChange={(e) => setMinAmount(e.target.value)}
+                onBlur={() => {
+                  const val = minAmount ? parseFloat(minAmount) : null;
+                  prefMutation.mutate({ min_alert_amount: val });
+                }}
+                placeholder="5000"
+                className="w-40 px-3 py-1.5 border rounded-md text-sm"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Only alert for leads above this amount (default: $5,000)
+            </p>
+          </div>
+        </div>
+      </section>
 
       {/* Plan comparison */}
       <section>

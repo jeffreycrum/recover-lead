@@ -190,6 +190,18 @@ async def _skip_trace_lead(user_id: str, lead_id: str, is_overage: bool = False)
             )
             session.add(skip_result)
 
+            # Record activity
+            from app.services.lead_service import record_activity
+
+            await record_activity(
+                session,
+                uuid.UUID(lead_id),
+                uuid.UUID(user_id),
+                "skip_trace_completed",
+                f"Skip trace {status_val} — {len(lookup_result.persons)} person(s) found",
+                {"status": status_val, "hit_count": len(lookup_result.persons)},
+            )
+
             # Save contacts
             for person in lookup_result.persons:
                 for phone in person.phones:

@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
-from app.models.lead import Lead, UserLead
+from app.models.lead import Lead, LeadActivity, UserLead
 
 logger = structlog.get_logger()
 
@@ -13,9 +13,9 @@ VALID_STATUSES = {"new", "qualified", "contacted", "signed", "filed", "paid", "c
 VALID_TRANSITIONS = {
     "new": {"qualified"},
     "qualified": {"contacted"},
-    "contacted": {"signed"},
+    "contacted": {"signed", "closed"},
     "signed": {"filed"},
-    "filed": {"paid"},
+    "filed": {"paid", "closed"},
     "paid": {"closed"},
     "closed": set(),
 }
@@ -97,3 +97,24 @@ def validate_priority(priority: str) -> None:
     """Validate a priority value."""
     if priority not in VALID_PRIORITIES:
         raise ConflictError(f"Invalid priority: {priority}. Must be low, medium, or high")
+
+
+async def record_activity(
+    session: AsyncSession,
+    lead_id: uuid.UUID,
+    user_id: uuid.UUID,
+    activity_type: str,
+    description: str | None = None,
+    metadata: dict | None = None,
+) -> LeadActivity:
+    """Record an activity event on a lead."""
+    activity = LeadActivity(
+        lead_id=lead_id,
+        user_id=user_id,
+        activity_type=activity_type,
+        description=description,
+        metadata_=metadata,
+    )
+    session.add(activity)
+    await session.flush()
+    return activity
