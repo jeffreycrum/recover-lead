@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
+from app.db.engine import ensure_asyncpg_url
 from app.models.lead import Lead, LeadContact, UserLead
 from app.models.skip_trace import SkipTraceResult
 from app.services.skip_trace import SkipTraceLookupRequest
@@ -19,7 +20,9 @@ logger = structlog.get_logger()
 
 
 def _get_worker_session() -> AsyncSession:
-    engine = create_async_engine(settings.database_url, pool_size=2, max_overflow=0)
+    engine = create_async_engine(
+        ensure_asyncpg_url(settings.database_url), pool_size=2, max_overflow=0
+    )
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     return factory()
 

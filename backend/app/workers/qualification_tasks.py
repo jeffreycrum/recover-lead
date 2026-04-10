@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
+from app.db.engine import ensure_asyncpg_url
 from app.models.county import County
 from app.models.lead import Lead, UserLead
 from app.rag.embeddings import build_lead_text, generate_lead_embedding
@@ -20,7 +21,9 @@ def _get_worker_session() -> AsyncSession:
     asyncpg connections can't be shared across forked processes, so each
     task creates its own engine instead of using the shared one.
     """
-    engine = create_async_engine(settings.database_url, pool_size=2, max_overflow=0)
+    engine = create_async_engine(
+        ensure_asyncpg_url(settings.database_url), pool_size=2, max_overflow=0
+    )
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     return factory()
 
