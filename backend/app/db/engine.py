@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.config import settings
 
 
-def _ensure_asyncpg_url(url: str) -> str:
+def ensure_asyncpg_url(url: str) -> str:
     """Convert postgresql:// to postgresql+asyncpg:// for SQLAlchemy async."""
     if url.startswith("postgresql://"):
         return url.replace("postgresql://", "postgresql+asyncpg://", 1)
@@ -11,7 +11,7 @@ def _ensure_asyncpg_url(url: str) -> str:
 
 
 engine = create_async_engine(
-    _ensure_asyncpg_url(settings.database_url),
+    ensure_asyncpg_url(settings.database_url),
     pool_size=5,
     max_overflow=10,
     echo=not settings.is_production,
