@@ -2,7 +2,7 @@ import hashlib
 import os
 import re
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -25,9 +25,9 @@ SCRAPER_HEADERS = {
 }
 
 
-@dataclass
+@dataclass(frozen=True)
 class RawLead:
-    """Normalized lead data from a county scraper."""
+    """Normalized lead data from a county scraper (immutable)."""
 
     case_number: str
     parcel_id: str | None = None
@@ -95,16 +95,23 @@ class BaseScraper(ABC):
         ...
 
     def sanitize(self, leads: list[RawLead]) -> list[RawLead]:
-        """Sanitize all text fields in parsed leads."""
-        for lead in leads:
-            lead.case_number = sanitize_text(lead.case_number) or lead.case_number
-            lead.parcel_id = sanitize_text(lead.parcel_id)
-            lead.property_address = sanitize_text(lead.property_address)
-            lead.property_city = sanitize_text(lead.property_city)
-            lead.property_zip = sanitize_text(lead.property_zip)
-            lead.owner_name = sanitize_text(lead.owner_name)
-            lead.owner_last_known_address = sanitize_text(lead.owner_last_known_address)
-        return leads
+        """Return new RawLead instances with all text fields sanitized.
+
+        RawLead is frozen (immutable) — this returns new dataclass copies.
+        """
+        return [
+            replace(
+                lead,
+                case_number=sanitize_text(lead.case_number) or lead.case_number,
+                parcel_id=sanitize_text(lead.parcel_id),
+                property_address=sanitize_text(lead.property_address),
+                property_city=sanitize_text(lead.property_city),
+                property_zip=sanitize_text(lead.property_zip),
+                owner_name=sanitize_text(lead.owner_name),
+                owner_last_known_address=sanitize_text(lead.owner_last_known_address),
+            )
+            for lead in leads
+        ]
 
     def _save_artifact(self, raw_data: bytes) -> Path | None:
         """Save raw scrape data to disk for audit trail and debugging."""

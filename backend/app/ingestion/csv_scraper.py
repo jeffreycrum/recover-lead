@@ -6,8 +6,10 @@ from decimal import Decimal
 import httpx
 
 from app.ingestion.base_scraper import BaseScraper, RawLead
+from app.ingestion.factory import register_scraper
 
 
+@register_scraper("CsvScraper")
 class CsvScraper(BaseScraper):
     """Scraper for counties that provide surplus fund lists as CSV downloads."""
 

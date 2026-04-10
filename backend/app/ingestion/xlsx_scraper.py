@@ -6,8 +6,10 @@ import httpx
 import openpyxl
 
 from app.ingestion.base_scraper import SCRAPER_HEADERS, BaseScraper, RawLead
+from app.ingestion.factory import register_scraper
 
 
+@register_scraper("XlsxScraper")
 class XlsxScraper(BaseScraper):
     """Scraper for counties that provide surplus fund lists as Excel downloads.
 

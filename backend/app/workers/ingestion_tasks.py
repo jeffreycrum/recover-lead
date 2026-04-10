@@ -1,16 +1,20 @@
 import asyncio
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import select
 
 from app.db.engine import async_session_factory
+from app.ingestion.factory import _ensure_scrapers_imported, get_scraper
 from app.ingestion.normalizer import normalize_and_store
 from app.models.county import County
 from app.models.lead import Lead
 from app.rag.embeddings import build_lead_text, generate_lead_embedding
 from app.workers.celery_app import celery_app
+
+# Ensure all scrapers register themselves with the factory on module import
+_ensure_scrapers_imported()
 
 logger = structlog.get_logger()
 
@@ -39,8 +43,8 @@ async def _scrape_county(county_id: str, task) -> dict:
         if not county.source_url or not county.scraper_class:
             return {"error": f"County {county.name} has no scraper configured"}
 
-        # Instantiate the scraper
-        scraper = _get_scraper(county)
+        # Instantiate the scraper via the factory
+        scraper = get_scraper(county)
         if not scraper:
             return {"error": f"Unknown scraper class: {county.scraper_class}"}
 
@@ -51,7 +55,7 @@ async def _scrape_county(county_id: str, task) -> dict:
         result = await normalize_and_store(session, county.id, raw_leads)
 
         # Update county metadata
-        county.last_scraped_at = datetime.utcnow()
+        county.last_scraped_at = datetime.now(UTC).replace(tzinfo=None)
         county.last_lead_count = result["inserted"] + result["skipped"]
         await session.commit()
 
@@ -118,27 +122,3 @@ async def _scrape_all() -> dict:
     return {"dispatched": len(county_ids)}
 
 
-def _get_scraper(county: County):
-    """Instantiate a scraper based on county config."""
-    from app.ingestion.csv_scraper import CsvScraper
-    from app.ingestion.html_scraper import HtmlTableScraper
-    from app.ingestion.pdf_scraper import PdfScraper
-    from app.ingestion.xlsx_scraper import XlsxScraper
-
-    scraper_map = {
-        "PdfScraper": PdfScraper,
-        "HtmlTableScraper": HtmlTableScraper,
-        "CsvScraper": CsvScraper,
-        "XlsxScraper": XlsxScraper,
-    }
-
-    scraper_cls = scraper_map.get(county.scraper_class)
-    if not scraper_cls:
-        return None
-
-    return scraper_cls(
-        county_name=county.name,
-        source_url=county.source_url,
-        state=county.state,
-        config=county.config,
-    )
