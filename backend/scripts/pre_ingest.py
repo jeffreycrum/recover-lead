@@ -10,47 +10,23 @@ Or from project root:
 """
 
 import asyncio
-import sys
 import os
+import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sqlalchemy import select
 
-from app.config import settings
 from app.db.engine import async_session_factory
+from app.ingestion.factory import _ensure_scrapers_imported, get_scraper
 from app.ingestion.normalizer import normalize_and_store
 from app.models.county import County
 from app.models.lead import Lead
 from app.rag.embeddings import build_lead_text, generate_lead_embedding
 
-
-def _get_scraper(county: County):
-    """Instantiate a scraper based on county config."""
-    from app.ingestion.pdf_scraper import PdfScraper
-    from app.ingestion.html_scraper import HtmlTableScraper
-    from app.ingestion.csv_scraper import CsvScraper
-    from app.ingestion.xlsx_scraper import XlsxScraper
-
-    scraper_map = {
-        "PdfScraper": PdfScraper,
-        "HtmlTableScraper": HtmlTableScraper,
-        "CsvScraper": CsvScraper,
-        "XlsxScraper": XlsxScraper,
-    }
-
-    scraper_cls = scraper_map.get(county.scraper_class)
-    if not scraper_cls:
-        return None
-
-    return scraper_cls(
-        county_name=county.name,
-        source_url=county.source_url,
-        state=county.state,
-        config=county.config,
-    )
+_ensure_scrapers_imported()
 
 
 async def _generate_embeddings(session, county_id: uuid.UUID, county_name: str) -> int:
@@ -85,14 +61,14 @@ async def _generate_embeddings(session, county_id: uuid.UUID, county_name: str) 
 
 async def scrape_county(county: County, session) -> dict:
     """Scrape a single county and store leads."""
-    scraper = _get_scraper(county)
+    scraper = get_scraper(county)
     if not scraper:
         return {"county": county.name, "error": f"Unknown scraper: {county.scraper_class}"}
 
     raw_leads = await scraper.scrape()
     result = await normalize_and_store(session, county.id, raw_leads)
 
-    county.last_scraped_at = datetime.utcnow()
+    county.last_scraped_at = datetime.now(UTC).replace(tzinfo=None)
     county.last_lead_count = result["inserted"] + result["skipped"]
     await session.commit()
 

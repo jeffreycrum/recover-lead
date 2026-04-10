@@ -5,8 +5,10 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.ingestion.base_scraper import SCRAPER_HEADERS, BaseScraper, RawLead
+from app.ingestion.factory import register_scraper
 
 
+@register_scraper("HtmlTableScraper")
 class HtmlTableScraper(BaseScraper):
     """Scraper for counties that publish surplus fund lists as HTML tables."""
 

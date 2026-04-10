@@ -33,6 +33,7 @@ dependencies = [
     "lxml>=5.2.0",
     "sendgrid>=6.11.0",
     "openpyxl>=3.1.0",
+    "cloudscraper>=1.2.71",
 ]
 
 [project.optional-dependencies]

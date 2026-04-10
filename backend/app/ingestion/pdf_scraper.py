@@ -7,10 +7,12 @@ import pdfplumber
 import structlog
 
 from app.ingestion.base_scraper import SCRAPER_HEADERS, BaseScraper, RawLead
+from app.ingestion.factory import register_scraper
 
 logger = structlog.get_logger()
 
 
+@register_scraper("PdfScraper")
 class PdfScraper(BaseScraper):
     """Scraper for counties that publish surplus fund lists as PDFs."""
 
