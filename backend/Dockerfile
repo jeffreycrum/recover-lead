@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir ".[prod]" 2>/dev/null || pip install --no-cache-d
 COPY app/ app/
 COPY alembic.ini .
 COPY alembic/ alembic/
+COPY scripts/ scripts/
 
 EXPOSE 8000
 
