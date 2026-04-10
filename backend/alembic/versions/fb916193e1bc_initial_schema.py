@@ -38,7 +38,7 @@ def upgrade() -> None:
         sa.Column("scraper_class", sa.String(length=255), nullable=True),
         sa.Column("scrape_schedule", sa.String(length=100), nullable=True),
         sa.Column("last_scraped_at", sa.DateTime(), nullable=True),
-        sa.Column("last_lead_count", sa.Integer(), nullable=False),
+        sa.Column("last_lead_count", sa.Integer(), server_default=sa.text("0"), nullable=False),
         sa.Column("is_active", sa.Boolean(), nullable=False),
         sa.Column("config", sa.JSON(), nullable=True),
         sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False),

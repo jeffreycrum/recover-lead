@@ -31,6 +31,7 @@ counties = sa.table(
     sa.column("scraper_class", sa.String),
     sa.column("scrape_schedule", sa.String),
     sa.column("is_active", sa.Boolean),
+    sa.column("last_lead_count", sa.Integer),
     sa.column("config", sa.JSON),
 )
 
@@ -140,6 +141,7 @@ def upgrade() -> None:
             "scraper_class": c.get("scraper_class"),
             "scrape_schedule": c.get("scrape_schedule"),
             "is_active": c.get("is_active", False),
+            "last_lead_count": 0,
             "config": c.get("config"),
         })
 
@@ -154,6 +156,7 @@ def upgrade() -> None:
             "scraper_class": None,
             "scrape_schedule": None,
             "is_active": False,
+            "last_lead_count": 0,
             "config": c.get("config"),
         })
 
@@ -168,6 +171,7 @@ def upgrade() -> None:
             "scraper_class": None,
             "scrape_schedule": None,
             "is_active": False,
+            "last_lead_count": 0,
             "config": None,
         })
 
