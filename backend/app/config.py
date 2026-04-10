@@ -1,4 +1,16 @@
+from urllib.parse import urlparse, urlunparse
+
 from pydantic_settings import BaseSettings
+
+
+def redis_url_with_db(url: str, db: int) -> str:
+    """Return the Redis URL with the database path set to the given number.
+
+    Correctly handles URLs with or without an existing db path, and with
+    or without auth credentials (Railway uses auth URLs without a db path).
+    """
+    parsed = urlparse(url)
+    return urlunparse(parsed._replace(path=f"/{db}"))
 
 
 class Settings(BaseSettings):

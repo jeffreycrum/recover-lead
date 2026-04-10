@@ -3,7 +3,7 @@ import time
 import redis.asyncio as redis
 import structlog
 
-from app.config import settings
+from app.config import redis_url_with_db, settings
 from app.core.exceptions import RateLimitError
 
 logger = structlog.get_logger()
@@ -22,9 +22,7 @@ _redis_client: redis.Redis | None = None
 def get_rate_limit_redis() -> redis.Redis:
     global _redis_client
     if _redis_client is None:
-        # Replace db 0 with db 1 for rate limiting
-        url = settings.redis_url.rsplit("/", 1)[0] + "/1"
-        _redis_client = redis.from_url(url)
+        _redis_client = redis.from_url(redis_url_with_db(settings.redis_url, 1))
     return _redis_client
 
 

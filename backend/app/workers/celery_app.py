@@ -1,9 +1,9 @@
 from celery import Celery
 
-from app.config import settings
+from app.config import redis_url_with_db, settings
 
 # Celery broker uses Redis db 2
-broker_url = settings.redis_url.rsplit("/", 1)[0] + "/2"
+broker_url = redis_url_with_db(settings.redis_url, 2)
 result_backend = broker_url
 
 celery_app = Celery(

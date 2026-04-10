@@ -18,8 +18,9 @@ _usage_redis: redis_lib.Redis | None = None
 def get_usage_redis() -> redis_lib.Redis:
     global _usage_redis
     if _usage_redis is None:
-        url = settings.redis_url.rsplit("/", 1)[0] + "/3"
-        _usage_redis = redis_lib.from_url(url)
+        from app.config import redis_url_with_db
+
+        _usage_redis = redis_lib.from_url(redis_url_with_db(settings.redis_url, 3))
     return _usage_redis
 
 
