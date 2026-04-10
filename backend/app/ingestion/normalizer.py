@@ -40,17 +40,28 @@ async def normalize_and_store(
             existing = result.scalar_one_or_none()
 
             if existing:
-                # Update if source data changed
+                # Update if source data changed — use savepoint so one bad
+                # row doesn't poison the whole transaction
                 if existing.source_hash != source_hash:
-                    existing.surplus_amount = raw.surplus_amount
-                    existing.owner_name = raw.owner_name
-                    existing.owner_last_known_address = raw.owner_last_known_address
-                    existing.property_address = raw.property_address
-                    existing.property_city = raw.property_city
-                    existing.property_zip = raw.property_zip
-                    existing.source_hash = source_hash
-                    existing.raw_data = raw.raw_data
-                    inserted += 1
+                    try:
+                        async with session.begin_nested():
+                            existing.surplus_amount = raw.surplus_amount
+                            existing.owner_name = raw.owner_name
+                            existing.owner_last_known_address = raw.owner_last_known_address
+                            existing.property_address = raw.property_address
+                            existing.property_city = raw.property_city
+                            existing.property_zip = raw.property_zip
+                            existing.source_hash = source_hash
+                            existing.raw_data = raw.raw_data
+                            await session.flush()
+                        inserted += 1
+                    except Exception as e:
+                        logger.warning(
+                            "lead_update_failed",
+                            case_number=raw.case_number,
+                            error=str(e),
+                        )
+                        errors += 1
                 else:
                     skipped += 1
                 continue
@@ -82,6 +93,7 @@ async def normalize_and_store(
             # Use savepoint to isolate each insert — failed inserts don't kill the transaction
             async with session.begin_nested():
                 session.add(lead)
+                await session.flush()
             inserted += 1
 
         except Exception as e:
