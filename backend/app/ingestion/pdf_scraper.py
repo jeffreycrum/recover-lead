@@ -107,11 +107,25 @@ class PdfScraper(BaseScraper):
 
     @staticmethod
     def _parse_amount(amount_str: str) -> Decimal:
-        """Parse a currency string like '$1,234.56' into a Decimal."""
+        """Parse the first currency-like token in a string into a Decimal.
+
+        Matches patterns like $1,234.56 / 1234.56 / $98,991 — pulls a single
+        token, not all digits. Returns 0 if no match or the value overflows
+        the DB's Numeric(12, 2) range (max ~99 million).
+        """
         if not amount_str:
             return Decimal("0.00")
-        cleaned = re.sub(r"[^\d.]", "", amount_str)
+        # Match: optional $, required digits with commas, optional decimal
+        pattern = r"\$?\s*(\d[\d,]*(?:\.\d{1,2})?)"
+        match = re.search(pattern, amount_str)
+        if not match:
+            return Decimal("0.00")
+        cleaned = match.group(1).replace(",", "")
         try:
-            return Decimal(cleaned) if cleaned else Decimal("0.00")
+            value = Decimal(cleaned)
         except Exception:
             return Decimal("0.00")
+        # Reject garbage outside Numeric(12, 2) range
+        if value >= Decimal("10000000000") or value < 0:
+            return Decimal("0.00")
+        return value
