@@ -93,6 +93,7 @@ export function LeadTable({
                     onClick={(e) => {
                       e.stopPropagation();
                       onClaim?.(lead.id);
+                      onSelect?.(lead.id);
                     }}
                     className="px-3 py-1 text-xs bg-emerald text-white rounded hover:bg-emerald/90 transition-colors"
                   >
