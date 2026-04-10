@@ -178,6 +178,42 @@ export class ApiClient {
     });
   }
 
+  // Activities
+  getLeadActivities(leadId: string, params: Record<string, string> = {}) {
+    const qs = new URLSearchParams(params).toString();
+    return this.request<any>(`/leads/${leadId}/activities${qs ? `?${qs}` : ""}`);
+  }
+
+  createLeadActivity(leadId: string, description: string) {
+    return this.request<any>(`/leads/${leadId}/activities`, {
+      method: "POST",
+      body: JSON.stringify({ description }),
+    });
+  }
+
+  // Deal close
+  payLead(leadId: string, data: { outcome_amount: number; fee_percentage: number; notes?: string }) {
+    return this.request<any>(`/leads/${leadId}/pay`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  closeLead(leadId: string, data: { closed_reason: string; notes?: string }) {
+    return this.request<any>(`/leads/${leadId}/close`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Preferences
+  updatePreferences(data: { alert_enabled?: boolean; min_alert_amount?: number | null }) {
+    return this.request<any>("/auth/me/preferences", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
   // Tasks
   getTaskStatus(taskId: string) {
     return this.request<any>(`/tasks/${taskId}`);

@@ -1,0 +1,10 @@
+Hi {{ user_name }},
+
+{{ lead_count }} new lead{{ 's' if lead_count != 1 else '' }} matched your criteria:
+
+{% for lead in leads %}
+- {{ lead.county_name }} County | ${{ "%.2f"|format(lead.surplus_amount) }} | {{ lead.sale_type or 'N/A' }}
+{% endfor %}
+
+View all leads: https://recoverlead.com/leads
+Manage alerts: https://recoverlead.com/settings

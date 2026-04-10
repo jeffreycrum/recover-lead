@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import String, func
+from sqlalchemy import Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.encryption import EncryptedString
@@ -20,6 +21,8 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(20), default="agent")  # agent|attorney|admin
     is_active: Mapped[bool] = mapped_column(default=True)
     stripe_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    alert_enabled: Mapped[bool] = mapped_column(default=True)
+    min_alert_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 

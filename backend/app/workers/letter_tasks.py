@@ -105,6 +105,18 @@ async def _generate_letter(
             )
             session.add(letter)
 
+            # Record activity
+            from app.services.lead_service import record_activity
+
+            await record_activity(
+                session,
+                uuid.UUID(lead_id),
+                uuid.UUID(user_id),
+                "letter_generated",
+                f"Letter generated ({letter_type})",
+                {"letter_type": letter_type},
+            )
+
         # Record overage AFTER transaction commits
         if is_overage:
             from app.services.billing_service import record_overage_usage

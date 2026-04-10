@@ -10,7 +10,7 @@ AI-powered surplus funds recovery platform for agents, attorneys, and heir searc
 ## Before You Start
 
 1. Read `TASKS.md` for current priorities and progress
-2. Read the implementation plan at `~/.claude/plans/mellow-gathering-octopus.md`
+2. Read the Phase 2 plan at `~/.claude/plans/phase2-retention-polish.md`
 3. Read relevant source files before making changes
 4. One task, one focus — no unrelated changes
 

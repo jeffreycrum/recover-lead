@@ -41,6 +41,8 @@ async def get_me(
             "full_name": user.full_name,
             "company_name": user.company_name,
             "role": user.role,
+            "alert_enabled": user.alert_enabled,
+            "min_alert_amount": float(user.min_alert_amount) if user.min_alert_amount else None,
         },
         "subscription": {
             "plan": subscription.plan if subscription else "free",
@@ -51,6 +53,27 @@ async def get_me(
             "skip_traces_remaining": credits.credits_remaining if credits else 0,
             "skip_traces_used_this_month": credits.credits_used_this_month if credits else 0,
         },
+    }
+
+
+@router.patch("/me/preferences")
+async def update_preferences(
+    req: dict,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+) -> dict:
+    """Update user email alert preferences."""
+    if "alert_enabled" in req:
+        user.alert_enabled = bool(req["alert_enabled"])
+    if "min_alert_amount" in req:
+        from decimal import Decimal
+
+        val = req["min_alert_amount"]
+        user.min_alert_amount = Decimal(str(val)) if val is not None else None
+    await session.flush()
+    return {
+        "alert_enabled": user.alert_enabled,
+        "min_alert_amount": float(user.min_alert_amount) if user.min_alert_amount else None,
     }
 
 

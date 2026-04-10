@@ -4,6 +4,8 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { LeadScoreBadge } from "./lead-score-badge";
 import { SkipTraceResults } from "./skip-trace-results";
+import { ActivityTimeline } from "./activity-timeline";
+import { DealOutcomeDialog } from "./deal-outcome-dialog";
 import { X, MapPin, User, DollarSign, Zap, Search, Loader2 } from "lucide-react";
 
 interface LeadDetailProps {
@@ -16,6 +18,7 @@ export function LeadDetail({ leadId, onClose }: LeadDetailProps) {
   const claimMutation = useClaimLead();
   const releaseMutation = useReleaseLead();
   const qualifyMutation = useQualifyLead();
+  const [showDealDialog, setShowDealDialog] = useState(false);
 
   if (isLoading) {
     return (
@@ -126,6 +129,14 @@ export function LeadDetail({ leadId, onClose }: LeadDetailProps) {
               >
                 Release
               </button>
+              {lead.user_lead && (lead.user_lead.status === "filed" || lead.user_lead.status === "paid" || lead.user_lead.status === "contacted") && (
+                <button
+                  onClick={() => setShowDealDialog(true)}
+                  className="px-4 py-2 border border-emerald text-emerald rounded-md hover:bg-emerald/5 text-sm"
+                >
+                  Deal Outcome
+                </button>
+              )}
             </>
           )}
         </div>
@@ -134,7 +145,18 @@ export function LeadDetail({ leadId, onClose }: LeadDetailProps) {
         {isClaimed && (
           <SkipTraceSection leadId={leadId} skipTraceResults={lead.skip_trace_results} />
         )}
+
+        {/* Activity Timeline */}
+        {isClaimed && <ActivityTimeline leadId={leadId} />}
       </div>
+
+      {showDealDialog && lead.user_lead && (
+        <DealOutcomeDialog
+          leadId={leadId}
+          currentStatus={lead.user_lead.status}
+          onClose={() => setShowDealDialog(false)}
+        />
+      )}
     </div>
   );
 }

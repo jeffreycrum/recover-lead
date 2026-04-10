@@ -13,6 +13,11 @@ celery_app.conf.beat_schedule = {
         "task": "app.workers.scheduled.reset_monthly_credits",
         "schedule": crontab(day_of_month=1, hour=0, minute=0),
     },
+    # Daily lead alerts at 12 UTC (7 AM ET)
+    "daily-lead-alerts": {
+        "task": "app.workers.email_tasks.send_daily_lead_alerts",
+        "schedule": crontab(hour=12, minute=0),
+    },
 }
 
 

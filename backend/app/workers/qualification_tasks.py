@@ -200,6 +200,18 @@ async def _qualify_single(user_id: str, lead_id: str, task, is_overage: bool = F
             # Update lead embedding
             lead.embedding = embedding
 
+            # Record activity
+            from app.services.lead_service import record_activity
+
+            await record_activity(
+                session,
+                uuid.UUID(lead_id),
+                uuid.UUID(user_id),
+                "qualified",
+                f"AI qualification completed — score {quality_score}/10",
+                {"quality_score": quality_score},
+            )
+
             logger.info("lead_qualified", lead_id=lead_id, score=quality_score)
 
         # Record overage AFTER transaction commits (avoids blocking

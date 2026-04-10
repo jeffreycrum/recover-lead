@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     tracerfy_api_key: str = ""
     tracerfy_base_url: str = "https://tracerfy.com/v1/api"
 
+    # SendGrid
+    sendgrid_api_key: str = ""
+    sendgrid_from_email: str = "alerts@recoverlead.com"
+
     # Embedding
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
 

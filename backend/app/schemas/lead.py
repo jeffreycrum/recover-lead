@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class LeadBrowseResponse(BaseModel):
@@ -95,3 +95,51 @@ class ClaimResponse(BaseModel):
     user_lead_id: uuid.UUID
     lead_id: uuid.UUID
     status: str
+
+
+class LeadActivityResponse(BaseModel):
+    id: uuid.UUID
+    activity_type: str
+    description: str | None
+    metadata_: dict | None = None
+    created_at: datetime
+
+
+class ActivityCreateRequest(BaseModel):
+    description: str
+
+
+VALID_CLOSED_REASONS = {"recovered", "declined", "unreachable", "expired", "other"}
+
+
+class DealPayRequest(BaseModel):
+    outcome_amount: Decimal
+    fee_percentage: Decimal
+    notes: str | None = None
+
+    @field_validator("outcome_amount")
+    @classmethod
+    def outcome_must_be_positive(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("outcome_amount must be positive")
+        return v
+
+    @field_validator("fee_percentage")
+    @classmethod
+    def fee_must_be_valid(cls, v: Decimal) -> Decimal:
+        if v < 0 or v > 100:
+            raise ValueError("fee_percentage must be between 0 and 100")
+        return v
+
+
+class DealCloseRequest(BaseModel):
+    closed_reason: str
+    notes: str | None = None
+
+    @field_validator("closed_reason")
+    @classmethod
+    def reason_must_be_valid(cls, v: str) -> str:
+        if v not in VALID_CLOSED_REASONS:
+            valid = ", ".join(sorted(VALID_CLOSED_REASONS))
+            raise ValueError(f"closed_reason must be one of: {valid}")
+        return v
