@@ -226,7 +226,7 @@ async def check_usage_limit(
     if period_start is None:
         from datetime import datetime, timedelta
 
-        period_start = datetime.now(UTC) - timedelta(days=30)
+        period_start = (datetime.now(UTC) - timedelta(days=30)).replace(tzinfo=None)
 
     current = await get_current_usage(session, user_id, usage_type, period_start)
     pct = round(current / limit * 100, 1) if limit > 0 else 0
@@ -285,7 +285,7 @@ async def reserve_usage(
     if period_start is None:
         from datetime import datetime, timedelta
 
-        period_start = datetime.now(UTC) - timedelta(days=30)
+        period_start = (datetime.now(UTC) - timedelta(days=30)).replace(tzinfo=None)
 
     limits = get_plan_limits(plan)
     limit_key = {
@@ -354,7 +354,7 @@ def release_reservation(
     if period_start_iso:
         period_start = datetime.fromisoformat(period_start_iso)
     else:
-        period_start = datetime.now(UTC) - timedelta(days=30)
+        period_start = (datetime.now(UTC) - timedelta(days=30)).replace(tzinfo=None)
 
     try:
         r = get_usage_redis()
