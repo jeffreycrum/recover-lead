@@ -22,4 +22,4 @@ ENV PYTHONPATH=/app
 
 EXPOSE 8000
 
-CMD sh -c "alembic upgrade head && python scripts/pre_ingest.py && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+CMD sh -c "alembic upgrade head; python scripts/pre_ingest.py || echo 'pre_ingest failed, continuing...'; uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
