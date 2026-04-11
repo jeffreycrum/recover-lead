@@ -556,7 +556,10 @@ async def skip_trace(
     lead = lead_result.scalar_one()
 
     # Skip trace works with whatever data we have — provider fills in the rest.
-    # Call Tracerfy
+    # Call configured skip trace provider
+    from app.config import settings as _settings
+
+    provider_name = (_settings.skip_trace_provider or "tracerfy").lower().strip()
     try:
         provider = get_skip_trace_provider()
         lookup_result = await provider.lookup(
@@ -617,7 +620,7 @@ async def skip_trace(
     skip_result = SkipTraceResult(
         lead_id=lead_id,
         user_id=user.id,
-        provider="tracerfy",
+        provider=provider_name,
         status=status_val,
         persons=persons_data,
         raw_response=lookup_result.raw,
@@ -634,7 +637,7 @@ async def skip_trace(
                     lead_id=lead_id,
                     contact_type="phone",
                     contact_value=phone.number,
-                    source="tracerfy",
+                    source=provider_name,
                     confidence=max(0.0, 1.0 - (phone.rank * 0.1)),
                 )
                 session.add(contact)
@@ -644,7 +647,7 @@ async def skip_trace(
                     lead_id=lead_id,
                     contact_type="email",
                     contact_value=email.email,
-                    source="tracerfy",
+                    source=provider_name,
                     confidence=max(0.0, 1.0 - (email.rank * 0.1)),
                 )
                 session.add(contact)
@@ -674,7 +677,7 @@ async def skip_trace(
     return SkipTraceResultResponse(
         id=skip_result.id,
         lead_id=lead_id,
-        provider="tracerfy",
+        provider=provider_name,
         status=status_val,
         persons=[
             PersonResponse(
