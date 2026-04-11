@@ -345,6 +345,30 @@ async def reserve_usage(
     within_limit = max(0, min(count, limit - total_before))
     overage = count - within_limit
 
+    # Hard cap overage at 2x plan limit per period to prevent runaway
+    # costs from a compromised account or retry loop (esp. mailings
+    # where each overage = ~$1 real spend on Lob).
+    max_overage_total = limit * 2  # allow up to 3x the base limit total
+    if overage > 0 and (total_after - limit) > max_overage_total:
+        r.decrby(key, count)
+        logger.warning(
+            "usage_overage_cap_hit",
+            user_id=str(user_id),
+            usage_type=usage_type,
+            limit=limit,
+            total_after=total_after,
+            max_overage=max_overage_total,
+        )
+        return ReservationResult(
+            allowed=False,
+            plan=plan,
+            limit=limit,
+            current_total=db_usage + (new_reserved_total - count),
+            overage_count=0,
+            within_limit_count=0,
+            period_start_iso=period_start.isoformat(),
+        )
+
     return ReservationResult(
         allowed=True,
         plan=plan,

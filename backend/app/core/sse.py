@@ -23,10 +23,14 @@ logger = structlog.get_logger()
 CHANNEL_PREFIX = "task_stream"
 SENTINEL_PREFIX = "task_done"
 TOKEN_PREFIX = "sse_token"
+OWNER_PREFIX = "task_owner"
+CONN_PREFIX = "sse_connections"
 SENTINEL_TTL_SECONDS = 600  # keep final result for 10 min for late subscribers
 TOKEN_TTL_SECONDS = 60  # opaque SSE token TTL
+OWNER_TTL_SECONDS = 86400  # task owner mapping kept 24 hours
 HEARTBEAT_SECONDS = 30
 MAX_STREAM_SECONDS = 600  # 10-min max connection
+MAX_CONCURRENT_STREAMS_PER_USER = 5  # hard cap on open SSE connections per user
 
 
 def _channel(task_id: str) -> str:
@@ -39,6 +43,14 @@ def _sentinel_key(task_id: str) -> str:
 
 def _token_key(token: str) -> str:
     return f"{TOKEN_PREFIX}:{token}"
+
+
+def _owner_key(task_id: str) -> str:
+    return f"{OWNER_PREFIX}:{task_id}"
+
+
+def _conn_key(user_id: str) -> str:
+    return f"{CONN_PREFIX}:{user_id}"
 
 
 def get_sync_redis() -> redis_sync.Redis:
@@ -65,6 +77,55 @@ def publish_progress(task_id: str, event: dict) -> None:
             r.setex(_sentinel_key(task_id), SENTINEL_TTL_SECONDS, message)
     except Exception as e:
         logger.error("sse_publish_failed", task_id=task_id, error=str(e))
+
+
+def register_task_owner(task_id: str, user_id: str) -> None:
+    """Register that a task belongs to a user. Call at task dispatch time.
+
+    This is used by the SSE token endpoint and the polling status endpoint
+    to verify tenant isolation — a user can only subscribe to / poll
+    tasks they dispatched. Without this, any authenticated user could
+    enumerate task UUIDs and receive other users' task results.
+    """
+    try:
+        r = get_sync_redis()
+        r.setex(_owner_key(task_id), OWNER_TTL_SECONDS, user_id)
+    except Exception as e:
+        logger.error("sse_register_owner_failed", task_id=task_id, error=str(e))
+
+
+def get_task_owner(task_id: str) -> str | None:
+    """Return the user_id that owns a task, or None if unknown."""
+    try:
+        r = get_sync_redis()
+        raw = r.get(_owner_key(task_id))
+        if raw is None:
+            return None
+        return raw.decode() if isinstance(raw, bytes) else str(raw)
+    except Exception as e:
+        logger.error("sse_get_owner_failed", task_id=task_id, error=str(e))
+        return None
+
+
+def increment_stream_count(user_id: str) -> int:
+    """Increment the open-stream counter for a user and return the new value."""
+    r = get_sync_redis()
+    count = r.incr(_conn_key(user_id))
+    # First increment — set an expiry so stale counters don't linger
+    if count == 1:
+        r.expire(_conn_key(user_id), MAX_STREAM_SECONDS + 60)
+    return int(count)
+
+
+def decrement_stream_count(user_id: str) -> None:
+    """Decrement the open-stream counter. Called when the SSE stream closes."""
+    try:
+        r = get_sync_redis()
+        count = r.decr(_conn_key(user_id))
+        if count <= 0:
+            r.delete(_conn_key(user_id))
+    except Exception as e:
+        logger.error("sse_decrement_count_failed", user_id=user_id, error=str(e))
 
 
 def issue_stream_token(task_id: str, user_id: str) -> str:

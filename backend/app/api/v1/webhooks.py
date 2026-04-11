@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 from datetime import UTC, datetime
 
 import structlog
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.db.session import get_async_session
 from app.models.letter import Letter
 
@@ -27,6 +31,32 @@ _LOB_EVENT_TO_STATUS: dict[str, str] = {
     "letter.returned_to_sender": "returned",
 }
 
+# Whitelist of known Lob return reason strings. Anything else -> "unknown"
+# to prevent stored XSS via unauthenticated/unsanitized webhook payloads.
+_VALID_RETURN_REASONS = {
+    "insufficient_address",
+    "undeliverable",
+    "refused",
+    "unknown",
+    "no_such_number",
+    "forwarding_expired",
+    "vacant",
+    "unclaimed",
+    "moved",
+}
+
+
+def _verify_lob_signature(body: bytes, signature: str, secret: str) -> bool:
+    """Verify Lob's HMAC-SHA256 webhook signature.
+
+    Lob sends the signature in the `lob-signature` header. Uses
+    constant-time comparison to prevent timing attacks.
+    """
+    if not secret or not signature:
+        return False
+    expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
 
 @router.post("/lob")
 async def lob_webhook(
@@ -38,11 +68,27 @@ async def lob_webhook(
     Supported events: letter.mailed, letter.in_transit, letter.in_local_area,
     letter.processed_for_delivery, letter.delivered, letter.re_routed,
     letter.returned_to_sender.
-
-    TODO: verify Lob webhook signature before trusting payload (Lob signs
-    with HMAC-SHA256 using settings.lob_webhook_secret).
     """
-    payload = await request.json()
+    # Read the raw body so we can compute the HMAC signature before parsing.
+    raw_body = await request.body()
+
+    # Verify signature — rejects any unauthenticated/forged event.
+    signature = request.headers.get("lob-signature", "")
+    if not _verify_lob_signature(raw_body, signature, settings.lob_webhook_secret):
+        logger.warning("lob_webhook_invalid_signature")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "INVALID_SIGNATURE", "message": "Unauthorized"},
+        )
+
+    try:
+        payload = json.loads(raw_body)
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "INVALID_JSON", "message": "Malformed webhook payload"},
+        ) from None
+
     event_type = (payload.get("event_type") or {}).get("id", "")
     body = payload.get("body") or {}
     lob_id = body.get("id", "")
@@ -64,8 +110,10 @@ async def lob_webhook(
         if new_status == "delivered":
             letter.delivery_confirmed_at = datetime.now(UTC).replace(tzinfo=None)
         elif new_status == "returned":
-            letter.return_reason = (body.get("metadata") or {}).get(
-                "return_reason", "unknown"
+            raw_reason = (body.get("metadata") or {}).get("return_reason", "unknown")
+            # Whitelist known values; anything else -> "unknown"
+            letter.return_reason = (
+                raw_reason if raw_reason in _VALID_RETURN_REASONS else "unknown"
             )
         await session.commit()
         logger.info(

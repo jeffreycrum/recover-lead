@@ -112,9 +112,11 @@ async def trigger_ingest(
     if not county:
         raise NotFoundError("County")
 
+    from app.core.sse import register_task_owner
     from app.workers.ingestion_tasks import scrape_county
 
     task = scrape_county.delay(str(county_id))
+    register_task_owner(task.id, str(user.id))
 
     return {"task_id": task.id, "status": "queued", "county": county.name}
 
