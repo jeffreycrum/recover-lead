@@ -8,6 +8,7 @@ metadata without actually mailing anything.
 
 from __future__ import annotations
 
+import lob  # type: ignore[import-untyped]
 import structlog
 
 from app.services.mailing import (
@@ -46,15 +47,6 @@ class LobProvider(MailingProvider):
         if not self.api_key:
             logger.error("lob_no_api_key")
             return MailLetterResult(success=False, error="LOB_API_KEY is not configured")
-
-        try:
-            import lob  # type: ignore[import-untyped]
-        except ImportError:
-            logger.error("lob_sdk_not_installed")
-            return MailLetterResult(
-                success=False,
-                error="lob SDK is not installed (pip install lob)",
-            )
 
         lob.api_key = self.api_key
 

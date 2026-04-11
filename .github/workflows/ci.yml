@@ -53,6 +53,13 @@ jobs:
         working-directory: backend
         run: pip install -e ".[dev]"
 
+      - name: Smoke import (catches missing/broken deps before build)
+        working-directory: backend
+        run: |
+          python -c "import app.main"
+          python -c "import app.services.mailing.lob"
+          python -c "import app.workers.celery_app"
+
       - name: Enable pgvector extension
         run: |
           PGPASSWORD=recoverlead_test psql -h localhost -p 5433 -U recoverlead_test -d recoverlead_test -c "CREATE EXTENSION IF NOT EXISTS vector;"
