@@ -43,6 +43,7 @@ class TestTracerfyProvider:
     @pytest.mark.asyncio
     async def test_lookup_hit(self, provider, lookup_request, hit_response):
         mock_response = MagicMock()
+        mock_response.status_code = 200
         mock_response.json.return_value = hit_response
         mock_response.raise_for_status = MagicMock()
 
@@ -85,6 +86,7 @@ class TestTracerfyProvider:
     @pytest.mark.asyncio
     async def test_lookup_miss(self, provider, lookup_request, miss_response):
         mock_response = MagicMock()
+        mock_response.status_code = 200
         mock_response.json.return_value = miss_response
         mock_response.raise_for_status = MagicMock()
 
@@ -103,6 +105,7 @@ class TestTracerfyProvider:
     @pytest.mark.asyncio
     async def test_lookup_sends_correct_payload(self, provider, lookup_request, hit_response):
         mock_response = MagicMock()
+        mock_response.status_code = 200
         mock_response.json.return_value = hit_response
         mock_response.raise_for_status = MagicMock()
 
@@ -171,6 +174,7 @@ class TestTracerfyProvider:
         )
 
         mock_response = MagicMock()
+        mock_response.status_code = 200
         mock_response.json.return_value = hit_response
         mock_response.raise_for_status = MagicMock()
 
