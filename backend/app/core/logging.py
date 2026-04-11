@@ -1,4 +1,6 @@
+import logging
 import re
+import sys
 import uuid
 
 import structlog
@@ -28,6 +30,22 @@ def generate_request_id() -> str:
 
 
 def setup_logging() -> None:
+    # Configure Python's stdlib logging to actually output INFO level.
+    # structlog.stdlib.filter_by_level uses the stdlib logger levels, so
+    # without this the root logger defaults to WARNING and all logger.info
+    # calls are silently dropped.
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    if not root_logger.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setLevel(logging.INFO)
+        root_logger.addHandler(handler)
+
+    # Silence noisy third-party loggers
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
