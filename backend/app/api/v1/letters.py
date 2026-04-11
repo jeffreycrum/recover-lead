@@ -21,6 +21,9 @@ from app.schemas.letter import (
     LetterResponse,
     LetterUpdateRequest,
 )
+from app.schemas.letter import (
+    MailLetterRequest as MailLetterRequestSchema,
+)
 from app.services.letter_service import generate_pdf
 
 logger = structlog.get_logger()
@@ -28,6 +31,26 @@ router = APIRouter(prefix="/letters", tags=["letters"])
 
 DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 100
+
+VALID_LETTER_STATUSES = {
+    "draft",
+    "approved",
+    "mailed",
+    "in_transit",
+    "delivered",
+    "returned",
+}
+
+# Allowed state transitions users can trigger via PATCH /letters/{id}.
+# Transitions driven by the mailing task / Lob webhook happen separately.
+LETTER_STATUS_TRANSITIONS: dict[str, set[str]] = {
+    "draft": {"approved"},
+    "approved": {"draft", "mailed"},
+    "mailed": {"in_transit", "delivered", "returned"},
+    "in_transit": {"delivered", "returned"},
+    "delivered": set(),
+    "returned": set(),
+}
 
 
 @router.post("/generate", status_code=status.HTTP_202_ACCEPTED)
@@ -217,6 +240,11 @@ async def get_letter(
         county_name=county_name,
         owner_name=owner_name,
         surplus_amount=float(surplus_amount),
+        lob_id=ltr.lob_id,
+        lob_status=ltr.lob_status,
+        mailed_at=ltr.mailed_at,
+        tracking_url=ltr.tracking_url,
+        expected_delivery_date=ltr.expected_delivery_date,
     )
 
 
@@ -235,19 +263,37 @@ async def update_letter(
     if not ltr:
         raise NotFoundError("Letter")
 
-    if ltr.status not in ("draft",):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"code": "NOT_EDITABLE", "message": "Only draft letters can be edited"},
-        )
-
+    # Content edits are only allowed while the letter is a draft.
     if req.content is not None:
+        if ltr.status != "draft":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "NOT_EDITABLE",
+                    "message": "Only draft letters can be edited",
+                },
+            )
         ltr.content = req.content
+
     if req.status is not None:
-        if req.status not in ("draft", "approved"):
+        if req.status not in VALID_LETTER_STATUSES:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"code": "INVALID_STATUS", "message": "Status must be draft or approved"},
+                detail={
+                    "code": "INVALID_STATUS",
+                    "message": f"Status must be one of {sorted(VALID_LETTER_STATUSES)}",
+                },
+            )
+        allowed = LETTER_STATUS_TRANSITIONS.get(ltr.status, set())
+        if req.status != ltr.status and req.status not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "INVALID_TRANSITION",
+                    "message": (
+                        f"Cannot transition letter from {ltr.status} to {req.status}"
+                    ),
+                },
             )
         ltr.status = req.status
 
@@ -276,6 +322,11 @@ async def update_letter(
         county_name=county_name,
         owner_name=owner_name,
         surplus_amount=float(surplus_amount) if surplus_amount else None,
+        lob_id=ltr.lob_id,
+        lob_status=ltr.lob_status,
+        mailed_at=ltr.mailed_at,
+        tracking_url=ltr.tracking_url,
+        expected_delivery_date=ltr.expected_delivery_date,
     )
 
 
@@ -327,3 +378,81 @@ async def download_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/{letter_id}/mail", status_code=status.HTTP_202_ACCEPTED)
+async def mail_letter(
+    letter_id: uuid.UUID,
+    req: MailLetterRequestSchema,
+    session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Queue an approved letter for physical mailing via Lob.
+
+    Reserves a mailing slot against the user's plan, then dispatches a
+    Celery task that calls Lob and updates the letter status to "mailed".
+    """
+    result = await session.execute(
+        select(Letter).where(Letter.id == letter_id, Letter.user_id == user.id)
+    )
+    ltr = result.scalar_one_or_none()
+    if not ltr:
+        raise NotFoundError("Letter")
+
+    if ltr.status != "approved":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "NOT_MAILABLE",
+                "message": "Only approved letters can be mailed",
+            },
+        )
+
+    from app.services.billing_service import reserve_usage
+
+    reservation = await reserve_usage(session, user.id, "mailing", count=1)
+    if not reservation.allowed:
+        raise InsufficientCreditsError()
+
+    from_address = {
+        "name": req.from_name,
+        "street1": req.from_street1,
+        "street2": req.from_street2 or "",
+        "city": req.from_city,
+        "state": req.from_state,
+        "zip_code": req.from_zip,
+        "country": "US",
+    }
+    to_address = {
+        "name": req.to_name,
+        "street1": req.to_street1,
+        "street2": req.to_street2 or "",
+        "city": req.to_city,
+        "state": req.to_state,
+        "zip_code": req.to_zip,
+        "country": "US",
+    }
+
+    from app.workers.mailing_tasks import mail_letter_via_lob
+
+    task = mail_letter_via_lob.delay(
+        str(letter_id),
+        str(user.id),
+        from_address,
+        to_address,
+        reservation.overage_count > 0,
+        reservation.period_start_iso,
+    )
+
+    logger.info(
+        "letter_mail_queued",
+        letter_id=str(letter_id),
+        user_id=str(user.id),
+        is_overage=reservation.overage_count > 0,
+    )
+
+    return {
+        "task_id": task.id,
+        "status": "queued",
+        "message": "Letter queued for mailing",
+    }

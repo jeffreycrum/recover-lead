@@ -43,17 +43,22 @@ def skip_trace_single(
     period_start_iso: str = "",
 ) -> dict:
     """Skip trace a single lead."""
+    from app.core.sse import publish_progress
+
     try:
+        publish_progress(self.request.id, {"status": "PROGRESS", "current": 0, "total": 1})
         result = asyncio.run(_skip_trace_lead(user_id, lead_id, is_overage))
         from app.services.billing_service import release_reservation
 
         release_reservation(uuid.UUID(user_id), "skip_trace", 1, period_start_iso or None)
+        publish_progress(self.request.id, {"status": "SUCCESS", "result": result})
         return result
-    except Exception:
+    except Exception as e:
         if self.request.retries >= self.max_retries:
             from app.services.billing_service import release_reservation
 
             release_reservation(uuid.UUID(user_id), "skip_trace", 1, period_start_iso or None)
+            publish_progress(self.request.id, {"status": "FAILURE", "error": str(e)})
         raise
 
 
@@ -75,6 +80,8 @@ def skip_trace_batch(
     period_start_iso: str = "",
 ) -> dict:
     """Batch skip trace multiple leads."""
+    from app.core.sse import publish_progress
+
     results = {"hits": 0, "misses": 0, "errors": 0, "total": len(lead_ids)}
     overage_start = len(lead_ids) - overage_count
 
@@ -83,6 +90,10 @@ def skip_trace_batch(
             self.update_state(
                 state="PROGRESS",
                 meta={"completed": i, "total": len(lead_ids)},
+            )
+            publish_progress(
+                self.request.id,
+                {"status": "PROGRESS", "current": i, "total": len(lead_ids)},
             )
             is_overage = i >= overage_start
             result = asyncio.run(_skip_trace_lead(user_id, lead_id, is_overage))
@@ -105,6 +116,7 @@ def skip_trace_batch(
         len(lead_ids),
         period_start_iso or None,
     )
+    publish_progress(self.request.id, {"status": "SUCCESS", "result": results})
     return results
 
 

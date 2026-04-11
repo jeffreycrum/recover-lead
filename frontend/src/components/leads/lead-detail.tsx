@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLead, useClaimLead, useReleaseLead, useQualifyLead } from "@/hooks/use-leads";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -169,23 +170,33 @@ function SkipTraceSection({
   leadId: string;
   skipTraceResults?: any[];
 }) {
-  const [isRunning, setIsRunning] = useState(false);
-  const [results, setResults] = useState(skipTraceResults || []);
-  const [error, setError] = useState<string | null>(null);
+  const qc = useQueryClient();
 
-  const handleSkipTrace = async () => {
-    setIsRunning(true);
-    setError(null);
-    try {
-      const result = await api.skipTraceLead(leadId);
-      setResults([result, ...results]);
-    } catch (e: any) {
-      const detail = e?.detail || e?.message || "Skip trace failed";
-      setError(typeof detail === "string" ? detail : detail.message || "Skip trace failed");
-    } finally {
-      setIsRunning(false);
-    }
-  };
+  // Source of truth: lead detail query already loads skip_trace_results.
+  // This query just mirrors it, keyed on leadId, so we get proper
+  // cache invalidation when the lead is refetched.
+  const { data: results = [] } = useQuery<any[]>({
+    queryKey: ["skip-trace", leadId],
+    queryFn: () => Promise.resolve(skipTraceResults || []),
+    initialData: skipTraceResults || [],
+  });
+
+  const mutation = useMutation({
+    mutationFn: () => api.skipTraceLead(leadId),
+    onSuccess: () => {
+      // Invalidate the lead so it refetches with the new skip trace result
+      qc.invalidateQueries({ queryKey: ["leads", leadId] });
+      qc.invalidateQueries({ queryKey: ["skip-trace", leadId] });
+    },
+  });
+
+  const errorMessage = mutation.error
+    ? (() => {
+        const e = mutation.error as any;
+        const detail = e?.detail || e?.message || "Skip trace failed";
+        return typeof detail === "string" ? detail : detail.message || "Skip trace failed";
+      })()
+    : null;
 
   return (
     <div className="pt-2">
@@ -194,11 +205,11 @@ function SkipTraceSection({
           <Search size={14} /> Skip Trace
         </h3>
         <button
-          onClick={handleSkipTrace}
-          disabled={isRunning}
+          onClick={() => mutation.mutate()}
+          disabled={mutation.isPending}
           className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50 flex items-center gap-1"
         >
-          {isRunning ? (
+          {mutation.isPending ? (
             <>
               <Loader2 size={12} className="animate-spin" /> Running...
             </>
@@ -209,8 +220,8 @@ function SkipTraceSection({
           )}
         </button>
       </div>
-      {error && (
-        <p className="text-xs text-red-600 mb-2">{error}</p>
+      {errorMessage && (
+        <p className="text-xs text-red-600 mb-2">{errorMessage}</p>
       )}
       <SkipTraceResults results={results} />
     </div>

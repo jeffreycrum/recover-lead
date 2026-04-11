@@ -5,6 +5,8 @@ import { formatPercent } from "@/lib/utils";
 import { BarChart3, FileText, Map, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
+import { RoiStats } from "@/components/dashboard/roi-stats";
+import { PipelineFunnel } from "@/components/dashboard/pipeline-funnel";
 
 export function DashboardPage() {
   const { data: sub } = useSubscription();
@@ -73,6 +75,9 @@ export function DashboardPage() {
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground">Welcome to RecoverLead</p>
       </div>
+
+      <RoiStats />
+      <PipelineFunnel />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (

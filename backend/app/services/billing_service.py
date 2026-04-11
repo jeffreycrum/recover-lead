@@ -1,5 +1,6 @@
 import uuid
 from datetime import UTC
+from functools import lru_cache
 
 import redis as redis_lib
 import stripe
@@ -7,21 +8,15 @@ import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
+from app.config import redis_url_with_db, settings
 
 logger = structlog.get_logger()
 
-# Redis db 3 for usage reservations
-_usage_redis: redis_lib.Redis | None = None
 
-
+@lru_cache(maxsize=1)
 def get_usage_redis() -> redis_lib.Redis:
-    global _usage_redis
-    if _usage_redis is None:
-        from app.config import redis_url_with_db
-
-        _usage_redis = redis_lib.from_url(redis_url_with_db(settings.redis_url, 3))
-    return _usage_redis
+    """Module-level singleton Redis client for usage tracking (db 3)."""
+    return redis_lib.from_url(redis_url_with_db(settings.redis_url, 3))
 
 
 def _usage_key(user_id: uuid.UUID, usage_type: str, period_start) -> str:
@@ -38,11 +33,13 @@ PLAN_CONFIG = {
         "qualifications": 15,
         "letters": 10,
         "skip_traces": 0,
+        "mailings": 0,
     },
     "starter": {
         "qualifications": 200,
         "letters": 100,
         "skip_traces": 25,
+        "mailings": 25,
         "monthly_price_id": "price_1TJNApAaXgwYepz4CT6VZrVb",
         "annual_price_id": "price_1TJNApAaXgwYepz4mkj53ZsT",
     },
@@ -50,6 +47,7 @@ PLAN_CONFIG = {
         "qualifications": 1000,
         "letters": 500,
         "skip_traces": 100,
+        "mailings": 100,
         "monthly_price_id": "price_1TJNAqAaXgwYepz4bpupmVbq",
         "annual_price_id": "price_1TJNAqAaXgwYepz4XjSGrUTB",
     },
@@ -57,6 +55,7 @@ PLAN_CONFIG = {
         "qualifications": 5000,
         "letters": 2000,
         "skip_traces": 500,
+        "mailings": 500,
         "monthly_price_id": "price_1TJNArAaXgwYepz4LcVF3T9U",
         "annual_price_id": "price_1TJNArAaXgwYepz46RoMlZdA",
     },
@@ -66,6 +65,7 @@ OVERAGE_PRICES = {
     "qualification": 0.02,
     "letter": 0.05,
     "skip_trace": 0.50,
+    "mailing": 1.00,
 }
 
 
@@ -76,6 +76,7 @@ def get_plan_limits(plan: str) -> dict[str, int]:
         "qualifications": config["qualifications"],
         "letters": config["letters"],
         "skip_traces": config["skip_traces"],
+        "mailings": config.get("mailings", 0),
     }
 
 
@@ -184,6 +185,19 @@ async def get_current_usage(
         )
         if period_start:
             query = query.where(SkipTraceResult.created_at >= period_start)
+    elif usage_type == "mailing":
+        from app.models.letter import Letter
+
+        query = (
+            select(func.count())
+            .select_from(Letter)
+            .where(
+                Letter.user_id == user_id,
+                Letter.lob_id.is_not(None),
+            )
+        )
+        if period_start:
+            query = query.where(Letter.mailed_at >= period_start)
     else:
         return 0
 
@@ -220,6 +234,7 @@ async def check_usage_limit(
         "qualification": "qualifications",
         "letter": "letters",
         "skip_trace": "skip_traces",
+        "mailing": "mailings",
     }.get(usage_type, usage_type)
     limit = limits[limit_key]
 
@@ -293,6 +308,7 @@ async def reserve_usage(
         "qualification": "qualifications",
         "letter": "letters",
         "skip_trace": "skip_traces",
+        "mailing": "mailings",
     }.get(usage_type, usage_type)
     limit = limits[limit_key]
 
@@ -385,6 +401,7 @@ async def record_overage_usage(
         "qualification": settings.stripe_qualification_overage_price_id,
         "letter": settings.stripe_letter_overage_price_id,
         "skip_trace": settings.stripe_skip_trace_overage_price_id,
+        "mailing": settings.stripe_mailing_overage_price_id,
     }.get(usage_type, "")
 
     if not target_price_id:

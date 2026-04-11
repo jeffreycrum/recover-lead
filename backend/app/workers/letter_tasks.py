@@ -31,19 +31,24 @@ def generate_letter_task(
     period_start_iso: str = "",
 ) -> dict:
     """Generate a single letter via Claude."""
+    from app.core.sse import publish_progress
+
     try:
+        publish_progress(self.request.id, {"status": "PROGRESS", "current": 0, "total": 1})
         result = asyncio.run(_generate_letter(user_id, lead_id, letter_type, is_overage))
         # Release reservation on success (usage now committed to DB)
         from app.services.billing_service import release_reservation
 
         release_reservation(uuid.UUID(user_id), "letter", 1, period_start_iso or None)
+        publish_progress(self.request.id, {"status": "SUCCESS", "result": result})
         return result
-    except Exception:
+    except Exception as e:
         if self.request.retries >= self.max_retries:
             # Final failure — release the reservation
             from app.services.billing_service import release_reservation
 
             release_reservation(uuid.UUID(user_id), "letter", 1, period_start_iso or None)
+            publish_progress(self.request.id, {"status": "FAILURE", "error": str(e)})
         raise
 
 
@@ -155,6 +160,8 @@ def generate_batch_task(
     period_start_iso: str = "",
 ) -> dict:
     """Generate letters for a batch of leads."""
+    from app.core.sse import publish_progress
+
     result = asyncio.run(_generate_batch(user_id, lead_ids, letter_type, overage_count, self))
     # Release all reservations on completion (both successes and failures)
     from app.services.billing_service import release_reservation
@@ -165,6 +172,7 @@ def generate_batch_task(
         len(lead_ids),
         period_start_iso or None,
     )
+    publish_progress(self.request.id, {"status": "SUCCESS", "result": result})
     return result
 
 
@@ -175,6 +183,8 @@ async def _generate_batch(
     overage_count: int,
     task,
 ) -> dict:
+    from app.core.sse import publish_progress
+
     results = {"generated": 0, "errors": 0, "total": len(lead_ids)}
     overage_start = len(lead_ids) - overage_count
 
@@ -183,6 +193,10 @@ async def _generate_batch(
             task.update_state(
                 state="PROGRESS",
                 meta={"completed": i, "total": len(lead_ids)},
+            )
+            publish_progress(
+                task.request.id,
+                {"status": "PROGRESS", "current": i, "total": len(lead_ids)},
             )
 
             is_overage = i >= overage_start
