@@ -1,49 +1,28 @@
 """Skip Sherpa skip trace provider implementation.
 
-Skip Sherpa is a waterfall enrichment API. Unlike Tracerfy (which
-requires a property address), Skip Sherpa accepts partial data and
-cross-references multiple sources. Critical features for RecoverLead:
-
-- Name-only or address-only lookups
+Skip Sherpa is a waterfall enrichment API. Critical features for RecoverLead:
+- Name-only lookups (no address required)
 - Deceased flags
-- Relative/heir graph
-- LLC/business owner piercing
+- LLC/business owner piercing (separate endpoint)
 
-API endpoints (from user-provided curl examples):
-
+API:
   PUT https://skipsherpa.com/api/beta6/person
-  Body:
-  {
-    "person_lookups": [{
-      "first_name", "middle_name", "last_name", "age", "email", "phone_number",
-      "mailing_addresses": [{"street", "street2", "city", "state", "zipcode"}]
-    }]
-  }
+    Body: {"person_lookups": [{"first_name", "middle_name", "last_name",
+                                "mailing_addresses": [{"street","city","state","zipcode"}]}]}
+    Response envelope: {"person_results": [{"persons": [{phone_numbers, emails, addresses}]}]}
 
   PUT https://skipsherpa.com/api/beta6/business
-  Body:
-  {
-    "business_lookups": [{
-      "mailing_address": {...},
-      "business_name": "string",
-      "omit_registered_agents": false
-    }]
-  }
+    Body: {"business_lookups": [{"business_name", "mailing_address":{...},
+                                  "omit_registered_agents": false}]}
+    Response envelope: {"business_results": [{"businesses": [{phone_numbers, emails, addresses}]}]}
 
-  PUT https://skipsherpa.com/api/beta6/properties
-  Body:
-  {
-    "property_lookups": [{
-      "success_criteria": "owner-contact-any",
-      "property_address_lookup": {"street", ...},
-      "owner_entity_lookup": {...}
-    }]
-  }
+  Auth: API-Key header
+  404 = no match (not an error)
+  Error envelope: {"status_code": 403, "issues": [{"detail": "..."}], "results": []}
 
-Routing logic:
-- Owner name looks like an LLC/entity -> /business
-- Owner name looks like a person    -> /person
-- No name, only address             -> /properties
+Routing:
+- Owner name looks like LLC/Corp/Trust -> /business
+- Person name                          -> /person
 """
 
 from __future__ import annotations
@@ -64,19 +43,62 @@ from app.services.skip_trace import (
 
 logger = structlog.get_logger()
 
-BUSINESS_KEYWORDS = re.compile(
-    r"\b(LLC|L\.L\.C\.|L\.L\.C|INC|INC\.|CORP|CORP\.|CORPORATION|LTD|LTD\.|LP|L\.P\.|"
-    r"LLP|L\.L\.P\.|COMPANY|CO\.|TRUST|HOLDINGS|PARTNERS|ASSOCIATES|GROUP|"
-    r"ESTATE|PROPERTIES|INVESTMENTS|REALTY|ENTERPRISES)\b",
-    re.IGNORECASE,
-)
+
+# Business entity markers — match flipfinder's production list
+BUSINESS_MARKERS = [
+    " LLC",
+    ",LLC",
+    " INC",
+    ",INC",
+    " CORP",
+    ",CORP",
+    " CO.",
+    " COMPANY",
+    " TRUST",
+    " L.P.",
+    " LP",
+    " L.L.C",
+    " LLLP",
+    " LLP",
+    " PARTNERS",
+    " HOLDINGS",
+    " INVESTMENTS",
+    " PROPERTIES",
+    " REAL ESTATE",
+    " CAPITAL",
+    " GROUP",
+    " VENTURES",
+    " FUND",
+    " ASSOC",
+    " ESTATE OF",
+    " LIVING TRUST",
+    " REVOCABLE",
+]
 
 
 def _looks_like_business(name: str) -> bool:
     """Return True if the owner name appears to be an LLC/business entity."""
     if not name:
         return False
-    return bool(BUSINESS_KEYWORDS.search(name))
+    u = name.upper()
+    return any(m in u for m in BUSINESS_MARKERS)
+
+
+def _split_person_name(name: str) -> tuple[str, str, str]:
+    """Split 'CURTIS S KRUGER' -> ('CURTIS', 'S', 'KRUGER').
+
+    Multi-party names joined with commas (e.g. 'JOHN SMITH,JANE SMITH')
+    only use the first party.
+    """
+    primary = name.split(",")[0].strip()
+    parts = primary.split()
+    if not parts:
+        return ("", "", "")
+    if len(parts) == 1:
+        return ("", "", parts[0])
+    if len(parts) == 2:
+        return (parts[0], "", parts[1])
+    return (parts[0], " ".join(parts[1:-1]), parts[-1])
 
 
 class SkipSherpaProvider:
@@ -87,296 +109,251 @@ class SkipSherpaProvider:
         self.base_url = base_url.rstrip("/")
 
     async def lookup(self, request: SkipTraceLookupRequest) -> SkipTraceLookupResponse:
-        """Real-time lookup. Uses /person when we have a name,
-        /properties when we only have an address.
-        """
+        """Real-time lookup. Routes to /person or /business based on name."""
         if not self.api_key:
             logger.error("skipsherpa_no_api_key")
             raise RuntimeError("SKIPSHERPA_API_KEY is not configured")
 
-        headers = {
-            "API-Key": self.api_key,
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        }
-
-        # Route based on what we have:
-        #   - LLC/business name  -> /business (pierces corporate veil)
-        #   - Person name        -> /person
-        #   - Address only       -> /properties
-        full_name = " ".join(
+        # Build combined owner name (Tracerfy-style request uses split fields;
+        # we join them to apply business-name detection)
+        name = " ".join(
             filter(None, [request.first_name, request.last_name])
         ).strip()
-        has_name = bool(full_name)
-        has_address = bool(request.address or request.city or request.state)
-        is_business = has_name and _looks_like_business(full_name)
 
-        if is_business:
-            endpoint = "business"
-            payload = self._build_business_payload(full_name, request)
-        elif has_name:
-            endpoint = "person"
-            payload = self._build_person_payload(request)
-        elif has_address:
-            endpoint = "properties"
-            payload = self._build_property_payload(request)
-        else:
-            logger.warning("skipsherpa_empty_request")
+        if not name:
+            logger.warning("skipsherpa_empty_name")
             return SkipTraceLookupResponse(hit=False, persons=[], raw={})
 
-        url = f"{self.base_url}/{endpoint}"
-        logger.info("skipsherpa_request", url=url, endpoint=endpoint)
+        async with httpx.AsyncClient(
+            timeout=60.0,
+            headers={
+                "API-Key": self.api_key,
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+        ) as client:
+            if _looks_like_business(name):
+                return await self._lookup_business(client, name, request)
+            else:
+                return await self._lookup_person(client, name, request)
 
-        async with httpx.AsyncClient(timeout=60.0, headers=headers) as client:
-            response = await client.put(url, json=payload)
-            logger.info(
-                "skipsherpa_response",
-                status_code=response.status_code,
-                body_preview=response.text[:1000],
-            )
-            if response.status_code >= 400:
-                logger.error(
-                    "skipsherpa_http_error",
-                    endpoint=endpoint,
-                    status_code=response.status_code,
-                    body=response.text[:2000],
-                )
-            response.raise_for_status()
-            data = response.json()
+    async def _lookup_person(
+        self,
+        client: httpx.AsyncClient,
+        name: str,
+        request: SkipTraceLookupRequest,
+    ) -> SkipTraceLookupResponse:
+        first, middle, last = _split_person_name(name)
+        body = {
+            "person_lookups": [
+                {
+                    "first_name": first or None,
+                    "middle_name": middle or None,
+                    "last_name": last or None,
+                    "mailing_addresses": [
+                        {
+                            "street": request.address or "",
+                            "city": request.city or "",
+                            "state": request.state or "",
+                            "zipcode": request.zip_code or "",
+                        }
+                    ],
+                }
+            ]
+        }
+        url = f"{self.base_url}/person"
+        logger.info("skipsherpa_request", url=url, endpoint="person")
 
-        persons = _extract_persons(data, endpoint)
+        data = await self._put_json(client, url, body)
+        if data is None:  # 404 = no match
+            return SkipTraceLookupResponse(hit=False, persons=[], raw={})
+
+        # Response envelope: person_results[0].persons[]
+        results = (
+            data.get("person_results") or data.get("results") or []
+        )
+        persons_raw: list = []
+        if results and isinstance(results[0], dict):
+            persons_raw = results[0].get("persons") or []
+
+        persons = [_parse_entity(p) for p in persons_raw if isinstance(p, dict)]
         hit = any((p.phones or p.emails or p.mailing_address) for p in persons)
 
         logger.info(
             "skipsherpa_lookup_complete",
+            endpoint="person",
             hit=hit,
             person_count=len(persons),
-            endpoint=endpoint,
         )
-
         return SkipTraceLookupResponse(hit=hit, persons=persons, raw=data)
 
-    @staticmethod
-    def _build_person_payload(request: SkipTraceLookupRequest) -> dict:
-        """Build a /person endpoint payload."""
-        mailing_addresses = []
-        if request.address or request.city or request.state or request.zip_code:
-            mailing_addresses.append(
-                {
-                    "street": request.address or None,
-                    "street2": None,
-                    "city": request.city or None,
-                    "state": request.state or None,
-                    "zipcode": request.zip_code or None,
-                }
-            )
-
-        lookup: dict = {
-            "first_name": request.first_name or None,
-            "middle_name": None,
-            "last_name": request.last_name or None,
-            "age": None,
-            "email": None,
-            "phone_number": None,
-            "mailing_addresses": mailing_addresses or None,
-        }
-
-        return {"person_lookups": [lookup]}
-
-    @staticmethod
-    def _build_business_payload(
-        business_name: str, request: SkipTraceLookupRequest
-    ) -> dict:
-        """Build a /business endpoint payload for LLC/entity piercing."""
-        mailing_address = None
-        if request.address or request.city or request.state or request.zip_code:
-            mailing_address = {
-                "street": request.address or None,
-                "street2": None,
-                "city": request.city or None,
-                "state": request.state or None,
-                "zipcode": request.zip_code or None,
-            }
-
-        return {
+    async def _lookup_business(
+        self,
+        client: httpx.AsyncClient,
+        name: str,
+        request: SkipTraceLookupRequest,
+    ) -> SkipTraceLookupResponse:
+        body = {
             "business_lookups": [
                 {
-                    "business_name": business_name,
-                    "mailing_address": mailing_address,
+                    "business_name": name,
+                    "mailing_address": {
+                        "street": request.address or "",
+                        "city": request.city or "",
+                        "state": request.state or "",
+                        "zipcode": request.zip_code or "",
+                    },
                     "omit_registered_agents": False,
                 }
             ]
         }
+        url = f"{self.base_url}/business"
+        logger.info("skipsherpa_request", url=url, endpoint="business")
 
-    @staticmethod
-    def _build_property_payload(request: SkipTraceLookupRequest) -> dict:
-        """Build a /properties endpoint payload (address-only fallback)."""
-        address_lookup = {
-            "street": request.address or None,
-            "street2": None,
-            "city": request.city or None,
-            "state": request.state or None,
-            "zipcode": request.zip_code or None,
-        }
-        return {
-            "property_lookups": [
-                {
-                    "success_criteria": "owner-contact-any",
-                    "property_address_lookup": address_lookup,
-                    "owner_entity_lookup": None,
-                }
-            ]
-        }
+        data = await self._put_json(client, url, body)
+        if data is None:
+            return SkipTraceLookupResponse(hit=False, persons=[], raw={})
+
+        # Response envelope: business_results[0].businesses[]
+        results = (
+            data.get("business_results") or data.get("results") or []
+        )
+        businesses_raw: list = []
+        if results and isinstance(results[0], dict):
+            businesses_raw = results[0].get("businesses") or []
+
+        persons = [_parse_entity(b) for b in businesses_raw if isinstance(b, dict)]
+        hit = any((p.phones or p.emails or p.mailing_address) for p in persons)
+
+        logger.info(
+            "skipsherpa_lookup_complete",
+            endpoint="business",
+            hit=hit,
+            person_count=len(persons),
+        )
+        return SkipTraceLookupResponse(hit=hit, persons=persons, raw=data)
+
+    async def _put_json(
+        self, client: httpx.AsyncClient, url: str, body: dict
+    ) -> dict | None:
+        """PUT a JSON body. Returns parsed response, or None for 404 (no match).
+
+        Raises on real errors (bad key, server error, etc.) with the
+        'issues[0].detail' message from Skip Sherpa's error envelope.
+        """
+        response = await client.put(url, json=body)
+        status = response.status_code
+        body_text = response.text
+
+        logger.info(
+            "skipsherpa_response",
+            status_code=status,
+            body_preview=body_text[:500],
+        )
+
+        # 404 = no match — not an error
+        if status == 404:
+            return None
+
+        if status >= 400:
+            # Try to extract the issue detail from Skip Sherpa's error envelope
+            try:
+                err_json = response.json()
+                issues = err_json.get("issues") or []
+                detail = (
+                    (issues[0].get("detail") if issues else None)
+                    or (issues[0].get("code_str") if issues else None)
+                    or response.reason_phrase
+                    or "error"
+                )
+            except Exception:
+                detail = body_text[:200] or response.reason_phrase or "error"
+            logger.error(
+                "skipsherpa_http_error",
+                status_code=status,
+                detail=detail,
+                body=body_text[:2000],
+            )
+            raise RuntimeError(f"Skip Sherpa {status}: {detail}")
+
+        return response.json()
 
 
-def _extract_persons(data: dict, endpoint: str) -> list[PersonResult]:
-    """Extract PersonResult list from a Skip Sherpa response.
+def _parse_entity(entity: dict) -> PersonResult:
+    """Extract phones/emails/address from a Skip Sherpa person or business entity.
 
-    Actual response field names are unknown until we see a real response.
-    Try several common paths and log the raw response so we can tighten
-    this once we see a real 200 body.
+    Both schemas share phone_numbers, emails, and addresses arrays.
     """
-    # Top-level results list — varies by endpoint
-    if endpoint == "person":
-        results = (
-            data.get("person_lookups")
-            or data.get("persons")
-            or data.get("results")
-            or data.get("data")
-            or []
-        )
-    elif endpoint == "business":
-        results = (
-            data.get("business_lookups")
-            or data.get("businesses")
-            or data.get("results")
-            or data.get("data")
-            or []
-        )
-    else:
-        results = (
-            data.get("property_lookups")
-            or data.get("properties")
-            or data.get("results")
-            or data.get("data")
-            or []
-        )
-
-    if isinstance(results, dict):
-        results = [results]
-
-    persons: list[PersonResult] = []
-    for r in results:
-        if not isinstance(r, dict):
+    phones: list[PhoneResult] = []
+    for p in entity.get("phone_numbers") or []:
+        if not isinstance(p, dict):
             continue
-        # A single lookup result is itself the person/entity record, OR
-        # contains an owners/persons sub-list. For /business the sub-list
-        # is typically the registered agents / officers / members.
-        owners = (
-            r.get("owners")
-            or r.get("officers")
-            or r.get("members")
-            or r.get("registered_agents")
-            or r.get("owner_entities")
-            or r.get("persons")
-            or r.get("matches")
-            or r.get("contacts")
-        )
-        if owners is None:
-            # Treat the result itself as the person
-            persons.append(_parse_person(r))
-        else:
-            if isinstance(owners, dict):
-                owners = [owners]
-            for owner in owners:
-                if isinstance(owner, dict):
-                    persons.append(_parse_person(owner))
+        # Prefer local_format, fall back to e164
+        number = p.get("local_format") or p.get("e164_format") or ""
+        if number:
+            phones.append(
+                PhoneResult(
+                    number=str(number),
+                    type=str(p.get("type") or p.get("line_type") or ""),
+                    dnc=bool(p.get("dnc") or p.get("do_not_call") or False),
+                    carrier=str(p.get("carrier") or ""),
+                    rank=int(p.get("rank") or 0),
+                )
+            )
 
-    return persons
+    emails: list[EmailResult] = []
+    for e in entity.get("emails") or []:
+        if not isinstance(e, dict):
+            continue
+        addr = e.get("email_address") or ""
+        if addr:
+            emails.append(EmailResult(email=str(addr), rank=int(e.get("rank") or 0)))
 
-
-def _parse_person(raw: dict) -> PersonResult:
-    """Map a Skip Sherpa owner/person object to PersonResult.
-
-    Field names are best guesses — verify against real responses and
-    adjust based on the body_preview in logs.
-    """
-    phones_raw = (
-        raw.get("phones")
-        or raw.get("phone_numbers")
-        or raw.get("contact_phones")
-        or []
-    )
-    if isinstance(phones_raw, dict):
-        phones_raw = [phones_raw]
-    phones = [
-        PhoneResult(
-            number=str(p.get("number") or p.get("phone") or p.get("value") or ""),
-            type=str(p.get("type") or p.get("phone_type") or ""),
-            dnc=bool(p.get("dnc") or p.get("do_not_call") or False),
-            carrier=str(p.get("carrier") or ""),
-            rank=int(p.get("rank") or p.get("confidence") or 0),
-        )
-        for p in phones_raw
-        if isinstance(p, dict) and (p.get("number") or p.get("phone") or p.get("value"))
-    ]
-
-    emails_raw = (
-        raw.get("emails")
-        or raw.get("email_addresses")
-        or raw.get("contact_emails")
-        or []
-    )
-    if isinstance(emails_raw, dict):
-        emails_raw = [emails_raw]
-    emails = [
-        EmailResult(
-            email=str(e.get("email") or e.get("address") or e.get("value") or ""),
-            rank=int(e.get("rank") or e.get("confidence") or 0),
-        )
-        for e in emails_raw
-        if isinstance(e, dict) and (e.get("email") or e.get("address") or e.get("value"))
-    ]
-
-    addr_raw = (
-        raw.get("mailing_address")
-        or raw.get("current_address")
-        or raw.get("address")
-        or {}
-    )
-    # Could also be a list
-    if isinstance(addr_raw, list) and addr_raw:
-        addr_raw = addr_raw[0] if isinstance(addr_raw[0], dict) else {}
+    # Mailing address from addresses[0] — has delivery_line1 + last_line
     mailing_address = None
-    if isinstance(addr_raw, dict) and addr_raw:
+    addresses = entity.get("addresses") or []
+    if addresses and isinstance(addresses[0], dict):
+        first_addr = addresses[0]
+        line1 = first_addr.get("delivery_line1") or first_addr.get("street") or ""
+        last_line = first_addr.get("last_line") or ""
+        city = first_addr.get("city") or ""
+        state = first_addr.get("state") or ""
+        zipcode = first_addr.get("zipcode") or first_addr.get("zip") or ""
+        # Parse "city, state zip" from last_line if individual fields missing
+        if last_line and not (city and state):
+            m = re.match(r"([^,]+),\s*(\w{2})\s+(\d{5})", last_line)
+            if m:
+                city = city or m.group(1).strip()
+                state = state or m.group(2)
+                zipcode = zipcode or m.group(3)
         mailing_address = AddressResult(
-            street=str(addr_raw.get("street") or addr_raw.get("line1") or ""),
-            city=str(addr_raw.get("city") or ""),
-            state=str(addr_raw.get("state") or ""),
-            zip_code=str(addr_raw.get("zipcode") or addr_raw.get("zip") or ""),
+            street=str(line1),
+            city=str(city),
+            state=str(state),
+            zip_code=str(zipcode),
         )
 
     deceased = bool(
-        raw.get("deceased")
-        or raw.get("is_deceased")
-        or raw.get("deceased_flag")
+        entity.get("deceased")
+        or entity.get("is_deceased")
+        or entity.get("deceased_flag")
         or False
     )
 
     return PersonResult(
-        first_name=str(raw.get("first_name") or raw.get("firstName") or ""),
-        last_name=str(raw.get("last_name") or raw.get("lastName") or ""),
+        first_name=str(entity.get("first_name") or ""),
+        last_name=str(entity.get("last_name") or ""),
         full_name=str(
-            raw.get("full_name")
-            or raw.get("fullName")
-            or raw.get("name")
+            entity.get("full_name")
+            or entity.get("business_name")
+            or entity.get("name")
             or ""
         ),
-        dob=raw.get("dob") or raw.get("date_of_birth"),
-        age=raw.get("age"),
+        dob=entity.get("dob") or entity.get("date_of_birth"),
+        age=entity.get("age"),
         deceased=deceased,
-        property_owner=bool(raw.get("property_owner") or False),
-        litigator=bool(raw.get("litigator") or False),
+        property_owner=bool(entity.get("property_owner") or False),
+        litigator=bool(entity.get("litigator") or False),
         mailing_address=mailing_address,
         phones=phones,
         emails=emails,
