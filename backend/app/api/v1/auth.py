@@ -34,6 +34,8 @@ async def get_me(
     )
     credits = result.scalar_one_or_none()
 
+    from app.config import settings
+
     return {
         "user": {
             "id": str(user.id),
@@ -52,6 +54,12 @@ async def get_me(
         "credits": {
             "skip_traces_remaining": credits.credits_remaining if credits else 0,
             "skip_traces_used_this_month": credits.credits_used_this_month if credits else 0,
+        },
+        "features": {
+            "lob_mailing_enabled": bool(settings.lob_api_key),
+            "skip_trace_enabled": bool(
+                settings.tracerfy_api_key or settings.skipsherpa_api_key
+            ),
         },
     }
 

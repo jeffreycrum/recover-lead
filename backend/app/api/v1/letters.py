@@ -77,6 +77,7 @@ async def generate_letter(
     if not reservation.allowed:
         raise InsufficientCreditsError()
 
+    from app.core.sse import register_task_owner
     from app.workers.letter_tasks import generate_letter_task
 
     task = generate_letter_task.delay(
@@ -86,6 +87,7 @@ async def generate_letter(
         reservation.overage_count > 0,
         reservation.period_start_iso,
     )
+    register_task_owner(task.id, str(user.id))
 
     return {
         "task_id": task.id,
@@ -124,6 +126,7 @@ async def generate_batch(
     if not reservation.allowed:
         raise InsufficientCreditsError()
 
+    from app.core.sse import register_task_owner
     from app.workers.letter_tasks import generate_batch_task
 
     task = generate_batch_task.delay(
@@ -133,6 +136,7 @@ async def generate_batch(
         reservation.overage_count,
         reservation.period_start_iso,
     )
+    register_task_owner(task.id, str(user.id))
 
     return {
         "task_id": task.id,
@@ -433,6 +437,7 @@ async def mail_letter(
         "country": "US",
     }
 
+    from app.core.sse import register_task_owner
     from app.workers.mailing_tasks import mail_letter_via_lob
 
     task = mail_letter_via_lob.delay(
@@ -443,6 +448,7 @@ async def mail_letter(
         reservation.overage_count > 0,
         reservation.period_start_iso,
     )
+    register_task_owner(task.id, str(user.id))
 
     logger.info(
         "letter_mail_queued",

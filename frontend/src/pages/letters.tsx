@@ -31,6 +31,12 @@ export function LettersPage() {
     queryFn: () => api.getLetters(),
   });
 
+  const { data: me } = useQuery({
+    queryKey: ["me"],
+    queryFn: () => api.getMe(),
+  });
+  const lobEnabled = Boolean(me?.features?.lob_mailing_enabled);
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.deleteLetter(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["letters"] }),
@@ -134,7 +140,7 @@ export function LettersPage() {
                       >
                         <Download size={14} />
                       </button>
-                      {letter.status === "approved" && (
+                      {letter.status === "approved" && lobEnabled && (
                         <button
                           onClick={() =>
                             setMailLetter({

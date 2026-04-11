@@ -253,8 +253,9 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
                   </div>
                   <p className="font-medium mt-1">{lead.owner_name || "Unknown Owner"}</p>
                   <p className="text-sm text-muted-foreground">
-                    {lead.property_address}
-                    {lead.property_city ? `, ${lead.property_city}` : ""}
+                    {lead.property_address
+                      ? `${lead.property_address}${lead.property_city ? `, ${lead.property_city}` : ""}`
+                      : "Address not on file"}
                   </p>
                 </div>
                 <div className="text-right ml-4">

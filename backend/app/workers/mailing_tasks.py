@@ -77,89 +77,94 @@ async def _mail_letter(
     user_uuid = uuid.UUID(user_id)
     period = period_start_iso or None
 
-    async with _get_worker_session() as session:
-        result = await session.execute(
-            select(Letter)
-            .options(selectinload(Letter.lead))
-            .where(
-                Letter.id == uuid.UUID(letter_id),
-                Letter.user_id == user_uuid,
-            )
-        )
-        letter = result.scalar_one_or_none()
-        if not letter:
-            release_reservation(user_uuid, "mailing", 1, period)
-            logger.warning("mail_letter_not_found", letter_id=letter_id)
-            return {"error": "letter not found"}
+    # Reservation MUST be released on every exit path (success or failure).
+    # Use try/finally so a post-send DB commit error doesn't leave a
+    # phantom reservation that locks the user out of future mailings.
+    reservation_released = False
 
-        if letter.status != "approved":
-            release_reservation(user_uuid, "mailing", 1, period)
-            logger.warning(
-                "mail_letter_wrong_state",
-                letter_id=letter_id,
-                status=letter.status,
-            )
-            return {"error": f"letter not in approved state: {letter.status}"}
-
-        case_number = letter.lead.case_number if letter.lead else letter_id
-
-        provider = get_mailing_provider()
-        try:
-            mail_result = provider.send_letter(
-                MailLetterRequest(
-                    to_address=Address(**to_address),
-                    from_address=Address(**from_address),
-                    content_html=letter.content,
-                    description=(
-                        f"RecoverLead surplus claim — case {case_number}"
-                    ),
+    try:
+        async with _get_worker_session() as session:
+            result = await session.execute(
+                select(Letter)
+                .options(selectinload(Letter.lead))
+                .where(
+                    Letter.id == uuid.UUID(letter_id),
+                    Letter.user_id == user_uuid,
                 )
             )
-        except Exception as e:
-            release_reservation(user_uuid, "mailing", 1, period)
-            logger.error(
-                "mail_letter_provider_exception",
-                letter_id=letter_id,
-                error=str(e),
-            )
-            raise
+            letter = result.scalar_one_or_none()
+            if not letter:
+                logger.warning("mail_letter_not_found", letter_id=letter_id)
+                return {"error": "letter not found"}
 
-        if not mail_result.success:
-            release_reservation(user_uuid, "mailing", 1, period)
-            logger.error(
-                "mail_letter_provider_error",
-                letter_id=letter_id,
-                error=mail_result.error,
-            )
-            return {"error": mail_result.error}
+            if letter.status != "approved":
+                logger.warning(
+                    "mail_letter_wrong_state",
+                    letter_id=letter_id,
+                    status=letter.status,
+                )
+                return {"error": f"letter not in approved state: {letter.status}"}
 
-        # Success — update letter state
-        letter.status = "mailed"
-        letter.lob_id = mail_result.provider_id
-        letter.lob_status = "created"
-        letter.mailed_at = _naive_utc_now()
-        letter.tracking_url = mail_result.tracking_url or None
-        letter.mailing_address_to = _serialize_address(to_address)
-        letter.mailing_address_from = _serialize_address(from_address)
-        if mail_result.expected_delivery_date:
+            case_number = letter.lead.case_number if letter.lead else letter_id
+
+            provider = get_mailing_provider()
             try:
-                letter.expected_delivery_date = date.fromisoformat(
-                    mail_result.expected_delivery_date[:10]
+                mail_result = provider.send_letter(
+                    MailLetterRequest(
+                        to_address=Address(**to_address),
+                        from_address=Address(**from_address),
+                        content_html=letter.content,
+                        description=(
+                            f"RecoverLead surplus claim — case {case_number}"
+                        ),
+                    )
                 )
-            except (ValueError, TypeError):
-                pass
+            except Exception as e:
+                logger.error(
+                    "mail_letter_provider_exception",
+                    letter_id=letter_id,
+                    error=str(e),
+                )
+                raise
 
-        await session.commit()
-        release_reservation(user_uuid, "mailing", 1, period)
-        if is_overage:
-            await record_overage_usage(session, user_uuid, "mailing")
+            if not mail_result.success:
+                logger.error(
+                    "mail_letter_provider_error",
+                    letter_id=letter_id,
+                    error=mail_result.error,
+                )
+                return {"error": mail_result.error}
 
-        logger.info(
-            "letter_mailed",
-            letter_id=letter_id,
-            lob_id=mail_result.provider_id,
-        )
-        return {"success": True, "lob_id": mail_result.provider_id}
+            # Success — update letter state
+            letter.status = "mailed"
+            letter.lob_id = mail_result.provider_id
+            letter.lob_status = "created"
+            letter.mailed_at = _naive_utc_now()
+            letter.tracking_url = mail_result.tracking_url or None
+            letter.mailing_address_to = _serialize_address(to_address)
+            letter.mailing_address_from = _serialize_address(from_address)
+            if mail_result.expected_delivery_date:
+                try:
+                    letter.expected_delivery_date = date.fromisoformat(
+                        mail_result.expected_delivery_date[:10]
+                    )
+                except (ValueError, TypeError):
+                    pass
+
+            await session.commit()
+            if is_overage:
+                await record_overage_usage(session, user_uuid, "mailing")
+
+            logger.info(
+                "letter_mailed",
+                letter_id=letter_id,
+                lob_id=mail_result.provider_id,
+            )
+            return {"success": True, "lob_id": mail_result.provider_id}
+    finally:
+        if not reservation_released:
+            release_reservation(user_uuid, "mailing", 1, period)
+            reservation_released = True
 
 
 def _serialize_address(addr: dict) -> str:

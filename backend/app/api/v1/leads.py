@@ -454,6 +454,7 @@ async def qualify_lead_endpoint(
     if not reservation.allowed:
         raise InsufficientCreditsError()
 
+    from app.core.sse import register_task_owner
     from app.workers.qualification_tasks import qualify_single
 
     task = qualify_single.delay(
@@ -462,6 +463,7 @@ async def qualify_lead_endpoint(
         reservation.overage_count > 0,
         reservation.period_start_iso,
     )
+    register_task_owner(task.id, str(user.id))
 
     await record_activity(session, lead_id, user.id, "qualify_started", "AI qualification started")
 
@@ -498,6 +500,7 @@ async def bulk_qualify(
     if not reservation.allowed:
         raise InsufficientCreditsError()
 
+    from app.core.sse import register_task_owner
     from app.workers.qualification_tasks import qualify_batch
 
     task = qualify_batch.delay(
@@ -506,6 +509,7 @@ async def bulk_qualify(
         reservation.overage_count,
         reservation.period_start_iso,
     )
+    register_task_owner(task.id, str(user.id))
 
     return {
         "task_id": task.id,
@@ -952,6 +956,7 @@ async def bulk_skip_trace(
     if not reservation.allowed:
         raise InsufficientCreditsError()
 
+    from app.core.sse import register_task_owner
     from app.workers.skip_trace_tasks import skip_trace_batch
 
     task = skip_trace_batch.delay(
@@ -960,6 +965,7 @@ async def bulk_skip_trace(
         reservation.overage_count,
         reservation.period_start_iso,
     )
+    register_task_owner(task.id, str(user.id))
 
     return {
         "task_id": task.id,
