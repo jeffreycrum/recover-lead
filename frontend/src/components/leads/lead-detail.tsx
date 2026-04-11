@@ -162,7 +162,13 @@ export function LeadDetail({ leadId, onClose }: LeadDetailProps) {
 }
 
 
-function SkipTraceSection({ leadId, skipTraceResults }: { leadId: string; skipTraceResults?: any[] }) {
+function SkipTraceSection({
+  leadId,
+  skipTraceResults,
+}: {
+  leadId: string;
+  skipTraceResults?: any[];
+}) {
   const [isRunning, setIsRunning] = useState(false);
   const [results, setResults] = useState(skipTraceResults || []);
   const [error, setError] = useState<string | null>(null);
