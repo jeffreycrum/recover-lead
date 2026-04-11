@@ -84,6 +84,24 @@ def _looks_like_business(name: str) -> bool:
     return any(m in u for m in BUSINESS_MARKERS)
 
 
+def _build_address_dict(request: SkipTraceLookupRequest) -> dict | None:
+    """Build a Skip Sherpa address dict, only including non-empty fields.
+
+    Skip Sherpa validates min length on string fields and rejects empty
+    or too-short values. Returns None if no usable address data exists.
+    """
+    addr: dict = {}
+    if request.address and len(request.address) >= 3:
+        addr["street"] = request.address
+    if request.city and len(request.city) >= 3:
+        addr["city"] = request.city
+    if request.state and len(request.state) >= 2:
+        addr["state"] = request.state
+    if request.zip_code and len(request.zip_code) >= 5:
+        addr["zipcode"] = request.zip_code
+    return addr if addr else None
+
+
 def _split_person_name(name: str) -> tuple[str, str, str]:
     """Split 'CURTIS S KRUGER' -> ('CURTIS', 'S', 'KRUGER').
 
@@ -144,23 +162,22 @@ class SkipSherpaProvider:
         request: SkipTraceLookupRequest,
     ) -> SkipTraceLookupResponse:
         first, middle, last = _split_person_name(name)
-        body = {
-            "person_lookups": [
-                {
-                    "first_name": first or None,
-                    "middle_name": middle or None,
-                    "last_name": last or None,
-                    "mailing_addresses": [
-                        {
-                            "street": request.address or "",
-                            "city": request.city or "",
-                            "state": request.state or "",
-                            "zipcode": request.zip_code or "",
-                        }
-                    ],
-                }
-            ]
-        }
+        person_lookup: dict = {}
+        # Skip Sherpa validates min length >= 3 on name fields
+        if first and len(first) >= 3:
+            person_lookup["first_name"] = first
+        if middle and len(middle) >= 3:
+            person_lookup["middle_name"] = middle
+        if last and len(last) >= 3:
+            person_lookup["last_name"] = last
+
+        # Only send mailing_addresses if we actually have address data —
+        # Skip Sherpa rejects empty/short field values with 400.
+        addr = _build_address_dict(request)
+        if addr:
+            person_lookup["mailing_addresses"] = [addr]
+
+        body = {"person_lookups": [person_lookup]}
         url = f"{self.base_url}/person"
         logger.info("skipsherpa_request", url=url, endpoint="person")
 
@@ -193,20 +210,15 @@ class SkipSherpaProvider:
         name: str,
         request: SkipTraceLookupRequest,
     ) -> SkipTraceLookupResponse:
-        body = {
-            "business_lookups": [
-                {
-                    "business_name": name,
-                    "mailing_address": {
-                        "street": request.address or "",
-                        "city": request.city or "",
-                        "state": request.state or "",
-                        "zipcode": request.zip_code or "",
-                    },
-                    "omit_registered_agents": False,
-                }
-            ]
+        business_lookup: dict = {
+            "business_name": name,
+            "omit_registered_agents": False,
         }
+        addr = _build_address_dict(request)
+        if addr:
+            business_lookup["mailing_address"] = addr
+
+        body = {"business_lookups": [business_lookup]}
         url = f"{self.base_url}/business"
         logger.info("skipsherpa_request", url=url, endpoint="business")
 
