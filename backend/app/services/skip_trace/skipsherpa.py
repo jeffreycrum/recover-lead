@@ -85,21 +85,24 @@ def _looks_like_business(name: str) -> bool:
 
 
 def _build_address_dict(request: SkipTraceLookupRequest) -> dict | None:
-    """Build a Skip Sherpa address dict, only including non-empty fields.
+    """Build a Skip Sherpa address dict.
 
-    Skip Sherpa validates min length on string fields and rejects empty
-    or too-short values. Returns None if no usable address data exists.
+    Skip Sherpa requires `street` whenever a mailing address is provided
+    and validates min length >= 3 on string fields. If we don't have a
+    street, return None so the caller omits the address entirely and
+    falls back to a name-only lookup.
     """
-    addr: dict = {}
-    if request.address and len(request.address) >= 3:
-        addr["street"] = request.address
+    if not request.address or len(request.address) < 3:
+        return None
+
+    addr: dict = {"street": request.address}
     if request.city and len(request.city) >= 3:
         addr["city"] = request.city
     if request.state and len(request.state) >= 2:
         addr["state"] = request.state
     if request.zip_code and len(request.zip_code) >= 5:
         addr["zipcode"] = request.zip_code
-    return addr if addr else None
+    return addr
 
 
 def _split_person_name(name: str) -> tuple[str, str, str]:
