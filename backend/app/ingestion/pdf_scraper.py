@@ -36,7 +36,34 @@ class PdfScraper(BaseScraper):
             return response.content
 
     def parse(self, raw_data: bytes) -> list[RawLead]:
-        """Extract leads from PDF tables using pdfplumber."""
+        """Extract leads from PDF tables using pdfplumber.
+
+        Two modes are supported via config:
+
+        - Default (table mode): pdfplumber.extract_tables() + per-column mapping.
+          Used by Volusia, Sumter, DeSoto, Taylor etc where the PDF has real
+          tabular structure that pdfplumber can detect.
+
+        - text_line_mode: page.extract_text() split into lines, then each line
+          is matched against a regex. Used for Baker/Santa Rosa/Osceola where
+          the PDF is text-based with positional layout and has NO tables.
+          Config schema:
+            {
+              "text_line_mode": True,
+              "line_pattern": r"^(?P<case>...)\\s+...$",
+              "fields": {  # optional named-group -> RawLead field mapping
+                "case": "case_number",
+                "amt": "surplus_amount",
+                "owner": "owner_name",
+                "parcel": "parcel_id",
+                "date": "sale_date",
+                "addr": "property_address",
+              }
+            }
+        """
+        if self.config.get("text_line_mode"):
+            return self._parse_text_lines(raw_data)
+
         leads = []
         pdf = pdfplumber.open(BytesIO(raw_data))
 
@@ -53,6 +80,97 @@ class PdfScraper(BaseScraper):
 
         pdf.close()
         return leads
+
+    def _parse_text_lines(self, raw_data: bytes) -> list[RawLead]:
+        """Parse PDFs that have no detectable table structure.
+
+        Extracts page text line-by-line and matches each line against the
+        regex from config["line_pattern"]. Non-matching lines (headers,
+        footers, multi-line owner continuations) are silently skipped.
+        """
+        pattern_str = self.config.get("line_pattern")
+        if not pattern_str:
+            self.logger.warning("text_line_mode_missing_pattern")
+            return []
+
+        try:
+            pattern = re.compile(pattern_str)
+        except re.error as e:
+            self.logger.error("invalid_line_pattern", error=str(e))
+            return []
+
+        fields = self.config.get("fields") or {
+            "case": "case_number",
+            "amt": "surplus_amount",
+            "owner": "owner_name",
+            "parcel": "parcel_id",
+            "date": "sale_date",
+            "addr": "property_address",
+        }
+
+        leads: list[RawLead] = []
+        pdf = pdfplumber.open(BytesIO(raw_data))
+        try:
+            for page in pdf.pages:
+                text = page.extract_text() or ""
+                for line in text.split("\n"):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    match = pattern.match(line)
+                    if not match:
+                        continue
+                    lead = self._build_lead_from_match(match, fields, line)
+                    if lead:
+                        leads.append(lead)
+        finally:
+            pdf.close()
+        return leads
+
+    def _build_lead_from_match(
+        self,
+        match: re.Match[str],
+        fields: dict[str, str],
+        raw_line: str,
+    ) -> RawLead | None:
+        """Convert a regex match to a RawLead using the configured field map."""
+        groups = match.groupdict()
+
+        case_group = next((g for g, f in fields.items() if f == "case_number"), None)
+        amt_group = next((g for g, f in fields.items() if f == "surplus_amount"), None)
+
+        case_number = (groups.get(case_group) or "").strip() if case_group else ""
+        amt_str = (groups.get(amt_group) or "").strip() if amt_group else ""
+        if not case_number:
+            return None
+
+        surplus_amount = self._parse_amount(amt_str)
+        if surplus_amount <= 0:
+            return None
+
+        kwargs: dict[str, object] = {
+            "case_number": case_number,
+            "surplus_amount": surplus_amount,
+            "sale_type": "tax_deed",
+            "raw_data": {"line": raw_line, **groups},
+        }
+
+        for group_name, field_name in fields.items():
+            if field_name in ("case_number", "surplus_amount"):
+                continue
+            if field_name not in {
+                "parcel_id",
+                "property_address",
+                "owner_name",
+                "sale_date",
+                "owner_last_known_address",
+            }:
+                continue
+            value = (groups.get(group_name) or "").strip() or None
+            if value is not None:
+                kwargs[field_name] = value
+
+        return RawLead(**kwargs)  # type: ignore[arg-type]
 
     def _parse_row(self, row: list[str | None]) -> RawLead | None:
         """Parse a single table row into a RawLead using config-based column mapping."""
