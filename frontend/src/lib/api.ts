@@ -6,6 +6,21 @@ export interface ApiError {
   message: string;
 }
 
+export interface MailLetterData {
+  from_name: string;
+  from_street1: string;
+  from_street2?: string;
+  from_city: string;
+  from_state: string;
+  from_zip: string;
+  to_name: string;
+  to_street1: string;
+  to_street2?: string;
+  to_city: string;
+  to_state: string;
+  to_zip: string;
+}
+
 export class ApiClient {
   private getTokenFn: (() => Promise<string | null>) | null = null;
 
@@ -94,6 +109,14 @@ export class ApiClient {
     });
   }
 
+  getRoiStats() {
+    return this.request<any>("/leads/stats/roi");
+  }
+
+  getPipelineStats() {
+    return this.request<any>("/leads/stats/pipeline");
+  }
+
   // Letters
   generateLetter(leadId: string, letterType: string = "tax_deed") {
     return this.request<any>("/letters/generate", {
@@ -127,6 +150,16 @@ export class ApiClient {
 
   deleteLetter(id: string) {
     return this.request<void>(`/letters/${id}`, { method: "DELETE" });
+  }
+
+  mailLetter(letterId: string, data: MailLetterData) {
+    return this.request<{ task_id: string; status: string; message: string }>(
+      `/letters/${letterId}/mail`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      }
+    );
   }
 
   async downloadLetterPdf(id: string): Promise<Blob> {

@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     stripe_qualification_overage_price_id: str = ""
     stripe_letter_overage_price_id: str = ""
     stripe_skip_trace_overage_price_id: str = ""
+    stripe_mailing_overage_price_id: str = ""
+
+    # Lob (mailing)
+    lob_api_key: str = ""
+    lob_environment: str = "test"  # "test" | "live"
+    lob_webhook_secret: str = ""
 
     # Skip trace providers
     skip_trace_provider: str = "tracerfy"  # "tracerfy" | "skipsherpa"

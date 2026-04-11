@@ -35,6 +35,11 @@ celery_app.conf.beat_schedule = {
         "task": "app.workers.scheduled.check_county_urls",
         "schedule": crontab(day_of_month=15, hour=3, minute=0),
     },
+    # Refresh pipeline metrics materialized view every 15 minutes
+    "refresh-pipeline-metrics": {
+        "task": "app.workers.scheduled.refresh_pipeline_metrics",
+        "schedule": crontab(minute="*/15"),
+    },
 }
 
 
@@ -89,6 +94,25 @@ async def _reset_monthly_credits() -> dict:
     if reset_count > 0:
         logger.info("credits_reset_on_cycle", count=reset_count)
     return {"status": "ok", "reset_count": reset_count}
+
+
+@celery_app.task(name="app.workers.scheduled.refresh_pipeline_metrics")
+def refresh_pipeline_metrics() -> dict:
+    """Refresh the pipeline metrics materialized view (non-blocking)."""
+    return asyncio.run(_refresh_pipeline_metrics())
+
+
+async def _refresh_pipeline_metrics() -> dict:
+    from sqlalchemy import text
+
+    async with async_session_factory() as session:
+        # CONCURRENTLY requires a unique index, which we have
+        await session.execute(
+            text("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_pipeline_metrics;")
+        )
+        await session.commit()
+    logger.info("pipeline_metrics_refreshed")
+    return {"status": "ok"}
 
 
 @celery_app.task(name="app.workers.scheduled.check_county_urls")

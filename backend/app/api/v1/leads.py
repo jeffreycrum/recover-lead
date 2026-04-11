@@ -817,6 +817,111 @@ async def create_lead_activity(
     )
 
 
+@router.get("/stats/roi")
+async def roi_stats(
+    session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Aggregate ROI for the current user from closed-recovered deals."""
+    from sqlalchemy import func as sql_func
+
+    result = await session.execute(
+        select(
+            sql_func.count().label("deal_count"),
+            sql_func.coalesce(sql_func.sum(UserLead.outcome_amount), 0).label("total_recovered"),
+            sql_func.coalesce(sql_func.sum(UserLead.fee_amount), 0).label("total_fees"),
+            sql_func.avg(UserLead.fee_percentage).label("avg_fee_percentage"),
+            sql_func.avg(
+                sql_func.extract("epoch", UserLead.closed_at - UserLead.created_at) / 86400
+            ).label("avg_days_to_close"),
+        ).where(
+            UserLead.user_id == user.id,
+            UserLead.status == "closed",
+            UserLead.closed_reason == "recovered",
+        )
+    )
+    row = result.one()
+
+    return {
+        "deal_count": int(row.deal_count or 0),
+        "total_recovered": float(row.total_recovered or 0),
+        "total_fees": float(row.total_fees or 0),
+        "avg_fee_percentage": (
+            float(row.avg_fee_percentage) if row.avg_fee_percentage is not None else None
+        ),
+        "avg_days_to_close": (
+            float(row.avg_days_to_close) if row.avg_days_to_close is not None else None
+        ),
+    }
+
+
+@router.get("/stats/pipeline")
+async def pipeline_stats(
+    session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Per-status counts and totals from the materialized view."""
+    from sqlalchemy import text
+
+    result = await session.execute(
+        text(
+            """
+            SELECT
+                COALESCE(leads_total, 0) AS leads_total,
+                COALESCE(leads_new, 0) AS leads_new,
+                COALESCE(leads_qualified, 0) AS leads_qualified,
+                COALESCE(leads_contacted, 0) AS leads_contacted,
+                COALESCE(leads_signed, 0) AS leads_signed,
+                COALESCE(leads_filed, 0) AS leads_filed,
+                COALESCE(leads_paid, 0) AS leads_paid,
+                COALESCE(leads_closed, 0) AS leads_closed,
+                COALESCE(leads_recovered, 0) AS leads_recovered,
+                COALESCE(total_recovered, 0) AS total_recovered,
+                COALESCE(total_fees, 0) AS total_fees,
+                avg_quality_score
+            FROM mv_pipeline_metrics
+            WHERE user_id = :user_id
+            """
+        ),
+        {"user_id": str(user.id)},
+    )
+    row = result.one_or_none()
+
+    if not row:
+        # Materialized view hasn't been refreshed for this user yet
+        return {
+            "leads_total": 0,
+            "leads_new": 0,
+            "leads_qualified": 0,
+            "leads_contacted": 0,
+            "leads_signed": 0,
+            "leads_filed": 0,
+            "leads_paid": 0,
+            "leads_closed": 0,
+            "leads_recovered": 0,
+            "total_recovered": 0.0,
+            "total_fees": 0.0,
+            "avg_quality_score": None,
+        }
+
+    return {
+        "leads_total": int(row.leads_total),
+        "leads_new": int(row.leads_new),
+        "leads_qualified": int(row.leads_qualified),
+        "leads_contacted": int(row.leads_contacted),
+        "leads_signed": int(row.leads_signed),
+        "leads_filed": int(row.leads_filed),
+        "leads_paid": int(row.leads_paid),
+        "leads_closed": int(row.leads_closed),
+        "leads_recovered": int(row.leads_recovered),
+        "total_recovered": float(row.total_recovered),
+        "total_fees": float(row.total_fees),
+        "avg_quality_score": (
+            float(row.avg_quality_score) if row.avg_quality_score is not None else None
+        ),
+    }
+
+
 MAX_BULK_SKIP_TRACE_SIZE = 100
 
 

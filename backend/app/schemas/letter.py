@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -18,7 +18,7 @@ class LetterBatchRequest(BaseModel):
 
 class LetterUpdateRequest(BaseModel):
     content: str | None = None
-    status: str | None = None  # draft|approved
+    status: str | None = None  # draft|approved|mailed|in_transit|delivered|returned
 
 
 class LetterResponse(BaseModel):
@@ -34,6 +34,12 @@ class LetterResponse(BaseModel):
     county_name: str | None = None
     owner_name: str | None = None
     surplus_amount: float | None = None
+    # Mailing fields
+    lob_id: str | None = None
+    lob_status: str | None = None
+    mailed_at: datetime | None = None
+    tracking_url: str | None = None
+    expected_delivery_date: date | None = None
 
 
 class LetterListResponse(BaseModel):
@@ -45,3 +51,18 @@ class LetterListResponse(BaseModel):
     case_number: str | None = None
     county_name: str | None = None
     owner_name: str | None = None
+
+
+class MailLetterRequest(BaseModel):
+    from_name: str
+    from_street1: str
+    from_street2: str | None = None
+    from_city: str
+    from_state: str  # 2-letter
+    from_zip: str
+    to_name: str
+    to_street1: str
+    to_street2: str | None = None
+    to_city: str
+    to_state: str
+    to_zip: str

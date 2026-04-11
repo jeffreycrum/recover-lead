@@ -5,13 +5,19 @@ import { useEffect } from "react";
 import { api } from "@/lib/api";
 import { EmptyState } from "@/components/common/empty-state";
 import { formatDate } from "@/lib/utils";
-import { FileText, Download, Trash2, Check, Plus } from "lucide-react";
+import { FileText, Download, Trash2, Check, Plus, Send } from "lucide-react";
 import { LetterBatchDialog } from "@/components/letters/letter-batch-dialog";
+import { MailDialog } from "@/components/letters/mail-dialog";
 
 export function LettersPage() {
   const { getToken } = useAuth();
   const qc = useQueryClient();
   const [showBatchDialog, setShowBatchDialog] = useState(false);
+  const [mailLetter, setMailLetter] = useState<{
+    id: string;
+    case_number?: string | null;
+    owner_name?: string | null;
+  } | null>(null);
 
   useEffect(() => {
     api.setTokenFn(getToken);
@@ -73,6 +79,12 @@ export function LettersPage() {
 
       <LetterBatchDialog open={showBatchDialog} onClose={() => setShowBatchDialog(false)} />
 
+      <MailDialog
+        open={mailLetter !== null}
+        onClose={() => setMailLetter(null)}
+        letter={mailLetter}
+      />
+
       {isLoading ? (
         <div className="py-16 text-center text-muted-foreground">Loading...</div>
       ) : letters.length > 0 ? (
@@ -122,6 +134,21 @@ export function LettersPage() {
                       >
                         <Download size={14} />
                       </button>
+                      {letter.status === "approved" && (
+                        <button
+                          onClick={() =>
+                            setMailLetter({
+                              id: letter.id,
+                              case_number: letter.case_number,
+                              owner_name: letter.owner_name,
+                            })
+                          }
+                          className="p-1.5 rounded hover:bg-emerald/10 text-emerald"
+                          title="Mail via Lob"
+                        >
+                          <Send size={14} />
+                        </button>
+                      )}
                       {letter.status === "draft" && (
                         <button
                           onClick={() => deleteMutation.mutate(letter.id)}
