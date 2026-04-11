@@ -522,6 +522,7 @@ async def skip_trace(
     user: User = Depends(get_current_user),
 ) -> dict:
     """Run real-time skip trace for a lead via Tracerfy."""
+    import traceback
     from decimal import Decimal
 
     from app.models.skip_trace import SkipTraceResult
@@ -536,6 +537,8 @@ async def skip_trace(
     from app.services.skip_trace import SkipTraceLookupRequest
     from app.services.skip_trace.factory import get_skip_trace_provider
 
+    logger.info("skip_trace_start", lead_id=str(lead_id), user_id=str(user.id))
+
     # Verify claimed
     result = await session.execute(
         select(UserLead).where(
@@ -545,19 +548,39 @@ async def skip_trace(
     )
     if not result.scalar_one_or_none():
         raise NotFoundError("Claimed lead")
+    logger.info("skip_trace_claim_ok", lead_id=str(lead_id))
 
     # Reserve credit
-    reservation = await reserve_usage(session, user.id, "skip_trace", count=1)
+    try:
+        reservation = await reserve_usage(session, user.id, "skip_trace", count=1)
+    except Exception as e:
+        logger.error(
+            "skip_trace_reserve_failed",
+            lead_id=str(lead_id),
+            error=repr(e),
+            trace=traceback.format_exc(),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={"code": "SKIP_TRACE_ERROR", "message": "Reservation failed"},
+        ) from e
     if not reservation.allowed:
         raise InsufficientCreditsError()
+    logger.info("skip_trace_reserved", lead_id=str(lead_id))
 
     # Load lead data
     lead_result = await session.execute(select(Lead).where(Lead.id == lead_id))
     lead = lead_result.scalar_one()
+    logger.info(
+        "skip_trace_lead_loaded",
+        lead_id=str(lead_id),
+        has_owner=bool(lead.owner_name),
+        has_address=bool(lead.property_address),
+    )
 
     # Call Tracerfy
-    provider = get_skip_trace_provider()
     try:
+        provider = get_skip_trace_provider()
         lookup_result = await provider.lookup(
             SkipTraceLookupRequest(
                 first_name=(lead.owner_name or "").split()[0] if lead.owner_name else "",
@@ -571,11 +594,16 @@ async def skip_trace(
         )
     except Exception as e:
         release_reservation(user.id, "skip_trace", 1, reservation.period_start_iso)
-        logger.error("skip_trace_failed", lead_id=str(lead_id), error=str(e))
+        logger.error(
+            "skip_trace_failed",
+            lead_id=str(lead_id),
+            error=repr(e),
+            trace=traceback.format_exc(),
+        )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail={"code": "SKIP_TRACE_ERROR", "message": "Skip trace provider unavailable"},
-        )
+        ) from e
 
     # Save result
     status_val = "hit" if lookup_result.hit else "miss"
