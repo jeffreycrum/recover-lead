@@ -28,11 +28,17 @@ class TracerfyProvider:
             logger.error("tracerfy_no_api_key")
             raise RuntimeError("TRACERFY_API_KEY is not configured")
 
-        payload = {
-            "address": request.address,
-            "city": request.city,
-            "state": request.state,
-        }
+        # Only include fields that have actual values — Tracerfy's API
+        # rejects empty-string fields with 400 "field may not be blank".
+        # Skip trace works by filling in missing data, so send whatever
+        # we have and let the provider do the lookup.
+        payload: dict = {}
+        if request.address:
+            payload["address"] = request.address
+        if request.city:
+            payload["city"] = request.city
+        if request.state:
+            payload["state"] = request.state
         if request.zip_code:
             payload["zip"] = request.zip_code
         if request.first_name:
