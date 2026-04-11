@@ -24,6 +24,10 @@ class TracerfyProvider:
 
     async def lookup(self, request: SkipTraceLookupRequest) -> SkipTraceLookupResponse:
         """Real-time single lookup. Returns immediately. $0.10/hit, $0.00/miss."""
+        if not self.api_key:
+            logger.error("tracerfy_no_api_key")
+            raise RuntimeError("TRACERFY_API_KEY is not configured")
+
         payload = {
             "address": request.address,
             "city": request.city,
@@ -38,6 +42,9 @@ class TracerfyProvider:
         if request.find_owner:
             payload["find_owner"] = True
 
+        url = f"{self.base_url}/trace/lookup/"
+        logger.info("tracerfy_request", url=url, payload_keys=list(payload.keys()))
+
         async with httpx.AsyncClient(
             timeout=30.0,
             headers={
@@ -45,10 +52,18 @@ class TracerfyProvider:
                 "Content-Type": "application/json",
             },
         ) as client:
-            response = await client.post(
-                f"{self.base_url}/trace/lookup/",
-                json=payload,
+            response = await client.post(url, json=payload)
+            logger.info(
+                "tracerfy_response",
+                status_code=response.status_code,
+                body_preview=response.text[:500],
             )
+            if response.status_code >= 400:
+                logger.error(
+                    "tracerfy_http_error",
+                    status_code=response.status_code,
+                    body=response.text[:2000],
+                )
             response.raise_for_status()
             data = response.json()
 
