@@ -46,7 +46,7 @@ class Settings(BaseSettings):
 
     # Skip Sherpa
     skipsherpa_api_key: str = ""
-    skipsherpa_base_url: str = "https://api.skipsherpa.com/v1"
+    skipsherpa_base_url: str = "https://skipsherpa.com/api/beta6"
 
     # SendGrid
     sendgrid_api_key: str = ""
