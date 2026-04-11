@@ -37,9 +37,16 @@ class Settings(BaseSettings):
     stripe_letter_overage_price_id: str = ""
     stripe_skip_trace_overage_price_id: str = ""
 
+    # Skip trace providers
+    skip_trace_provider: str = "tracerfy"  # "tracerfy" | "skipsherpa"
+
     # Tracerfy
     tracerfy_api_key: str = ""
     tracerfy_base_url: str = "https://tracerfy.com/v1/api"
+
+    # Skip Sherpa
+    skipsherpa_api_key: str = ""
+    skipsherpa_base_url: str = "https://api.skipsherpa.com/v1"
 
     # SendGrid
     sendgrid_api_key: str = ""
