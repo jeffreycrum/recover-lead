@@ -18,7 +18,8 @@ COPY alembic.ini .
 COPY alembic/ alembic/
 COPY scripts/ scripts/
 
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app \
+    PYTHONUNBUFFERED=1
 
 EXPOSE 8000
 
