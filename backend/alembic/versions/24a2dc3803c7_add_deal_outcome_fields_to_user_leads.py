@@ -21,9 +21,18 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     """Add deal outcome fields and fee_percentage check constraint."""
-    op.add_column("user_leads", sa.Column("outcome_amount", sa.Numeric(precision=12, scale=2), nullable=True))
-    op.add_column("user_leads", sa.Column("fee_amount", sa.Numeric(precision=12, scale=2), nullable=True))
-    op.add_column("user_leads", sa.Column("fee_percentage", sa.Numeric(precision=5, scale=2), nullable=True))
+    op.add_column(
+        "user_leads",
+        sa.Column("outcome_amount", sa.Numeric(precision=12, scale=2), nullable=True),
+    )
+    op.add_column(
+        "user_leads",
+        sa.Column("fee_amount", sa.Numeric(precision=12, scale=2), nullable=True),
+    )
+    op.add_column(
+        "user_leads",
+        sa.Column("fee_percentage", sa.Numeric(precision=5, scale=2), nullable=True),
+    )
     op.add_column("user_leads", sa.Column("closed_at", sa.DateTime(), nullable=True))
     op.add_column("user_leads", sa.Column("outcome_notes", sa.Text(), nullable=True))
     op.add_column("user_leads", sa.Column("closed_reason", sa.String(length=50), nullable=True))

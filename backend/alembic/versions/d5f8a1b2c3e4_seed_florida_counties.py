@@ -6,12 +6,12 @@ Create Date: 2026-04-09 17:00:00.000000
 
 """
 
-from typing import Sequence
-
 import uuid
+from collections.abc import Sequence
+
+import sqlalchemy as sa
 
 from alembic import op
-import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "d5f8a1b2c3e4"
@@ -46,8 +46,20 @@ ACTIVE_COUNTIES = [
         "is_active": True,
         "config": {
             "notes": "30-page PDF, updated regularly.",
-            "columns": {"case_number": 2, "owner_name": 1, "surplus_amount": 3, "property_address": None},
-            "skip_rows_containing": ["CLERK OF THE CIRCUIT", "TAX DEED SURPLUS", "Fee calculator", "Deposit amount", "Date Surplus", "Amt of Deposit"],
+            "columns": {
+                "case_number": 2,
+                "owner_name": 1,
+                "surplus_amount": 3,
+                "property_address": None,
+            },
+            "skip_rows_containing": [
+                "CLERK OF THE CIRCUIT",
+                "TAX DEED SURPLUS",
+                "Fee calculator",
+                "Deposit amount",
+                "Date Surplus",
+                "Amt of Deposit",
+            ],
         },
     },
     {
@@ -97,11 +109,72 @@ ACTIVE_COUNTIES = [
 ]
 
 PENDING_COUNTIES = [
-    {"name": "Duval", "fips_code": "12031", "source_url": "https://www.duvalclerk.com/departments/finance-and-accounting/unclaimed-funds", "source_type": "html", "config": {"notes": "Interactive search only. Contact: Ask.Taxdeeds@DuvalClerk.com"}},
-    {"name": "Lee", "fips_code": "12071", "source_url": "https://www.leeclerk.org/departments/courts/property-sales/tax-deed-sales/tax-deed-reports", "config": {"notes": "Contact: taxdeedsurplus@leeclerk.org"}},
-    {"name": "Miami-Dade", "fips_code": "12086", "source_url": "https://www.miamidadeclerk.gov/clerk/property-tax-deeds.page", "config": {"notes": "Contact Foreclosure Unit: 305-275-1155."}},
-    {"name": "Palm Beach", "fips_code": "12099", "source_url": "https://www.mypalmbeachclerk.com/departments/courts/tax-deeds/sale-information", "config": {"notes": "Surplus report from Clerk Cart. Contact: 561-355-2962."}},
-    {"name": "Orange", "fips_code": "12095", "source_url": "https://www.occompt.com/191/Tax-Deed-Sales", "config": {"notes": "Unclaimed property sent to state. Contact: 407-836-5116."}},
+    {
+        "name": "Duval",
+        "fips_code": "12031",
+        "source_url": (
+            "https://www.duvalclerk.com/departments/"
+            "finance-and-accounting/unclaimed-funds"
+        ),
+        "source_type": "html",
+        "config": {
+            "notes": (
+                "Interactive search only."
+                " Contact: Ask.Taxdeeds@DuvalClerk.com"
+            ),
+        },
+    },
+    {
+        "name": "Lee",
+        "fips_code": "12071",
+        "source_url": (
+            "https://www.leeclerk.org/departments/courts/"
+            "property-sales/tax-deed-sales/tax-deed-reports"
+        ),
+        "config": {
+            "notes": "Contact: taxdeedsurplus@leeclerk.org",
+        },
+    },
+    {
+        "name": "Miami-Dade",
+        "fips_code": "12086",
+        "source_url": (
+            "https://www.miamidadeclerk.gov/clerk/"
+            "property-tax-deeds.page"
+        ),
+        "config": {
+            "notes": (
+                "Contact Foreclosure Unit: 305-275-1155."
+            ),
+        },
+    },
+    {
+        "name": "Palm Beach",
+        "fips_code": "12099",
+        "source_url": (
+            "https://www.mypalmbeachclerk.com/departments/"
+            "courts/tax-deeds/sale-information"
+        ),
+        "config": {
+            "notes": (
+                "Surplus report from Clerk Cart."
+                " Contact: 561-355-2962."
+            ),
+        },
+    },
+    {
+        "name": "Orange",
+        "fips_code": "12095",
+        "source_url": (
+            "https://www.occompt.com/191/Tax-Deed-Sales"
+        ),
+        "config": {
+            "notes": (
+                "Unclaimed property sent to state."
+                " Contact: 407-836-5116."
+            ),
+        },
+    },
 ]
 
 INACTIVE_COUNTIES = [

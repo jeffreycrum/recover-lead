@@ -3,13 +3,12 @@
 import asyncio
 import sys
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
 from sqlalchemy import select, update
 
-from app.config import settings
 from app.db.engine import async_session_factory
 from app.models.billing import Subscription, SkipTraceCredits
 from app.models.user import User
@@ -71,10 +70,10 @@ async def main():
 
         await session.commit()
 
-        print(f"Plan: agency")
-        print(f"Status: active")
+        print("Plan: agency")
+        print("Status: active")
         print(f"Period: {now.date()} → {period_end.date()}")
-        print(f"Limits: 5000 qualifications, 2000 letters, 500 skip traces/mo")
+        print("Limits: 5000 qualifications, 2000 letters, 500 skip traces/mo")
         print("Done.")
 
 

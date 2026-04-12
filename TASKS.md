@@ -183,23 +183,23 @@ These counties do not publish bulk surplus fund lists online. Contact each to re
 
 ### P1
 
-- [ ] Email provider integration (SendGrid or Postmark)
-- [ ] Daily lead alerts: email new high-value leads in user's counties
-- [ ] SSE endpoint: GET /tasks/{task_id}/stream via Redis pub/sub
-- [ ] Status transition validation: enforce allowed state machine transitions
-- [ ] Lead activity timeline / audit log UI
-- [ ] "Mark deal as paid/closed" flow — feed outcome data into qualification feedback loop
-- [ ] Skip trace integration: abstract interface + one provider (TLO or IDI)
-- [ ] Lob.com integration: letter mailing API (close workflow loop)
+- [x] Email provider integration (SendGrid) — `services/email/sendgrid.py`, Celery email tasks
+- [x] Daily lead alerts: email new high-value leads in user's counties — `workers/email_tasks.py`
+- [x] SSE endpoint: GET /tasks/{task_id}/stream via Redis pub/sub — `core/sse.py`, frontend `use-task-stream.ts` with polling fallback
+- [x] Status transition validation: enforce allowed state machine transitions — `VALID_TRANSITIONS` in `lead_service.py`
+- [x] Lead activity timeline / audit log UI — `LeadActivity` model, `activity-timeline.tsx` with infinite scroll + notes
+- [x] "Mark deal as paid/closed" flow — `deal-outcome-dialog.tsx`, `feedback_service.py` outcome correlation
+- [x] Skip trace integration: abstract interface + SkipSherpa and Tracerfy providers — `services/skip_trace/`, factory pattern, Celery tasks, full frontend UI
+- [x] Lob.com integration: letter mailing API — `services/mailing/lob.py`, `workers/mailing_tasks.py`, webhook handler
 
 ### P1 — County Scraping Maintenance
 
-- [ ] Activate verified scrapable counties with direct downloads: Baker (PDF), Collier (PDF), Columbia (HTML), DeSoto (PDF), Gulf (HTML), Manatee (HTML), Madison (XLSX), Marion (PDF), Martin (PDF), Okaloosa (HTML), Osceola (PDF), Pasco (HTML), Santa Rosa (PDF), Sumter (PDF), Taylor (HTML), Walton (XLSX)
-- [ ] Fix 403/bot-blocked scrapers (need browser headers): Broward, Columbia, Lee, Leon, Pinellas
-- [ ] Fix broken scraper: Polk (404 — site restructured, find new URL)
-- [ ] Deactivate Polk until URL found; deactivate Broward/Pinellas until 403 bypass resolved
+- [ ] Activate remaining 4 counties: Collier (PDF), Columbia (HTML), Marion (PDF), Martin (PDF) — 12 of 16 activated in migration `e7f9c2b3a4d5`
+- [ ] Fix 403/bot-blocked scrapers: Pinellas (still 403, needs Playwright), Columbia, Lee, Leon — Broward fixed via `cloudscraper_html.py`
+- [x] Fix broken scraper: Polk (404 — deactivated with note to find new URL)
+- [x] Deactivate Polk until URL found; Pinellas kept inactive (still 403)
 - [ ] Reclassify counties per deep research: Alachua→Web Form, Charlotte→Web Form, Citrus→Email, Clay→Web Form, Escambia→Email, Flagler→Web Form, Hernando→Email, Lake→Phone, Monroe→Phone, Nassau→Phone, St. Johns→Web Form, Sarasota→Web Form, Seminole→Web Form, St. Lucie→Phone
-- [ ] Monthly scraper URL health check — run `python scripts/check_county_urls.py` (updates `scripts/fl_county_surplus_research.csv`)
+- [x] Monthly scraper URL health check — `scripts/check_county_urls.py` created
 - [ ] Update `scripts/fl_county_surplus_research.csv` when county URLs change
 
 ### Manual Tasks — County Outreach
@@ -212,10 +212,10 @@ These counties do not publish bulk surplus fund lists online. Contact each to re
 
 ### P2
 
-- [ ] ROI dashboard: total recovered amount, per-lead ROI, cumulative value
-- [ ] Pipeline metrics: Celery Beat aggregation every 15 minutes
+- [x] ROI dashboard: `roi-stats.tsx` — total recovered, fees earned, deals closed, avg days to close
+- [x] Pipeline metrics: `pipeline-funnel.tsx` — 7-stage Recharts funnel (new→qualified→contacted→signed→filed→paid→closed)
 - [ ] Multi-county upsell prompts ("You've qualified 90% of Hillsborough leads...")
-- [ ] Expand to 20+ FL counties (33 identified as scrapable — see `scripts/fl_county_surplus_research.csv`)
+- [ ] Expand to 20+ FL counties — currently 17 active (5 original + 12 new). 33 identified as scrapable.
 - [ ] Qualification result caching: skip re-qualification of unchanged leads
 - [ ] Contract generation: template-based with Claude filling case-specific fields
 
