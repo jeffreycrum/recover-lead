@@ -164,6 +164,89 @@ class TestHtmlTableScraper:
 
 
 # ---------------------------------------------------------------------------
+# Column mapping (Taylor-style: TDA# | Owner | Parcel | Cert | Amount | ...)
+# ---------------------------------------------------------------------------
+
+_TAYLOR_HTML = b"""
+<html><body>
+<table>
+  <tr><th>TDA #</th><th>Owner</th><th>Parcel</th><th>Certificate</th><th>Amount</th><th>Sale Date</th></tr>
+  <tr><td>22-036</td><td>Annie Lee Smith Estate</td><td>R04145-000</td><td>518 of 2019</td><td>$2,269.01</td><td>1/9/2023</td></tr>
+  <tr><td>23-019</td><td>Solange Montrose</td><td>R03191-000</td><td></td><td>$2,236.10</td><td>6/12/2023</td></tr>
+</table>
+</body></html>
+"""
+
+
+_MANATEE_HTML = b"""
+<html><body>
+<table>
+  <tr><th>Case Number</th><th>Sale Date</th><th>Property Owner</th><th>Surplus Funds</th><th>1 Year from Sale</th></tr>
+  <tr><td>2023-001-TD</td><td>01/09/2023</td><td>Annie Lee Smith Estate</td><td>$2,269.01</td><td>01/09/2024</td></tr>
+  <tr><td>2023-002-TD</td><td>04/10/2023</td><td>Susie M Dooley</td><td>$3,427.23</td><td>04/10/2024</td></tr>
+</table>
+</body></html>
+"""
+
+
+class TestColumnMapping:
+    def test_taylor_col_surplus_override(self):
+        """col_surplus=4 reads Amount column, not Parcel column."""
+        scraper = _make_scraper(config={"col_surplus": 4})
+        leads = scraper.parse(_TAYLOR_HTML)
+        assert len(leads) == 2
+        assert leads[0].surplus_amount == Decimal("2269.01")
+        assert leads[1].surplus_amount == Decimal("2236.10")
+
+    def test_taylor_parcel_not_parsed_as_amount(self):
+        """Without col_surplus override parcel R04145-000 would be parsed as 4145000."""
+        # Confirm the bug exists without the fix
+        scraper_default = _make_scraper()
+        leads = scraper_default.parse(_TAYLOR_HTML)
+        # Default col[2] is Parcel — would produce wrong value
+        assert leads[0].surplus_amount != Decimal("2269.01")
+
+        # With fix, it's correct
+        scraper_fixed = _make_scraper(config={"col_surplus": 4})
+        leads_fixed = scraper_fixed.parse(_TAYLOR_HTML)
+        assert leads_fixed[0].surplus_amount == Decimal("2269.01")
+
+    def test_manatee_col_mapping(self):
+        """Manatee: col_owner=2, col_surplus=3 — owner was showing as date, amount as $0."""
+        scraper = _make_scraper(config={"col_owner": 2, "col_surplus": 3})
+        leads = scraper.parse(_MANATEE_HTML)
+        assert len(leads) == 2
+        assert leads[0].owner_name == "Annie Lee Smith Estate"
+        assert leads[0].surplus_amount == Decimal("2269.01")
+        assert leads[1].owner_name == "Susie M Dooley"
+        assert leads[1].surplus_amount == Decimal("3427.23")
+
+    def test_manatee_default_mapping_shows_bug(self):
+        """Without col overrides, Manatee owner shows as date and surplus is $0."""
+        scraper = _make_scraper()
+        leads = scraper.parse(_MANATEE_HTML)
+        # col[1] is Sale Date — shows up as owner
+        assert leads[0].owner_name == "01/09/2023"
+        # col[2] is a name string — parses to $0
+        assert leads[0].surplus_amount == Decimal("0.00")
+
+    def test_col_case_override(self):
+        """col_case can be overridden for non-standard layouts."""
+        html = b"""
+        <html><body><table>
+          <tr><th>Extra</th><th>Case</th><th>Owner</th><th>Amount</th></tr>
+          <tr><td>ignored</td><td>24-001</td><td>Jane Doe</td><td>$500.00</td></tr>
+        </table></body></html>
+        """
+        scraper = _make_scraper(config={"col_case": 1, "col_owner": 2, "col_surplus": 3})
+        leads = scraper.parse(html)
+        assert len(leads) == 1
+        assert leads[0].case_number == "24-001"
+        assert leads[0].owner_name == "Jane Doe"
+        assert leads[0].surplus_amount == Decimal("500.00")
+
+
+# ---------------------------------------------------------------------------
 # HtmlTableScraper._parse_amount (static)
 # ---------------------------------------------------------------------------
 

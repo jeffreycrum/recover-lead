@@ -1,3 +1,5 @@
+import { useState, useMemo } from "react";
+import { ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { LeadScoreBadge } from "./lead-score-badge";
 
@@ -15,6 +17,9 @@ interface Lead {
   status?: string;
 }
 
+type SortKey = "county_name" | "case_number" | "owner_name" | "surplus_amount" | "sale_date";
+type SortDir = "asc" | "desc";
+
 interface LeadTableProps {
   leads: Lead[];
   onSelect?: (id: string) => void;
@@ -22,6 +27,11 @@ interface LeadTableProps {
   showScore?: boolean;
   showStatus?: boolean;
   showClaim?: boolean;
+}
+
+function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey | null; sortDir: SortDir }) {
+  if (sortKey !== col) return <ChevronsUpDown size={13} className="opacity-40" />;
+  return sortDir === "asc" ? <ChevronUp size={13} /> : <ChevronDown size={13} />;
 }
 
 export function LeadTable({
@@ -32,21 +42,60 @@ export function LeadTable({
   showStatus = false,
   showClaim = false,
 }: LeadTableProps) {
-  if (leads.length === 0) {
-    return null;
-  }
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const handleSort = (col: SortKey) => {
+    if (sortKey === col) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(col);
+      setSortDir("asc");
+    }
+  };
+
+  const sorted = useMemo(() => {
+    if (!sortKey) return leads;
+    return [...leads].sort((a, b) => {
+      const av = a[sortKey] ?? "";
+      const bv = b[sortKey] ?? "";
+      let cmp = 0;
+      if (typeof av === "number" && typeof bv === "number") {
+        cmp = av - bv;
+      } else {
+        cmp = String(av).localeCompare(String(bv));
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [leads, sortKey, sortDir]);
+
+  if (leads.length === 0) return null;
+
+  const thClass = "px-4 py-3 font-medium text-muted-foreground select-none cursor-pointer hover:text-foreground";
+
+  const Th = ({ col, label, align = "left" }: { col: SortKey; label: string; align?: "left" | "right" }) => (
+    <th
+      className={`${thClass} text-${align}`}
+      onClick={() => handleSort(col)}
+    >
+      <span className={`inline-flex items-center gap-1 ${align === "right" ? "flex-row-reverse" : ""}`}>
+        {label}
+        <SortIcon col={col} sortKey={sortKey} sortDir={sortDir} />
+      </span>
+    </th>
+  );
 
   return (
     <div className="overflow-x-auto rounded-lg border bg-white">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b bg-gray-50/50">
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground">County</th>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground">Case #</th>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground">Owner</th>
-            <th className="text-right px-4 py-3 font-medium text-muted-foreground">Surplus</th>
+            <Th col="county_name" label="County" />
+            <Th col="case_number" label="Case #" />
+            <Th col="owner_name" label="Owner" />
+            <Th col="surplus_amount" label="Surplus" align="right" />
             <th className="text-left px-4 py-3 font-medium text-muted-foreground">Property</th>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground">Sale Date</th>
+            <Th col="sale_date" label="Sale Date" />
             {showScore && (
               <th className="text-center px-4 py-3 font-medium text-muted-foreground">Score</th>
             )}
@@ -57,7 +106,7 @@ export function LeadTable({
           </tr>
         </thead>
         <tbody>
-          {leads.map((lead) => (
+          {sorted.map((lead) => (
             <tr
               key={lead.id}
               onClick={() => onSelect?.(lead.id)}
