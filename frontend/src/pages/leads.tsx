@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useBrowseLeads, useClaimLead } from "@/hooks/use-leads";
 import { useCounties } from "@/hooks/use-subscription";
 import { LeadTable } from "@/components/leads/lead-table";
@@ -9,9 +9,37 @@ import { Search } from "lucide-react";
 export function LeadsPage() {
   const [selectedLead, setSelectedLead] = useState<string | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const { data, isLoading } = useBrowseLeads(filters);
+  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [allLeads, setAllLeads] = useState<any[]>([]);
+  const appendRef = useRef(false);
+
+  const { data, isLoading } = useBrowseLeads(
+    cursor ? { ...filters, cursor } : filters,
+  );
   const { data: counties } = useCounties();
   const claimMutation = useClaimLead();
+
+  useEffect(() => {
+    if (!data?.items) return;
+    if (appendRef.current) {
+      setAllLeads((prev) => [...prev, ...data.items]);
+    } else {
+      setAllLeads(data.items);
+    }
+    appendRef.current = false;
+  }, [data]);
+
+  const updateFilter = (update: (f: Record<string, string>) => Record<string, string>) => {
+    appendRef.current = false;
+    setCursor(undefined);
+    setFilters(update);
+  };
+
+  const handleLoadMore = () => {
+    if (!data?.next_cursor) return;
+    appendRef.current = true;
+    setCursor(data.next_cursor);
+  };
 
   return (
     <div className="space-y-4">
@@ -30,7 +58,7 @@ export function LeadsPage() {
           className="px-3 py-2 border rounded-md text-sm bg-white"
           value={filters.county_id || ""}
           onChange={(e) =>
-            setFilters((f) => ({
+            updateFilter((f) => ({
               ...f,
               county_id: e.target.value || undefined!,
             }))
@@ -49,7 +77,7 @@ export function LeadsPage() {
           placeholder="Min surplus ($)"
           className="px-3 py-2 border rounded-md text-sm w-36"
           onChange={(e) =>
-            setFilters((f) => ({ ...f, surplus_min: e.target.value || undefined! }))
+            updateFilter((f) => ({ ...f, surplus_min: e.target.value || undefined! }))
           }
         />
         <input
@@ -57,14 +85,14 @@ export function LeadsPage() {
           placeholder="Max surplus ($)"
           className="px-3 py-2 border rounded-md text-sm w-36"
           onChange={(e) =>
-            setFilters((f) => ({ ...f, surplus_max: e.target.value || undefined! }))
+            updateFilter((f) => ({ ...f, surplus_max: e.target.value || undefined! }))
           }
         />
         <select
           className="px-3 py-2 border rounded-md text-sm bg-white"
           value={filters.sale_type || ""}
           onChange={(e) =>
-            setFilters((f) => ({ ...f, sale_type: e.target.value || undefined! }))
+            updateFilter((f) => ({ ...f, sale_type: e.target.value || undefined! }))
           }
         >
           <option value="">All Types</option>
@@ -75,25 +103,24 @@ export function LeadsPage() {
       </div>
 
       {/* Table */}
-      {isLoading ? (
+      {isLoading && allLeads.length === 0 ? (
         <div className="py-16 text-center text-muted-foreground">Loading leads...</div>
-      ) : data?.items?.length > 0 ? (
+      ) : allLeads.length > 0 ? (
         <>
           <LeadTable
-            leads={data.items}
+            leads={allLeads}
             onSelect={setSelectedLead}
             onClaim={(id) => claimMutation.mutate(id)}
             showClaim
           />
-          {data.has_more && (
+          {data?.has_more && (
             <div className="flex justify-center">
               <button
-                onClick={() =>
-                  setFilters((f) => ({ ...f, cursor: data.next_cursor }))
-                }
-                className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50"
+                onClick={handleLoadMore}
+                disabled={isLoading}
+                className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50 disabled:opacity-50"
               >
-                Load more
+                {isLoading ? "Loading..." : "Load more"}
               </button>
             </div>
           )}
