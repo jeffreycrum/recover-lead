@@ -62,14 +62,21 @@ class HtmlTableScraper(BaseScraper):
         if all(not cell for cell in row):
             return None
 
+        # Optional per-county column index overrides in config:
+        # {"col_case": 0, "col_owner": 1, "col_surplus": 2, "col_address": 3}
+        col_case = self.config.get("col_case", 0)
+        col_owner = self.config.get("col_owner", 1)
+        col_surplus = self.config.get("col_surplus", 2)
+        col_address = self.config.get("col_address", 3)
+
         try:
-            case_number = row[0].strip()
+            case_number = row[col_case].strip() if len(row) > col_case else ""
             if not case_number:
                 return None
 
-            owner_name = row[1].strip() if len(row) > 1 else None
-            surplus_str = row[2].strip() if len(row) > 2 else "0"
-            property_address = row[3].strip() if len(row) > 3 else None
+            owner_name = row[col_owner].strip() if len(row) > col_owner else None
+            surplus_str = row[col_surplus].strip() if len(row) > col_surplus else "0"
+            property_address = row[col_address].strip() if len(row) > col_address else None
 
             surplus_amount = self._parse_amount(surplus_str)
 
