@@ -9,12 +9,13 @@ on:
 env:
   DATABASE_URL: postgresql+asyncpg://recoverlead_test:recoverlead_test@localhost:5433/recoverlead_test
   REDIS_URL: redis://localhost:6380/0
-  ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
   ENVIRONMENT: test
 
 jobs:
   backend:
     runs-on: ubuntu-latest
+    env:
+      ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
 
     services:
       postgres:

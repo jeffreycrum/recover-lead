@@ -1,0 +1,186 @@
+"""Tests for HtmlTableScraper — HTML table parsing edge cases."""
+
+from __future__ import annotations
+
+from decimal import Decimal
+
+import pytest
+
+from app.ingestion.html_scraper import HtmlTableScraper
+
+
+def _make_scraper(config: dict | None = None) -> HtmlTableScraper:
+    return HtmlTableScraper(
+        county_name="TestCounty",
+        source_url="http://example.com",
+        config=config,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Minimal HTML fixtures
+# ---------------------------------------------------------------------------
+
+_BASIC_TABLE_HTML = b"""
+<html><body>
+<table>
+  <tr><th>Case No</th><th>Owner</th><th>Amount</th><th>Address</th></tr>
+  <tr><td>2024-FC-001</td><td>SMITH JOHN A</td><td>$22,450.00</td><td>123 Main St</td></tr>
+  <tr><td>2024-FC-002</td><td>JONES MARY B</td><td>$8,750.00</td><td>456 Oak Ave</td></tr>
+</table>
+</body></html>
+"""
+
+_EMPTY_ROW_HTML = b"""
+<html><body>
+<table>
+  <tr><th>Case No</th><th>Owner</th><th>Amount</th></tr>
+  <tr><td></td><td></td><td></td></tr>
+  <tr><td>2024-FC-003</td><td>GARCIA CARLOS</td><td>$5,000.00</td></tr>
+</table>
+</body></html>
+"""
+
+_NO_TABLE_HTML = b"""
+<html><body><p>No surplus funds at this time.</p></body></html>
+"""
+
+_CUSTOM_SELECTOR_HTML = b"""
+<html><body>
+<div class="data-section">
+  <table id="surplus-table">
+    <tr><th>Case</th><th>Owner</th><th>Surplus</th></tr>
+    <tr><td>2024-TX-100</td><td>BROWN ALICE</td><td>$15,000.00</td></tr>
+  </table>
+</div>
+<table id="other-table">
+  <tr><th>Case</th><th>Owner</th><th>Surplus</th></tr>
+  <tr><td>OTHER-001</td><td>NOBODY</td><td>$1,000.00</td></tr>
+</table>
+</body></html>
+"""
+
+_CURRENCY_VARIANTS_HTML = b"""
+<html><body>
+<table>
+  <tr><th>Case</th><th>Owner</th><th>Amount</th></tr>
+  <tr><td>CASE-A</td><td>Owner A</td><td>$1,234.56</td></tr>
+  <tr><td>CASE-B</td><td>Owner B</td><td>3500</td></tr>
+  <tr><td>CASE-C</td><td>Owner C</td><td>$ 800.00</td></tr>
+</table>
+</body></html>
+"""
+
+_SHORT_ROW_HTML = b"""
+<html><body>
+<table>
+  <tr><th>Case</th><th>Owner</th></tr>
+  <tr><td>SHORT-001</td><td>Owner Name</td></tr>
+</table>
+</body></html>
+"""
+
+
+class TestHtmlTableScraper:
+    def test_parses_table_rows(self):
+        """Standard HTML table must produce one RawLead per data row."""
+        scraper = _make_scraper()
+        leads = scraper.parse(_BASIC_TABLE_HTML)
+
+        assert len(leads) == 2
+        assert leads[0].case_number == "2024-FC-001"
+        assert leads[0].owner_name == "SMITH JOHN A"
+        assert leads[0].surplus_amount == Decimal("22450.00")
+        assert leads[0].property_address == "123 Main St"
+        assert leads[0].sale_type == "tax_deed"
+
+    def test_skips_empty_rows(self):
+        """Rows where all cells are blank must be excluded."""
+        scraper = _make_scraper()
+        leads = scraper.parse(_EMPTY_ROW_HTML)
+
+        assert len(leads) == 1
+        assert leads[0].case_number == "2024-FC-003"
+
+    def test_no_table_returns_empty_list(self):
+        """HTML without any table must return an empty list."""
+        scraper = _make_scraper()
+        leads = scraper.parse(_NO_TABLE_HTML)
+        assert leads == []
+
+    def test_empty_html_table_returns_empty_list(self):
+        """A table with only a header row must return an empty list."""
+        html = b"<html><body><table><tr><th>A</th></tr></table></body></html>"
+        scraper = _make_scraper()
+        assert scraper.parse(html) == []
+
+    def test_custom_table_selector(self):
+        """table_selector config must narrow which table is parsed."""
+        scraper = _make_scraper(config={"table_selector": "#surplus-table"})
+        leads = scraper.parse(_CUSTOM_SELECTOR_HTML)
+
+        assert len(leads) == 1
+        assert leads[0].case_number == "2024-TX-100"
+        assert leads[0].owner_name == "BROWN ALICE"
+
+    def test_parse_amount_handles_currency(self):
+        """Dollar-formatted, plain integers, and space-after-$ must all parse."""
+        scraper = _make_scraper()
+        leads = scraper.parse(_CURRENCY_VARIANTS_HTML)
+
+        amounts = {lead.case_number: lead.surplus_amount for lead in leads}
+        assert amounts["CASE-A"] == Decimal("1234.56")
+        assert amounts["CASE-B"] == Decimal("3500")
+        assert amounts["CASE-C"] == Decimal("800.00")
+
+    def test_header_row_is_skipped(self):
+        """The first <tr> in each table must always be treated as a header."""
+        scraper = _make_scraper()
+        leads = scraper.parse(_BASIC_TABLE_HTML)
+
+        case_numbers = [lead.case_number for lead in leads]
+        assert "Case No" not in case_numbers
+
+    def test_short_row_returns_none(self):
+        """Rows with fewer than 3 cells must not produce leads."""
+        scraper = _make_scraper()
+        leads = scraper.parse(_SHORT_ROW_HTML)
+        assert leads == []
+
+    def test_property_address_optional(self):
+        """Rows with only 3 columns (no address column) must still produce leads."""
+        html = b"""
+        <html><body>
+        <table>
+          <tr><th>Case</th><th>Owner</th><th>Amount</th></tr>
+          <tr><td>2024-FC-OK</td><td>OWNER NAME</td><td>$1,000.00</td></tr>
+        </table>
+        </body></html>
+        """
+        scraper = _make_scraper()
+        leads = scraper.parse(html)
+        assert len(leads) == 1
+        assert leads[0].property_address is None
+
+
+# ---------------------------------------------------------------------------
+# HtmlTableScraper._parse_amount (static)
+# ---------------------------------------------------------------------------
+
+
+class TestHtmlParseAmount:
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [
+            ("$1,234.56", Decimal("1234.56")),
+            ("3500", Decimal("3500")),
+            ("$ 800.00", Decimal("800.00")),
+            ("", Decimal("0.00")),
+            ("NONE", Decimal("0.00")),
+            ("$10000000000.00", Decimal("0.00")),  # overflow guard
+        ],
+    )
+    def test_parse_amount_variants(self, raw: str, expected: Decimal):
+        """_parse_amount must handle all common currency formats and edge cases."""
+        result = HtmlTableScraper._parse_amount(raw)
+        assert result == expected

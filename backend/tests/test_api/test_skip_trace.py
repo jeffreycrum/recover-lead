@@ -2,7 +2,7 @@
 
 import uuid
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -61,14 +61,27 @@ def _make_miss_response():
     return SkipTraceLookupResponse(hit=False, persons=[], raw={"results": []})
 
 
+def _make_db_session(scalar_result=None):
+    session = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = scalar_result
+    result.scalar.return_value = scalar_result
+    session.execute = AsyncMock(return_value=result)
+    return session
+
+
 class TestSkipTraceEndpoint:
     @pytest.mark.asyncio
     async def test_skip_trace_unclaimed_lead_returns_404(self):
         """Skip trace on an unclaimed lead should return 404."""
         user = _make_mock_user()
+        from app.db.session import get_async_session
         from app.dependencies import get_current_user
 
+        session = _make_db_session(scalar_result=None)  # lead not found
+
         app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_async_session] = lambda: session
 
         try:
             transport = ASGITransport(app=app)
