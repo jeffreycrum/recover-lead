@@ -35,7 +35,13 @@ def generate_letter_task(
 
     try:
         publish_progress(self.request.id, {"status": "PROGRESS", "current": 0, "total": 1})
-        result = asyncio.run(_generate_letter(user_id, lead_id, letter_type, is_overage))
+        loop = asyncio.new_event_loop()
+        try:
+            result = loop.run_until_complete(
+                _generate_letter(user_id, lead_id, letter_type, is_overage)
+            )
+        finally:
+            loop.close()
         # Release reservation on success (usage now committed to DB)
         from app.services.billing_service import release_reservation
 
@@ -162,7 +168,13 @@ def generate_batch_task(
     """Generate letters for a batch of leads."""
     from app.core.sse import publish_progress
 
-    result = asyncio.run(_generate_batch(user_id, lead_ids, letter_type, overage_count, self))
+    loop = asyncio.new_event_loop()
+    try:
+        result = loop.run_until_complete(
+            _generate_batch(user_id, lead_ids, letter_type, overage_count, self)
+        )
+    finally:
+        loop.close()
     # Release all reservations on completion (both successes and failures)
     from app.services.billing_service import release_reservation
 

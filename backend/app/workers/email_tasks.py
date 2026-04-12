@@ -40,7 +40,11 @@ def _get_worker_session() -> AsyncSession:
 )
 def send_daily_lead_alerts(self) -> dict:
     """Send daily new lead alert emails to all opted-in users."""
-    return asyncio.run(_send_daily_alerts())
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(_send_daily_alerts())
+    finally:
+        loop.close()
 
 
 async def _send_daily_alerts() -> dict:

@@ -47,7 +47,11 @@ def skip_trace_single(
 
     try:
         publish_progress(self.request.id, {"status": "PROGRESS", "current": 0, "total": 1})
-        result = asyncio.run(_skip_trace_lead(user_id, lead_id, is_overage))
+        loop = asyncio.new_event_loop()
+        try:
+            result = loop.run_until_complete(_skip_trace_lead(user_id, lead_id, is_overage))
+        finally:
+            loop.close()
         from app.services.billing_service import release_reservation
 
         release_reservation(uuid.UUID(user_id), "skip_trace", 1, period_start_iso or None)
@@ -96,7 +100,11 @@ def skip_trace_batch(
                 {"status": "PROGRESS", "current": i, "total": len(lead_ids)},
             )
             is_overage = i >= overage_start
-            result = asyncio.run(_skip_trace_lead(user_id, lead_id, is_overage))
+            loop = asyncio.new_event_loop()
+            try:
+                result = loop.run_until_complete(_skip_trace_lead(user_id, lead_id, is_overage))
+            finally:
+                loop.close()
             if result.get("status") == "hit":
                 results["hits"] += 1
             elif result.get("status") == "miss":

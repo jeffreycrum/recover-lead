@@ -48,7 +48,11 @@ def qualify_single(
 
     try:
         publish_progress(self.request.id, {"status": "PROGRESS", "current": 0, "total": 1})
-        result = asyncio.run(_qualify_single(user_id, lead_id, self, is_overage))
+        loop = asyncio.new_event_loop()
+        try:
+            result = loop.run_until_complete(_qualify_single(user_id, lead_id, self, is_overage))
+        finally:
+            loop.close()
         # Release reservation on success (usage now committed to DB)
         from app.services.billing_service import release_reservation
 
@@ -274,7 +278,13 @@ def qualify_batch(
                 {"status": "PROGRESS", "current": i, "total": len(lead_ids)},
             )
             is_overage = i >= overage_start
-            result = asyncio.run(_qualify_single(user_id, lead_id, self, is_overage))
+            loop = asyncio.new_event_loop()
+            try:
+                result = loop.run_until_complete(
+                    _qualify_single(user_id, lead_id, self, is_overage)
+                )
+            finally:
+                loop.close()
             if "error" in result:
                 results["errors"] += 1
             else:
