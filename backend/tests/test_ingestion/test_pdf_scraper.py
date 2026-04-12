@@ -278,6 +278,75 @@ class TestTableMode:
         assert leads[0].case_number == "2024-TX-001"
         assert leads[1].surplus_amount == Decimal("3500.00")
 
+    def test_sumter_column_mapping(self):
+        """Sumter PDF: [0]=date, [1]=case, [2]=owner/desc, [3]=surplus.
+
+        Default mapping reads date as case, case as owner, and description
+        as surplus (producing garbage billions). The Sumter config must fix
+        this by setting case_number=1, owner_name=2, surplus_amount=3.
+        """
+        config = {
+            "columns": {
+                "case_number": 1,
+                "owner_name": 2,
+                "surplus_amount": 3,
+                "property_address": None,
+            },
+            "skip_rows_containing": ["Date Filed", "Case Number", "CLERK", "REGISTRY", "SURPLUS"],
+        }
+        scraper = _make_scraper(config)
+        mock_table = [
+            ["Date Filed", "Case Number", "Description", "Surplus Amount"],  # header
+            ["01/13/2025", "2023CA1033", "MARSHA BLANKENSHIP", "$15,816.00"],
+            ["03/16/2026", "2026CC460", "ETHEL MAE SMITH", "$1,500.00"],
+        ]
+        mock_page = MagicMock()
+        mock_page.extract_tables.return_value = [mock_table]
+        mock_pdf = MagicMock()
+        mock_pdf.pages = [mock_page]
+        mock_pdf.close = MagicMock()
+
+        with patch("pdfplumber.open", return_value=mock_pdf):
+            leads = scraper.parse(b"fake-pdf-bytes")
+
+        assert len(leads) == 2
+        assert leads[0].case_number == "2023CA1033"
+        assert leads[0].owner_name == "MARSHA BLANKENSHIP"
+        assert leads[0].surplus_amount == Decimal("15816.00")
+        assert leads[0].property_address is None
+        assert leads[1].case_number == "2026CC460"
+        assert leads[1].surplus_amount == Decimal("1500.00")
+
+    def test_sumter_default_mapping_shows_bug(self):
+        """Without Sumter config, default mapping reads wrong columns.
+
+        col[2] is a description string — if it contains digits that parse
+        under the 10^10 cap, a garbage surplus is stored. If the digits
+        overflow, the row is silently dropped (surplus=0 → skipped).
+        Either way the data is wrong.
+        """
+        scraper = _make_scraper()  # default columns
+        mock_table = [
+            ["Date Filed", "Case Number", "Description", "Surplus Amount"],
+            ["01/13/2025", "2023CA1033", "CASE 4005605", "$15,816.00"],
+        ]
+        mock_page = MagicMock()
+        mock_page.extract_tables.return_value = [mock_table]
+        mock_pdf = MagicMock()
+        mock_pdf.pages = [mock_page]
+        mock_pdf.close = MagicMock()
+
+        with patch("pdfplumber.open", return_value=mock_pdf):
+            leads = scraper.parse(b"fake-pdf-bytes")
+
+        # Default: col[0]=case → gets the date string instead of case number
+        assert leads[0].case_number == "01/13/2025"
+        # Default: col[1]=owner → gets the case number instead of owner name
+        assert leads[0].owner_name == "2023CA1033"
+        # Default: col[2]=surplus → parses digits from description text
+        assert leads[0].surplus_amount == Decimal("4005605")
+        assert leads[0].surplus_amount != Decimal("15816.00")
+
     def test_parse_table_mode_empty_tables_returns_empty(self):
         """PDF with no tables must return an empty list."""
         scraper = _make_scraper()
