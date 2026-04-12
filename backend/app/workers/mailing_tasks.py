@@ -54,16 +54,20 @@ def mail_letter_via_lob(
     period_start_iso: str,
 ) -> dict:
     """Mail an approved letter via Lob and update the letter row."""
-    return asyncio.run(
-        _mail_letter(
-            letter_id,
-            user_id,
-            from_address,
-            to_address,
-            is_overage,
-            period_start_iso,
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(
+            _mail_letter(
+                letter_id,
+                user_id,
+                from_address,
+                to_address,
+                is_overage,
+                period_start_iso,
+            )
         )
-    )
+    finally:
+        loop.close()
 
 
 async def _mail_letter(

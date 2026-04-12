@@ -43,10 +43,19 @@ celery_app.conf.beat_schedule = {
 }
 
 
-@celery_app.task(name="app.workers.scheduled.reset_monthly_credits")
+@celery_app.task(
+    name="app.workers.scheduled.reset_monthly_credits",
+    autoretry_for=(Exception,),
+    retry_backoff=60,
+    max_retries=2,
+)
 def reset_monthly_credits() -> dict:
     """Reset skip trace credits for all users based on their subscription plan."""
-    return asyncio.run(_reset_monthly_credits())
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(_reset_monthly_credits())
+    finally:
+        loop.close()
 
 
 async def _reset_monthly_credits() -> dict:
@@ -96,29 +105,60 @@ async def _reset_monthly_credits() -> dict:
     return {"status": "ok", "reset_count": reset_count}
 
 
-@celery_app.task(name="app.workers.scheduled.refresh_pipeline_metrics")
+@celery_app.task(
+    name="app.workers.scheduled.refresh_pipeline_metrics",
+    autoretry_for=(Exception,),
+    retry_backoff=60,
+    max_retries=2,
+)
 def refresh_pipeline_metrics() -> dict:
     """Refresh the pipeline metrics materialized view (non-blocking)."""
-    return asyncio.run(_refresh_pipeline_metrics())
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(_refresh_pipeline_metrics())
+    finally:
+        loop.close()
 
 
 async def _refresh_pipeline_metrics() -> dict:
     from sqlalchemy import text
 
     async with async_session_factory() as session:
-        # CONCURRENTLY requires a unique index, which we have
+        # Check if the materialized view exists before refreshing
+        result = await session.execute(
+            text(
+                "SELECT 1 FROM pg_matviews"
+                " WHERE matviewname = 'mv_pipeline_metrics'"
+            )
+        )
+        if not result.scalar():
+            logger.warning("pipeline_metrics_view_missing")
+            return {"status": "skipped", "reason": "view does not exist"}
+
         await session.execute(
-            text("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_pipeline_metrics;")
+            text(
+                "REFRESH MATERIALIZED VIEW"
+                " CONCURRENTLY mv_pipeline_metrics;"
+            )
         )
         await session.commit()
     logger.info("pipeline_metrics_refreshed")
     return {"status": "ok"}
 
 
-@celery_app.task(name="app.workers.scheduled.check_county_urls")
+@celery_app.task(
+    name="app.workers.scheduled.check_county_urls",
+    autoretry_for=(Exception,),
+    retry_backoff=60,
+    max_retries=2,
+)
 def check_county_urls() -> dict:
-    """Ping all county source URLs and flag broken ones. Deactivates on 404/DNS errors."""
-    return asyncio.run(_check_county_urls())
+    """Ping all county source URLs and flag broken ones."""
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(_check_county_urls())
+    finally:
+        loop.close()
 
 
 async def _check_county_urls() -> dict:

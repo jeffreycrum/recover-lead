@@ -29,7 +29,11 @@ logger = structlog.get_logger()
 )
 def scrape_county(self, county_id: str) -> dict:
     """Scrape a single county and store leads."""
-    return asyncio.run(_scrape_county(county_id, self))
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(_scrape_county(county_id, self))
+    finally:
+        loop.close()
 
 
 async def _scrape_county(county_id: str, task) -> dict:
@@ -107,7 +111,11 @@ async def _generate_embeddings_for_county(session, county_id: uuid.UUID, county_
 )
 def scrape_all_active_counties() -> dict:
     """Scrape all active counties. Called daily by Celery Beat."""
-    return asyncio.run(_scrape_all())
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(_scrape_all())
+    finally:
+        loop.close()
 
 
 async def _scrape_all() -> dict:
