@@ -178,6 +178,17 @@ _TAYLOR_HTML = b"""
 """
 
 
+_MANATEE_HTML = b"""
+<html><body>
+<table>
+  <tr><th>Case Number</th><th>Sale Date</th><th>Property Owner</th><th>Surplus Funds</th><th>1 Year from Sale</th></tr>
+  <tr><td>2023-001-TD</td><td>01/09/2023</td><td>Annie Lee Smith Estate</td><td>$2,269.01</td><td>01/09/2024</td></tr>
+  <tr><td>2023-002-TD</td><td>04/10/2023</td><td>Susie M Dooley</td><td>$3,427.23</td><td>04/10/2024</td></tr>
+</table>
+</body></html>
+"""
+
+
 class TestColumnMapping:
     def test_taylor_col_surplus_override(self):
         """col_surplus=4 reads Amount column, not Parcel column."""
@@ -199,6 +210,25 @@ class TestColumnMapping:
         scraper_fixed = _make_scraper(config={"col_surplus": 4})
         leads_fixed = scraper_fixed.parse(_TAYLOR_HTML)
         assert leads_fixed[0].surplus_amount == Decimal("2269.01")
+
+    def test_manatee_col_mapping(self):
+        """Manatee: col_owner=2, col_surplus=3 — owner was showing as date, amount as $0."""
+        scraper = _make_scraper(config={"col_owner": 2, "col_surplus": 3})
+        leads = scraper.parse(_MANATEE_HTML)
+        assert len(leads) == 2
+        assert leads[0].owner_name == "Annie Lee Smith Estate"
+        assert leads[0].surplus_amount == Decimal("2269.01")
+        assert leads[1].owner_name == "Susie M Dooley"
+        assert leads[1].surplus_amount == Decimal("3427.23")
+
+    def test_manatee_default_mapping_shows_bug(self):
+        """Without col overrides, Manatee owner shows as date and surplus is $0."""
+        scraper = _make_scraper()
+        leads = scraper.parse(_MANATEE_HTML)
+        # col[1] is Sale Date — shows up as owner
+        assert leads[0].owner_name == "01/09/2023"
+        # col[2] is a name string — parses to $0
+        assert leads[0].surplus_amount == Decimal("0.00")
 
     def test_col_case_override(self):
         """col_case can be overridden for non-standard layouts."""
