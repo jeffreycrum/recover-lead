@@ -46,8 +46,8 @@ celery_app.conf.beat_schedule = {
 @celery_app.task(
     name="app.workers.scheduled.reset_monthly_credits",
     autoretry_for=(Exception,),
-    retry_backoff=60,
-    max_retries=2,
+    retry_backoff=True,
+    max_retries=3,
 )
 def reset_monthly_credits() -> dict:
     """Reset skip trace credits for all users based on their subscription plan."""
@@ -108,8 +108,8 @@ async def _reset_monthly_credits() -> dict:
 @celery_app.task(
     name="app.workers.scheduled.refresh_pipeline_metrics",
     autoretry_for=(Exception,),
-    retry_backoff=60,
-    max_retries=2,
+    retry_backoff=True,
+    max_retries=3,
 )
 def refresh_pipeline_metrics() -> dict:
     """Refresh the pipeline metrics materialized view (non-blocking)."""
@@ -149,8 +149,8 @@ async def _refresh_pipeline_metrics() -> dict:
 @celery_app.task(
     name="app.workers.scheduled.check_county_urls",
     autoretry_for=(Exception,),
-    retry_backoff=60,
-    max_retries=2,
+    retry_backoff=True,
+    max_retries=3,
 )
 def check_county_urls() -> dict:
     """Ping all county source URLs and flag broken ones."""
