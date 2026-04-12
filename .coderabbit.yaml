@@ -1,0 +1,71 @@
+version: "2"
+
+language: "en-US"
+
+reviews:
+  # Auto-review every PR
+  auto_review:
+    enabled: true
+    drafts: false
+
+  # Focus areas for this stack
+  profile: "chill"  # assertive | chill — chill means fewer nitpicks, focus on real issues
+
+  path_filters:
+    # Skip generated/vendored files
+    - "!backend/.venv/**"
+    - "!frontend/node_modules/**"
+    - "!frontend/dist/**"
+    - "!alembic/versions/**"  # migrations reviewed separately
+
+  path_instructions:
+    - path: "backend/app/api/**"
+      instructions: |
+        Check for: row-level tenant isolation (every query must filter by user_id),
+        idempotency keys on POST endpoints with side effects,
+        rate limiting headers in responses,
+        generic error messages (no stack traces or SQL in API responses),
+        correct HTTP status codes per the project conventions.
+
+    - path: "backend/app/workers/**"
+      instructions: |
+        Check for: asyncio.run() usage for async bridges (not await in sync tasks),
+        max_retries=3 + exponential backoff on all tasks,
+        no direct Anthropic API calls (must go through Celery task).
+
+    - path: "backend/app/models/**"
+      instructions: |
+        Check for: missing Alembic migration for schema changes,
+        UTC timezone-aware datetimes,
+        CHECK constraints on bounded fields,
+        no direct database modifications (always through Alembic).
+
+    - path: "backend/app/services/mailing/**"
+      instructions: |
+        This is the Lob physical mail integration. Check that send_letter()
+        returns MailLetterResult (never raises), cost_cents is tracked,
+        and test mode is used unless LOB_API_KEY starts with 'live_'.
+
+    - path: "backend/app/ingestion/**"
+      instructions: |
+        Scraper code. Check for: input sanitization (strip control chars,
+        limit length), fixture-based tests only (never hit real county
+        websites), proper error handling that doesn't crash the whole run.
+
+    - path: "frontend/src/**"
+      instructions: |
+        Check for: @tanstack/react-query for all server state (no raw useEffect
+        for data fetching), shadcn/ui components only (no MUI/Chakra/Ant),
+        Clerk for all auth UI (no custom auth forms), camelCase functions,
+        PascalCase components, kebab-case filenames.
+
+  # Flag these regardless of profile
+  tools:
+    ruff:
+      enabled: true
+    mypy:
+      enabled: true
+
+chat:
+  # Allow @coderabbitai commands in PR comments
+  auto_reply: true
