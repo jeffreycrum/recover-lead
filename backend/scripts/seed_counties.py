@@ -1,18 +1,16 @@
 """Seed all 67 Florida county configs. Top 10 by surplus volume set as active."""
 
 import asyncio
-import sys
 import os
+import sys
 
 # Add backend to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sqlalchemy import select
 
-from app.config import settings
 from app.db.engine import async_session_factory
 from app.models.county import County
-
 
 # Counties with verified, freely accessible surplus fund downloads — active at launch
 ACTIVE_COUNTIES = [
@@ -27,8 +25,20 @@ ACTIVE_COUNTIES = [
         "is_active": True,
         "config": {
             "notes": "30-page PDF, updated regularly. Main page: https://www.clerk.org/tax-deeds.aspx",
-            "columns": {"case_number": 2, "owner_name": 1, "surplus_amount": 3, "property_address": None},
-            "skip_rows_containing": ["CLERK OF THE CIRCUIT", "TAX DEED SURPLUS", "Fee calculator", "Deposit amount", "Date Surplus", "Amt of Deposit"],
+            "columns": {
+                "case_number": 2,
+                "owner_name": 1,
+                "surplus_amount": 3,
+                "property_address": None,
+            },
+            "skip_rows_containing": [
+                "CLERK OF THE CIRCUIT",
+                "TAX DEED SURPLUS",
+                "Fee calculator",
+                "Deposit amount",
+                "Date Surplus",
+                "Amt of Deposit",
+            ],
         },
     },
     {
@@ -41,7 +51,11 @@ ACTIVE_COUNTIES = [
         "scrape_schedule": "0 2 * * *",
         "is_active": True,
         "config": {
-            "notes": "Excel spreadsheet. Claims tracking format: File #, Claims Filed, Claims Paid. Main page: https://hillsclerk.com/taxdeeds",
+            "notes": (
+                "Excel spreadsheet. Claims tracking format:"
+                " File #, Claims Filed, Claims Paid."
+                " Main page: https://hillsclerk.com/taxdeeds"
+            ),
             "column_mapping": {"case_number": 0, "owner_name": 1, "surplus_amount": 1},
             "extract_from_claims": True,
         },
@@ -55,7 +69,12 @@ ACTIVE_COUNTIES = [
         "scraper_class": "PdfScraper",
         "scrape_schedule": "0 2 * * *",
         "is_active": False,
-        "config": {"notes": "DEACTIVATED: 403 Cloudflare. Annual PDF by year. Main page: https://www.mypinellasclerk.gov/Unclaimed-Monies."},
+        "config": {
+            "notes": (
+                "DEACTIVATED: 403 Cloudflare. Annual PDF by year."
+                " Main page: https://www.mypinellasclerk.gov/Unclaimed-Monies."
+            ),
+        },
     },
     {
         "name": "Broward",
@@ -66,7 +85,12 @@ ACTIVE_COUNTIES = [
         "scraper_class": "HtmlTableScraper",
         "scrape_schedule": "0 2 * * *",
         "is_active": False,
-        "config": {"notes": "DEACTIVATED: 404. Excel/CSV download links on page. Overbid files and surplus disbursements."},
+        "config": {
+            "notes": (
+                "DEACTIVATED: 404. Excel/CSV download links on page."
+                " Overbid files and surplus disbursements."
+            ),
+        },
     },
     {
         "name": "Polk",
@@ -87,21 +111,38 @@ PENDING_COUNTIES = [
         "name": "Duval",
         "state": "FL",
         "fips_code": "12031",
-        "source_url": "https://www.duvalclerk.com/departments/finance-and-accounting/unclaimed-funds",
+        "source_url": (
+            "https://www.duvalclerk.com/departments/"
+            "finance-and-accounting/unclaimed-funds"
+        ),
         "source_type": "html",
         "scraper_class": None,
         "is_active": False,
-        "config": {"notes": "Interactive search only, no bulk download. Tax deed viewer: https://taxdeed.duvalclerk.com/. Contact: Ask.Taxdeeds@DuvalClerk.com"},
+        "config": {
+            "notes": (
+                "Interactive search only, no bulk download."
+                " Tax deed viewer: https://taxdeed.duvalclerk.com/."
+                " Contact: Ask.Taxdeeds@DuvalClerk.com"
+            ),
+        },
     },
     {
         "name": "Lee",
         "state": "FL",
         "fips_code": "12071",
-        "source_url": "https://www.leeclerk.org/departments/courts/property-sales/tax-deed-sales/tax-deed-reports",
+        "source_url": (
+            "https://www.leeclerk.org/departments/courts/"
+            "property-sales/tax-deed-sales/tax-deed-reports"
+        ),
         "source_type": None,
         "scraper_class": None,
         "is_active": False,
-        "config": {"notes": "Weekly reports may be available. Contact: taxdeedsurplus@leeclerk.org"},
+        "config": {
+            "notes": (
+                "Weekly reports may be available."
+                " Contact: taxdeedsurplus@leeclerk.org"
+            ),
+        },
     },
     {
         "name": "Miami-Dade",
@@ -111,17 +152,30 @@ PENDING_COUNTIES = [
         "source_type": None,
         "scraper_class": None,
         "is_active": False,
-        "config": {"notes": "No public surplus list. Must contact Foreclosure Unit at 305-275-1155."},
+        "config": {
+            "notes": (
+                "No public surplus list."
+                " Must contact Foreclosure Unit at 305-275-1155."
+            ),
+        },
     },
     {
         "name": "Palm Beach",
         "state": "FL",
         "fips_code": "12099",
-        "source_url": "https://www.mypalmbeachclerk.com/departments/courts/tax-deeds/sale-information",
+        "source_url": (
+            "https://www.mypalmbeachclerk.com/departments/"
+            "courts/tax-deeds/sale-information"
+        ),
         "source_type": None,
         "scraper_class": None,
         "is_active": False,
-        "config": {"notes": "Surplus report must be purchased from Clerk Cart. Contact: 561-355-2962."},
+        "config": {
+            "notes": (
+                "Surplus report must be purchased from Clerk Cart."
+                " Contact: 561-355-2962."
+            ),
+        },
     },
     {
         "name": "Orange",
@@ -131,7 +185,13 @@ PENDING_COUNTIES = [
         "source_type": None,
         "scraper_class": None,
         "is_active": False,
-        "config": {"notes": "No public surplus list. Unclaimed property sent to state: https://www.fltreasurehunt.gov/. Contact: 407-836-5116."},
+        "config": {
+            "notes": (
+                "No public surplus list. Unclaimed property sent"
+                " to state: https://www.fltreasurehunt.gov/."
+                " Contact: 407-836-5116."
+            ),
+        },
     },
 ]
 

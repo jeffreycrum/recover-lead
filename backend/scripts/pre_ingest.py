@@ -104,7 +104,10 @@ async def main():
             print(f"Scraping {county.name}...", end=" ", flush=True)
             try:
                 r = await scrape_county(county, session)
-                print(f"OK - {r.get('inserted', 0)} new, {r.get('skipped', 0)} existing, {r.get('embeddings', 0)} embeddings")
+                inserted = r.get('inserted', 0)
+                skipped = r.get('skipped', 0)
+                embeds = r.get('embeddings', 0)
+                print(f"OK - {inserted} new, {skipped} existing, {embeds} embeddings")
                 results.append(r)
             except Exception as e:
                 print(f"FAILED - {e}")
@@ -120,7 +123,10 @@ async def main():
         if "error" in r:
             print(f"{r['county']:<20} {'':>10} {'':>10} {'':>12} {'FAILED':>10}")
         else:
-            print(f"{r['county']:<20} {r.get('inserted', 0):>10} {r.get('skipped', 0):>10} {r.get('embeddings', 0):>12} {'OK':>10}")
+            ins = r.get('inserted', 0)
+            skp = r.get('skipped', 0)
+            emb = r.get('embeddings', 0)
+            print(f"{r['county']:<20} {ins:>10} {skp:>10} {emb:>12} {'OK':>10}")
 
     total_inserted = sum(r.get("inserted", 0) for r in results if "error" not in r)
     total_errors = sum(1 for r in results if "error" in r)

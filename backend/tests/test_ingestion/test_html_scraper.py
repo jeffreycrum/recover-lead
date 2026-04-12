@@ -170,9 +170,20 @@ class TestHtmlTableScraper:
 _TAYLOR_HTML = b"""
 <html><body>
 <table>
-  <tr><th>TDA #</th><th>Owner</th><th>Parcel</th><th>Certificate</th><th>Amount</th><th>Sale Date</th></tr>
-  <tr><td>22-036</td><td>Annie Lee Smith Estate</td><td>R04145-000</td><td>518 of 2019</td><td>$2,269.01</td><td>1/9/2023</td></tr>
-  <tr><td>23-019</td><td>Solange Montrose</td><td>R03191-000</td><td></td><td>$2,236.10</td><td>6/12/2023</td></tr>
+  <tr>
+    <th>TDA #</th><th>Owner</th><th>Parcel</th>
+    <th>Certificate</th><th>Amount</th><th>Sale Date</th>
+  </tr>
+  <tr>
+    <td>22-036</td><td>Annie Lee Smith Estate</td>
+    <td>R04145-000</td><td>518 of 2019</td>
+    <td>$2,269.01</td><td>1/9/2023</td>
+  </tr>
+  <tr>
+    <td>23-019</td><td>Solange Montrose</td>
+    <td>R03191-000</td><td></td>
+    <td>$2,236.10</td><td>6/12/2023</td>
+  </tr>
 </table>
 </body></html>
 """
@@ -181,9 +192,21 @@ _TAYLOR_HTML = b"""
 _MANATEE_HTML = b"""
 <html><body>
 <table>
-  <tr><th>Case Number</th><th>Sale Date</th><th>Property Owner</th><th>Surplus Funds</th><th>1 Year from Sale</th></tr>
-  <tr><td>2023-001-TD</td><td>01/09/2023</td><td>Annie Lee Smith Estate</td><td>$2,269.01</td><td>01/09/2024</td></tr>
-  <tr><td>2023-002-TD</td><td>04/10/2023</td><td>Susie M Dooley</td><td>$3,427.23</td><td>04/10/2024</td></tr>
+  <tr>
+    <th>Case Number</th><th>Sale Date</th>
+    <th>Property Owner</th><th>Surplus Funds</th>
+    <th>1 Year from Sale</th>
+  </tr>
+  <tr>
+    <td>2023-001-TD</td><td>01/09/2023</td>
+    <td>Annie Lee Smith Estate</td>
+    <td>$2,269.01</td><td>01/09/2024</td>
+  </tr>
+  <tr>
+    <td>2023-002-TD</td><td>04/10/2023</td>
+    <td>Susie M Dooley</td>
+    <td>$3,427.23</td><td>04/10/2024</td>
+  </tr>
 </table>
 </body></html>
 """

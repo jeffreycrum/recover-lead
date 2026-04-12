@@ -9,7 +9,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
 from sqlalchemy import select
 
-from app.config import settings
 from app.db.engine import async_session_factory
 from app.models.county import County
 
