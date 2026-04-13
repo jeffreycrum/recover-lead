@@ -95,16 +95,13 @@ class ParentPagePdfScraper(PdfScraper):
                 continue
             return urljoin(base_url, href)
 
-        # If pattern filtered everything out, fall back to first unfiltered anchor
+        # Pattern filtered everything out — fail loudly rather than ingest wrong PDF
         if pattern:
-            first_href = anchors[0].get("href", "")
-            if first_href:
-                self.logger.warning(
-                    "parent_page_pdf_pattern_no_match",
-                    pattern=pattern_str,
-                    falling_back_to=first_href,
-                )
-                return urljoin(base_url, first_href)
+            msg = (
+                f"{self.county_name}: no PDF links matching pattern '{pattern_str}' "
+                f"found on {self.source_url}"
+            )
+            raise RuntimeError(msg)
 
         msg = (
             f"{self.county_name}: PDF links found but none had a non-empty href "

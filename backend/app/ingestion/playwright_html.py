@@ -33,12 +33,13 @@ class PlaywrightHtmlScraper(HtmlTableScraper):
         """Fetch the page using headless Chromium via Playwright."""
         wait_selector = self.config.get("wait_selector")
         wait_ms = self.config.get("wait_ms", 2000)
+        wait_until = self.config.get("wait_until", "load")
 
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             try:
                 page = await browser.new_page()
-                await page.goto(self.source_url, timeout=60000, wait_until="networkidle")
+                await page.goto(self.source_url, timeout=60000, wait_until=wait_until)
 
                 if wait_selector:
                     await page.wait_for_selector(wait_selector, timeout=30000)
@@ -77,6 +78,9 @@ class PlaywrightPdfScraper(PdfScraper):
 
                 async def capture_response(response):
                     nonlocal pdf_bytes
+                    # Skip redirects — response.body() raises on 3xx responses
+                    if response.status >= 300:
+                        return
                     content_type = response.headers.get("content-type", "")
                     if "application/pdf" in content_type or self.source_url == response.url:
                         pdf_bytes = await response.body()
