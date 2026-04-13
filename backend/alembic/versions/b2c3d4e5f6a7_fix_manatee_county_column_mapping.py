@@ -31,8 +31,8 @@ def upgrade() -> None:
     op.execute(
         sa.text("""
             UPDATE counties
-            SET config = config
-                || '{"col_owner": 2, "col_surplus": 3}'::jsonb
+            SET config = (config::jsonb
+                || '{"col_owner": 2, "col_surplus": 3}'::jsonb)::json
             WHERE name = 'Manatee' AND state = 'FL'
         """)
     )
