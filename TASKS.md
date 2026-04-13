@@ -142,11 +142,13 @@ Ordered by phase and severity. Check off tasks as completed.
 ### Manual Tasks (Human Required)
 
 #### Stripe Configuration
-- [ ] Create metered overage prices in Stripe Dashboard for each paid plan:
-  - Qualification overage: $0.02/unit, metered usage
-  - Letter overage: $0.05/unit, metered usage
-  - Add resulting price IDs to `PLAN_CONFIG` in `billing_service.py`
-- [ ] Run `scripts/create_stripe_products.sh` if not already done
+- [x] Create metered overage prices in Stripe Dashboard for each paid plan:
+  - Qualification overage: `price_1TJkI5ACGBKrDLNGbmTqHnBN`
+  - Letter overage: `price_1TJkI5ACGBKrDLNGMHiuUpgj`
+  - Skip trace overage: `price_1TLBNmACGBKrDLNGGuLlUdXu`
+  - Mailing overage: `price_1TL9AWACGBKrDLNGCsDQptXj`
+  - Price IDs set as env vars on Railway (api + worker)
+- [x] Run `scripts/create_stripe_products.sh` if not already done
 
 #### Clerk Configuration
 - [ ] Enable email verification: Clerk Dashboard > Email, Phone, Username > Require email verification
