@@ -22,6 +22,8 @@ class County(Base):
     last_scraped_at: Mapped[datetime | None] = mapped_column(nullable=True)
     last_lead_count: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(default=False)
+    contact_phone: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 

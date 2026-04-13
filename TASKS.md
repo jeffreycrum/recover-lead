@@ -17,7 +17,7 @@ Ordered by phase and severity. Check off tasks as completed.
 - [x] Input sanitization on scraper-sourced data (strip control chars, limit length)
 - [x] LLM output validation (quality_score 1-10, letter content patterns)
 - [x] CHECK constraints on all bounded fields (surplus_amount, quality_score, confidence, fee_percentage)
-- [ ] Free tier email verification required (Clerk Dashboard → Email → require verification — configure at deploy time)
+- [x] Free tier email verification required (Clerk Dashboard → Email → require verification — configure at deploy time)
 - [x] No PII in logs (structlog filter)
 - [x] CORS restricted to known origins (`CORS_ORIGINS` env var)
 - [x] HTTPS everywhere (Railway TLS — automatic on Railway custom domains)
@@ -142,24 +142,25 @@ Ordered by phase and severity. Check off tasks as completed.
 ### Manual Tasks (Human Required)
 
 #### Stripe Configuration
-- [ ] Create metered overage prices in Stripe Dashboard for each paid plan:
-  - Qualification overage: $0.02/unit, metered usage
-  - Letter overage: $0.05/unit, metered usage
-  - Add resulting price IDs to `PLAN_CONFIG` in `billing_service.py`
-- [ ] Run `scripts/create_stripe_products.sh` if not already done
+- [x] Create metered overage prices in Stripe Dashboard for each paid plan:
+  - Qualification overage: `price_1TJkI5ACGBKrDLNGbmTqHnBN`
+  - Letter overage: `price_1TJkI5ACGBKrDLNGMHiuUpgj`
+  - Skip trace overage: `price_1TLBNmACGBKrDLNGGuLlUdXu`
+  - Mailing overage: `price_1TL9AWACGBKrDLNGCsDQptXj`
+  - Price IDs set as env vars on Railway (api + worker)
+- [x] Run `scripts/create_stripe_products.sh` if not already done
 
 #### Clerk Configuration
-- [ ] Enable email verification: Clerk Dashboard > Email, Phone, Username > Require email verification
+- [x] Enable email verification: Clerk Dashboard > Email, Phone, Username > Require email verification
 
-#### Pending County Data Requests (5 Counties)
+#### Pending County Data Requests (4 Counties)
 
 These counties do not publish bulk surplus fund lists online. Contact each to request access:
 
 - [ ] **Duval County** — Email Ask.Taxdeeds@DuvalClerk.com:
   > "We are a surplus funds recovery firm. Is there a way to obtain a bulk list of unclaimed surplus/excess proceeds from tax deed sales? We'd prefer CSV or PDF format if available."
 
-- [ ] **Lee County** — Email taxdeedsurplus@leeclerk.org (phone: (239) 533-5000):
-  > "We are requesting access to your weekly surplus funds reports from tax deed sales. Can these be provided in CSV or PDF format?"
+- [x] **Lee County** — Public weekly tax deed surplus reports confirmed on Lee Clerk site on 2026-04-12; manual outreach no longer required unless automated access fails.
 
 - [ ] **Miami-Dade County** — Call (305) 275-1155 (Foreclosure Unit):
   > Ask for a list of unclaimed surplus funds from tax deed/foreclosure sales. Ask about format, frequency, and cost.
@@ -194,17 +195,17 @@ These counties do not publish bulk surplus fund lists online. Contact each to re
 
 ### P1 — County Scraping Maintenance
 
-- [ ] Activate remaining 4 counties: Collier (PDF), Columbia (HTML), Marion (PDF), Martin (PDF) — 12 of 16 activated in migration `e7f9c2b3a4d5`
-- [ ] Fix 403/bot-blocked scrapers: Pinellas (still 403, needs Playwright), Columbia, Lee, Leon — Broward fixed via `cloudscraper_html.py`
-- [x] Fix broken scraper: Polk (404 — deactivated with note to find new URL)
-- [x] Deactivate Polk until URL found; Pinellas kept inactive (still 403)
-- [ ] Reclassify counties per deep research: Alachua→Web Form, Charlotte→Web Form, Citrus→Email, Clay→Web Form, Escambia→Email, Flagler→Web Form, Hernando→Email, Lake→Phone, Monroe→Phone, Nassau→Phone, St. Johns→Web Form, Sarasota→Web Form, Seminole→Web Form, St. Lucie→Phone
+- [x] Activate remaining counties: Collier, Columbia, Marion, Martin, Lee, Leon, Polk, Pinellas — all activated via PlaywrightHtmlScraper, PlaywrightPdfScraper, and ParentPagePdfScraper
+- [x] Fix 403/bot-blocked scrapers: Pinellas (PlaywrightPdfScraper), Columbia/Lee/Leon (PlaywrightHtmlScraper) — Broward fixed via `cloudscraper_html.py`
+- [x] Polk reactivated with new domain polkcountyclerk.net via PlaywrightHtmlScraper
+- [x] Pinellas reactivated via PlaywrightPdfScraper (was 403 Cloudflare)
+- [x] Refresh county access classifications from live clerk sources (2026-04-12): Alachua→Web Form, Charlotte→Web Form, Citrus→Email, Clay→Web Form, Escambia→Email, Flagler→Web Form, Hernando→Web Form, Lake→Web Form, Monroe→Phone, Nassau→Web Form, St. Johns→Web Form, Sarasota→Web Form, Seminole→Web Form, St. Lucie→Phone
 - [x] Monthly scraper URL health check — `scripts/check_county_urls.py` created
-- [ ] Update `scripts/fl_county_surplus_research.csv` when county URLs change
+- [x] Update `scripts/fl_county_surplus_research.csv` when county URLs change
 
 ### Manual Tasks — County Outreach
 
-- [ ] **Lee County** — Email taxdeedsurplus@leeclerk.org requesting bulk surplus data (CSV/PDF)
+- [x] **Lee County** — Public weekly tax deed surplus reports confirmed on Lee Clerk site on 2026-04-12; manual outreach no longer required unless automated access fails
 - [ ] **Duval County** — Email Ask.Taxdeeds@DuvalClerk.com requesting bulk download (currently interactive search only)
 - [ ] **Miami-Dade County** — Call 305-275-1155 (Foreclosure Unit) requesting surplus fund list
 - [ ] **Palm Beach County** — Call 561-355-2962 to inquire about Clerk Cart surplus report cost/format

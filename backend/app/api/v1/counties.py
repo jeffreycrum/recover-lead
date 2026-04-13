@@ -21,9 +21,9 @@ async def list_counties(
     session: AsyncSession = Depends(get_async_session),
     user: User = Depends(get_current_user),
     state: str | None = Query(None),
-    active_only: bool = Query(True),
+    active_only: bool = Query(False),
 ) -> list[dict]:
-    """List available counties with lead counts."""
+    """List all counties with lead counts. Includes inactive counties with contact info."""
     query = (
         select(
             County,
@@ -49,7 +49,10 @@ async def list_counties(
             "state": county.state,
             "fips_code": county.fips_code,
             "source_type": county.source_type,
+            "source_url": county.source_url,
             "is_active": county.is_active,
+            "contact_phone": county.contact_phone,
+            "contact_email": county.contact_email,
             "last_scraped_at": county.last_scraped_at.isoformat()
             if county.last_scraped_at
             else None,
@@ -90,6 +93,8 @@ async def get_county(
         "source_url": county.source_url,
         "source_type": county.source_type,
         "is_active": county.is_active,
+        "contact_phone": county.contact_phone,
+        "contact_email": county.contact_email,
         "last_scraped_at": county.last_scraped_at.isoformat() if county.last_scraped_at else None,
         "lead_count": lead_count,
     }

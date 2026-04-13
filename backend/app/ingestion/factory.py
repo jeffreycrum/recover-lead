@@ -67,5 +67,19 @@ def _ensure_scrapers_imported() -> None:
     # Cloudscraper is optional — import separately so missing dep doesn't break
     try:
         from app.ingestion import cloudscraper_html  # noqa: F401
-    except ImportError:
-        logger.debug("cloudscraper_not_available")
+    except ModuleNotFoundError as exc:
+        if exc.name and exc.name.startswith("cloudscraper"):
+            logger.debug("cloudscraper_not_available")
+        else:
+            raise
+
+    # Playwright is optional — requires chromium binary installed separately
+    try:
+        from app.ingestion import playwright_html  # noqa: F401
+    except ModuleNotFoundError as exc:
+        if exc.name and exc.name.startswith("playwright"):
+            logger.debug("playwright_not_available")
+        else:
+            raise
+
+    from app.ingestion import parent_page_pdf_scraper  # noqa: F401
