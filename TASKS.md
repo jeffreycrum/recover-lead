@@ -17,7 +17,7 @@ Ordered by phase and severity. Check off tasks as completed.
 - [x] Input sanitization on scraper-sourced data (strip control chars, limit length)
 - [x] LLM output validation (quality_score 1-10, letter content patterns)
 - [x] CHECK constraints on all bounded fields (surplus_amount, quality_score, confidence, fee_percentage)
-- [ ] Free tier email verification required (Clerk Dashboard → Email → require verification — configure at deploy time)
+- [x] Free tier email verification required (Clerk Dashboard → Email → require verification — configure at deploy time)
 - [x] No PII in logs (structlog filter)
 - [x] CORS restricted to known origins (`CORS_ORIGINS` env var)
 - [x] HTTPS everywhere (Railway TLS — automatic on Railway custom domains)
@@ -151,7 +151,7 @@ Ordered by phase and severity. Check off tasks as completed.
 - [x] Run `scripts/create_stripe_products.sh` if not already done
 
 #### Clerk Configuration
-- [ ] Enable email verification: Clerk Dashboard > Email, Phone, Username > Require email verification
+- [x] Enable email verification: Clerk Dashboard > Email, Phone, Username > Require email verification
 
 #### Pending County Data Requests (4 Counties)
 
