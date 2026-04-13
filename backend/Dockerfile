@@ -12,6 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml .
 RUN pip install --no-cache-dir "."
 
+# Install Chromium for Playwright-based scrapers (bot-blocked counties)
+RUN playwright install --with-deps chromium
+
 # Application code (changes here don't bust the pip cache)
 COPY app/ app/
 COPY alembic.ini .

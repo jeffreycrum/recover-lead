@@ -69,3 +69,9 @@ def _ensure_scrapers_imported() -> None:
         from app.ingestion import cloudscraper_html  # noqa: F401
     except ImportError:
         logger.debug("cloudscraper_not_available")
+
+    # Playwright is optional — requires chromium binary installed separately
+    try:
+        from app.ingestion import playwright_html  # noqa: F401
+    except ImportError:
+        logger.debug("playwright_not_available")
