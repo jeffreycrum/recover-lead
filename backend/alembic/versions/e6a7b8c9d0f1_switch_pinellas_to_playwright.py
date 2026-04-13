@@ -1,7 +1,7 @@
 """switch pinellas to playwright pdf scraper
 
 Revision ID: e6a7b8c9d0f1
-Revises: d5f8a1b2c3e4
+Revises: b3c4d5e6f7a8
 Create Date: 2026-04-12 12:00:00.000000
 
 """

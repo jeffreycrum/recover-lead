@@ -197,8 +197,8 @@ These counties do not publish bulk surplus fund lists online. Contact each to re
 
 - [x] Activate remaining counties: Collier, Columbia, Marion, Martin, Lee, Leon, Polk, Pinellas — all activated via PlaywrightHtmlScraper, PlaywrightPdfScraper, and ParentPagePdfScraper
 - [x] Fix 403/bot-blocked scrapers: Pinellas (PlaywrightPdfScraper), Columbia/Lee/Leon (PlaywrightHtmlScraper) — Broward fixed via `cloudscraper_html.py`
-- [x] Fix broken scraper: Polk (404 — deactivated with note to find new URL)
-- [x] Deactivate Polk until URL found; Pinellas kept inactive (still 403)
+- [x] Polk reactivated with new domain polkcountyclerk.net via PlaywrightHtmlScraper
+- [x] Pinellas reactivated via PlaywrightPdfScraper (was 403 Cloudflare)
 - [x] Refresh county access classifications from live clerk sources (2026-04-12): Alachua→Web Form, Charlotte→Web Form, Citrus→Email, Clay→Web Form, Escambia→Email, Flagler→Web Form, Hernando→Web Form, Lake→Web Form, Monroe→Phone, Nassau→Web Form, St. Johns→Web Form, Sarasota→Web Form, Seminole→Web Form, St. Lucie→Phone
 - [x] Monthly scraper URL health check — `scripts/check_county_urls.py` created
 - [x] Update `scripts/fl_county_surplus_research.csv` when county URLs change
