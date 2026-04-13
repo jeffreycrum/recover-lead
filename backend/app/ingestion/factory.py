@@ -75,3 +75,5 @@ def _ensure_scrapers_imported() -> None:
         from app.ingestion import playwright_html  # noqa: F401
     except ImportError:
         logger.debug("playwright_not_available")
+
+    from app.ingestion import parent_page_pdf_scraper  # noqa: F401
