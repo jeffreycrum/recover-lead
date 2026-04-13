@@ -1,6 +1,6 @@
 import { useCounties } from "@/hooks/use-subscription";
 import { formatDate } from "@/lib/utils";
-import { Map, CheckCircle, XCircle } from "lucide-react";
+import { Map, CheckCircle, XCircle, Phone, Mail } from "lucide-react";
 import { EmptyState } from "@/components/common/empty-state";
 
 export function CountiesPage() {
@@ -38,6 +38,32 @@ export function CountiesPage() {
                 <p>Source: {county.source_type?.toUpperCase() || "—"}</p>
                 <p>Last scraped: {formatDate(county.last_scraped_at)}</p>
               </div>
+
+              {!county.is_active && (county.contact_phone || county.contact_email) && (
+                <div className="mt-3 pt-3 border-t space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Request data
+                  </p>
+                  {county.contact_phone && (
+                    <a
+                      href={`tel:${county.contact_phone.replace(/[^\d+]/g, "")}`}
+                      className="flex items-center gap-1.5 text-sm text-foreground hover:text-emerald transition-colors"
+                    >
+                      <Phone size={13} />
+                      {county.contact_phone}
+                    </a>
+                  )}
+                  {county.contact_email && (
+                    <a
+                      href={`mailto:${county.contact_email}`}
+                      className="flex items-center gap-1.5 text-sm text-foreground hover:text-emerald transition-colors"
+                    >
+                      <Mail size={13} />
+                      {county.contact_email}
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
