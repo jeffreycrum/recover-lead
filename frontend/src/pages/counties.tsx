@@ -1,6 +1,6 @@
 import { useCounties } from "@/hooks/use-subscription";
 import { formatDate } from "@/lib/utils";
-import { Map, CheckCircle, XCircle, Phone, Mail } from "lucide-react";
+import { Map, CheckCircle, XCircle, Phone, Mail, ExternalLink } from "lucide-react";
 import { EmptyState } from "@/components/common/empty-state";
 
 export function CountiesPage() {
@@ -39,11 +39,22 @@ export function CountiesPage() {
                 <p>Last scraped: {formatDate(county.last_scraped_at)}</p>
               </div>
 
-              {!county.is_active && (county.contact_phone || county.contact_email) && (
+              {!county.is_active && (county.contact_phone || county.contact_email || county.source_url) && (
                 <div className="mt-3 pt-3 border-t space-y-1">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                     Request data
                   </p>
+                  {county.source_url && (
+                    <a
+                      href={county.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-sm text-foreground hover:text-emerald transition-colors"
+                    >
+                      <ExternalLink size={13} />
+                      Clerk website
+                    </a>
+                  )}
                   {county.contact_phone && (
                     <a
                       href={`tel:${county.contact_phone.replace(/[^\d+]/g, "")}`}

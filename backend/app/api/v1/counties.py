@@ -49,6 +49,7 @@ async def list_counties(
             "state": county.state,
             "fips_code": county.fips_code,
             "source_type": county.source_type,
+            "source_url": county.source_url,
             "is_active": county.is_active,
             "contact_phone": county.contact_phone,
             "contact_email": county.contact_email,
