@@ -45,7 +45,7 @@ def upgrade() -> None:
             "SET is_active = true, "
             "    source_url = :url, "
             "    source_type = 'html', "
-            "    scraper_class = 'PlaywrightHtmlScraper', "
+            "    scraper_class = 'RealTdmScraper', "
             "    scrape_schedule = '0 2 * * *', "
             "    config = CAST(:cfg AS JSON) "
             "WHERE name = 'Pinellas' AND state = 'FL'"
@@ -57,12 +57,14 @@ def upgrade() -> None:
                 "col_owner": 99,
                 "col_surplus": 7,
                 "col_address": 5,
-                "wait_until": "load",
-                "wait_ms": 3000,
+                "balance_type": "Surplus Without Pending Claim",
+                "results_per_page": "100 Results per Page",
+                "wait_ms": 4000,
                 "notes": (
                     "Reactivated 2026-04-14. realtdm.com public case list — "
-                    "server-rendered HTML, no auth required. No owner name column; "
-                    "col_address repurposed for parcel number (col 5)."
+                    "form-submitted via RealTdmScraper (Playwright fills Balance Type "
+                    "and Results per Page, clicks Process Search). No owner name column; "
+                    "col_address repurposed for parcel number (col 5). 22 results as of 2026-04-14."
                 ),
             }),
         },

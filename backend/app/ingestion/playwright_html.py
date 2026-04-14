@@ -1,10 +1,11 @@
 """Playwright-based scrapers for bot-protected county websites.
 
 Used for counties that return 403 even with cloudscraper. Launches a headless
-Chromium browser for each fetch. Two variants:
+Chromium browser for each fetch. Three variants:
 
 - PlaywrightHtmlScraper: fetches rendered HTML, parses tables (Columbia, Lee, Leon)
-- PlaywrightPdfScraper: downloads PDF through browser, parses with pdfplumber (Pinellas)
+- PlaywrightPdfScraper: downloads PDF through browser, parses with pdfplumber
+- RealTdmScraper: fills search form on realtdm.com portals, extracts case table
 """
 
 from __future__ import annotations
@@ -111,4 +112,60 @@ class PlaywrightPdfScraper(PdfScraper):
 
     def parse(self, raw_data: bytes) -> list[RawLead]:
         """Delegate to PdfScraper.parse()."""
+        return super().parse(raw_data)
+
+
+@register_scraper("RealTdmScraper")
+class RealTdmScraper(HtmlTableScraper):
+    """Scraper for county clerk portals hosted on realtdm.com.
+
+    The case list is server-rendered but filtered via an AJAX form submission.
+    Playwright fills the search form, submits it, and extracts the result table.
+
+    Supported county config keys (all optional):
+        balance_type  : Balance Type option label (default: "Surplus Without Pending Claim")
+        results_per_page: Results per Page option label (default: "100 Results per Page")
+        wait_ms       : milliseconds to wait after form submission (default: 4000)
+        col_case      : column index for case number (default: 2)
+        col_owner     : column index for owner/party name (default: 99 = none)
+        col_surplus   : column index for surplus balance (default: 7)
+        col_address   : column index for parcel/address (default: 5)
+    """
+
+    async def fetch(self) -> bytes:
+        """Navigate to the case list, apply surplus filter, return rendered HTML."""
+        balance_type = self.config.get("balance_type", "Surplus Without Pending Claim")
+        results_per_page = self.config.get("results_per_page", "100 Results per Page")
+        wait_ms = self.config.get("wait_ms", 4000)
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            try:
+                page = await browser.new_page()
+                await page.goto(self.source_url, timeout=60000, wait_until="load")
+                await page.wait_for_timeout(2000)
+
+                # Set Balance Type filter
+                balance_select = page.locator("select").filter(
+                    has=page.locator(f"option:text-is('{balance_type}')")
+                )
+                await balance_select.select_option(label=balance_type)
+
+                # Set Results per Page
+                page_select = page.locator("select").filter(
+                    has=page.locator(f"option:text-is('{results_per_page}')")
+                )
+                await page_select.select_option(label=results_per_page)
+
+                # Submit the search form
+                await page.get_by_role("button", name="Process Search").click()
+                await page.wait_for_timeout(wait_ms)
+
+                content = await page.content()
+                return content.encode("utf-8")
+            finally:
+                await browser.close()
+
+    def parse(self, raw_data: bytes) -> list[RawLead]:
+        """Delegate to HtmlTableScraper.parse()."""
         return super().parse(raw_data)
