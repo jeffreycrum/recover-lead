@@ -73,27 +73,59 @@ class TestExtractPdfUrl:
         assert "Excess-Proceeds" in url
 
     def test_pattern_filters_to_surplus_link_marion(self):
-        """Marion: pattern should pick the dated surplus PDF, not the claim form."""
+        """Marion: exclude_pattern must skip the claim affidavit (which appears first)."""
         scraper = _make_scraper(county="Marion")
         url = scraper._extract_pdf_url(
             MARION_HTML,
             selector="a[href$='.pdf']",
             pattern_str="surplus|excess|overbid",
             base_url="https://www.marioncountyclerk.org",
+            exclude_str="affidavit|claim.form|claim-form",
+        )
+        assert "Surplus-Funds" in url
+        assert "Affidavit" not in url
+
+    def test_exclude_pattern_skips_claim_form(self):
+        """pdf_link_exclude_pattern should skip the affidavit and return data PDF."""
+        scraper = _make_scraper(county="Marion")
+        url = scraper._extract_pdf_url(
+            MARION_HTML,
+            selector="a[href$='.pdf']",
+            pattern_str="surplus|excess|overbid",
+            base_url="https://www.marioncountyclerk.org",
+            exclude_str="affidavit|claim.form|claim-form",
+        )
+        assert "Surplus-Funds" in url
+        assert "Affidavit" not in url
+
+    def test_exclude_pattern_skips_first_link_to_reach_second(self):
+        """When first PDF matches exclude_pattern, second matching PDF is returned."""
+        html = (
+            b"<html><body>"
+            b'<a href="/forms/Surplus-Claim-Affidavit.pdf">Claim Form</a>'
+            b'<a href="/data/Tax-Deed-Surplus-Funds-2025.pdf">Surplus List</a>'
+            b"</body></html>"
+        )
+        scraper = _make_scraper()
+        url = scraper._extract_pdf_url(
+            html,
+            selector="a[href$='.pdf']",
+            pattern_str="surplus",
+            base_url="https://example.gov",
+            exclude_str="affidavit|claim-form",
         )
         assert "Surplus-Funds" in url
 
     def test_pattern_fallback_when_no_match(self):
-        """If pattern matches nothing, fall back to first PDF link without error."""
+        """If pattern + exclude filter everything out, RuntimeError is raised."""
         scraper = _make_scraper()
-        url = scraper._extract_pdf_url(
-            COLLIER_HTML,
-            selector="a[href$='.pdf']",
-            pattern_str="NOMATCH_XYZ",
-            base_url="https://www.collierclerk.com",
-        )
-        # Falls back to first link
-        assert url.endswith(".pdf")
+        with pytest.raises(RuntimeError):
+            scraper._extract_pdf_url(
+                COLLIER_HTML,
+                selector="a[href$='.pdf']",
+                pattern_str="NOMATCH_XYZ",
+                base_url="https://www.collierclerk.com",
+            )
 
     def test_raises_when_no_pdf_links_found(self):
         scraper = _make_scraper()
@@ -166,6 +198,7 @@ class TestFetch:
                 "tax-deeds-and-lands-available-for-taxes/unclaimed-funds/",
             config={
                 "pdf_link_pattern": "surplus|excess|overbid",
+                "pdf_link_exclude_pattern": "affidavit|claim.form|claim-form",
                 "base_url": "https://www.marioncountyclerk.org",
             },
         )
@@ -177,6 +210,7 @@ class TestFetch:
         assert result == FAKE_PDF
         second_url = mock_client.get.call_args_list[1][0][0]
         assert "Surplus-Funds" in second_url
+        assert "Affidavit" not in second_url
 
 
 class TestRegistration:

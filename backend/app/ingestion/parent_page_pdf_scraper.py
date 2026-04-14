@@ -6,10 +6,14 @@ the landing page, extracts the first matching PDF href, then fetches and
 parses that PDF.
 
 Config keys:
-    pdf_link_selector : CSS selector for the <a> element (default: ``a[href$=".pdf"]``)
-    pdf_link_pattern  : regex applied to the raw href as a secondary filter
-                        (useful when multiple PDF links exist on the page)
-    base_url          : base URL for resolving relative hrefs; defaults to source_url
+    pdf_link_selector        : CSS selector for the <a> element (default: ``a[href$=".pdf"]``)
+    pdf_link_pattern         : regex applied to the raw href as a positive filter
+                               (useful when multiple PDF links exist on the page)
+    pdf_link_exclude_pattern : regex applied to the raw href as a negative filter —
+                               any link whose href matches this pattern is skipped;
+                               used to exclude claim forms, affidavits, etc. that
+                               share keywords with the target PDF (e.g. Marion)
+    base_url                 : base URL for resolving relative hrefs; defaults to source_url
 """
 
 from __future__ import annotations
@@ -44,6 +48,7 @@ class ParentPagePdfScraper(PdfScraper):
         """Fetch landing page, resolve PDF href, return PDF bytes."""
         selector = self.config.get("pdf_link_selector", "a[href$='.pdf']")
         pattern_str = self.config.get("pdf_link_pattern")
+        exclude_str = self.config.get("pdf_link_exclude_pattern")
         base_url = self.config.get("base_url", self.source_url)
 
         async with httpx.AsyncClient(
@@ -56,7 +61,7 @@ class ParentPagePdfScraper(PdfScraper):
             landing.raise_for_status()
 
             pdf_url = self._extract_pdf_url(
-                landing.content, selector, pattern_str, base_url
+                landing.content, selector, pattern_str, base_url, exclude_str
             )
             self.logger.info("parent_page_pdf_resolved", pdf_url=pdf_url)
 
@@ -70,8 +75,14 @@ class ParentPagePdfScraper(PdfScraper):
         selector: str,
         pattern_str: str | None,
         base_url: str,
+        exclude_str: str | None = None,
     ) -> str:
         """Find the first PDF href on the landing page matching the given criteria.
+
+        Links are filtered in order:
+        1. Must match ``selector`` (CSS)
+        2. Must match ``pattern_str`` if provided (positive filter on href)
+        3. Must NOT match ``exclude_str`` if provided (negative filter on href)
 
         Raises RuntimeError if no matching link is found.
         """
@@ -86,6 +97,7 @@ class ParentPagePdfScraper(PdfScraper):
             raise RuntimeError(msg)
 
         pattern = re.compile(pattern_str, re.IGNORECASE) if pattern_str else None
+        exclude_pattern = re.compile(exclude_str, re.IGNORECASE) if exclude_str else None
 
         for anchor in anchors:
             href = anchor.get("href", "")
@@ -93,13 +105,15 @@ class ParentPagePdfScraper(PdfScraper):
                 continue
             if pattern and not pattern.search(href):
                 continue
+            if exclude_pattern and exclude_pattern.search(href):
+                continue
             return urljoin(base_url, href)
 
-        # Pattern filtered everything out — fail loudly rather than ingest wrong PDF
-        if pattern:
+        # All links were filtered out — fail loudly rather than ingest wrong PDF
+        if pattern or exclude_pattern:
             msg = (
                 f"{self.county_name}: no PDF links matching pattern '{pattern_str}' "
-                f"found on {self.source_url}"
+                f"(exclude: '{exclude_str}') found on {self.source_url}"
             )
             raise RuntimeError(msg)
 

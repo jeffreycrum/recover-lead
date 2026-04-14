@@ -10,11 +10,13 @@ Chromium browser for each fetch. Three variants:
 
 from __future__ import annotations
 
+import httpx
 from playwright.async_api import async_playwright
 
-from app.ingestion.base_scraper import RawLead
+from app.ingestion.base_scraper import SCRAPER_HEADERS, RawLead
 from app.ingestion.factory import register_scraper
 from app.ingestion.html_scraper import HtmlTableScraper
+from app.ingestion.parent_page_pdf_scraper import ParentPagePdfScraper
 from app.ingestion.pdf_scraper import PdfScraper
 
 
@@ -34,7 +36,7 @@ class PlaywrightHtmlScraper(HtmlTableScraper):
         """Fetch the page using headless Chromium via Playwright."""
         wait_selector = self.config.get("wait_selector")
         wait_ms = self.config.get("wait_ms", 2000)
-        wait_until = self.config.get("wait_until", "load")
+        wait_until = self.config.get("wait_until", "networkidle")
 
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
@@ -113,6 +115,64 @@ class PlaywrightPdfScraper(PdfScraper):
     def parse(self, raw_data: bytes) -> list[RawLead]:
         """Delegate to PdfScraper.parse()."""
         return super().parse(raw_data)
+
+
+@register_scraper("PlaywrightParentPagePdfScraper")
+class PlaywrightParentPagePdfScraper(ParentPagePdfScraper):
+    """ParentPagePdfScraper that fetches the landing page via Playwright.
+
+    Used when the county's landing page is bot-protected or JS-rendered so
+    that ParentPagePdfScraper's httpx fetch returns empty or redirect content.
+    Playwright renders the full page; the PDF link is extracted from the
+    rendered HTML and the PDF itself is then downloaded via regular httpx.
+
+    Config keys: same as ParentPagePdfScraper, plus:
+        wait_ms       : milliseconds to wait after page load (default: 3000)
+        wait_until    : Playwright wait_until argument (default: "networkidle")
+        wait_selector : optional CSS selector to wait for before grabbing HTML
+    """
+
+    async def fetch(self) -> bytes:
+        """Render landing page via Playwright, extract PDF link, download PDF."""
+        selector = self.config.get("pdf_link_selector", "a[href$='.pdf']")
+        pattern_str = self.config.get("pdf_link_pattern")
+        exclude_str = self.config.get("pdf_link_exclude_pattern")
+        base_url = self.config.get("base_url", self.source_url)
+        wait_ms = self.config.get("wait_ms", 3000)
+        wait_until = self.config.get("wait_until", "networkidle")
+        wait_selector = self.config.get("wait_selector")
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            try:
+                page = await browser.new_page()
+                await page.goto(self.source_url, timeout=60000, wait_until=wait_until)
+                if wait_selector:
+                    await page.wait_for_selector(wait_selector, timeout=30000)
+                if wait_ms:
+                    await page.wait_for_timeout(wait_ms)
+                html_content = await page.content()
+            finally:
+                await browser.close()
+
+        pdf_url = self._extract_pdf_url(
+            html_content.encode("utf-8"), selector, pattern_str, base_url, exclude_str
+        )
+        self.logger.info("playwright_parent_page_pdf_resolved", pdf_url=pdf_url)
+
+        async with httpx.AsyncClient(
+            timeout=60.0,
+            headers=SCRAPER_HEADERS,
+            follow_redirects=True,
+            verify=False,
+        ) as client:
+            pdf_response = await client.get(pdf_url)
+            pdf_response.raise_for_status()
+            return pdf_response.content
+
+    def parse(self, raw_data: bytes) -> list[RawLead]:
+        """Delegate to PdfScraper.parse()."""
+        return PdfScraper.parse(self, raw_data)
 
 
 @register_scraper("RealTdmScraper")
