@@ -82,7 +82,15 @@ class PlaywrightPdfScraper(PdfScraper):
                     if response.status >= 300:
                         return
                     content_type = response.headers.get("content-type", "")
-                    if "application/pdf" in content_type or self.source_url == response.url:
+                    # Accept PDF content-type or octet-stream, and also match
+                    # any response whose URL ends in .pdf (handles URL encoding
+                    # mismatches like %20 vs space in self.source_url comparison)
+                    url_is_pdf = response.url.lower().split("?")[0].endswith(".pdf")
+                    if (
+                        "application/pdf" in content_type
+                        or "application/octet-stream" in content_type
+                        or url_is_pdf
+                    ):
                         pdf_bytes = await response.body()
 
                 page.on("response", capture_response)
