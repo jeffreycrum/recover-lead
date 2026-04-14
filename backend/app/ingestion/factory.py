@@ -83,3 +83,12 @@ def _ensure_scrapers_imported() -> None:
             raise
 
     from app.ingestion import parent_page_pdf_scraper  # noqa: F401
+
+    # Duval County interactive search scraper (requires playwright)
+    try:
+        from app.ingestion import duval_clerk  # noqa: F401
+    except ModuleNotFoundError as exc:
+        if exc.name and exc.name.startswith("playwright"):
+            logger.debug("playwright_not_available")
+        else:
+            raise
