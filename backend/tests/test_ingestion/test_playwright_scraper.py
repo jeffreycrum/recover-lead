@@ -18,7 +18,11 @@ skip_if_no_playwright = pytest.mark.skipif(
 )
 
 if _PLAYWRIGHT_AVAILABLE:
-    from app.ingestion.playwright_html import PlaywrightHtmlScraper, PlaywrightPdfScraper
+    from app.ingestion.playwright_html import (
+        PlaywrightHtmlScraper,
+        PlaywrightParentPagePdfScraper,
+        PlaywrightPdfScraper,
+    )
 
 
 def _make_html_scraper(config: dict | None = None) -> PlaywrightHtmlScraper:
@@ -183,6 +187,7 @@ class TestPlaywrightPdfScraper:
         async def fake_goto(url, **kwargs):
             # Simulate the response callback firing during navigation
             mock_response = AsyncMock()
+            mock_response.status = 200
             mock_response.headers = {"content-type": "application/pdf"}
             mock_response.url = url
             mock_response.body.return_value = fake_pdf_bytes
@@ -230,6 +235,108 @@ class TestPlaywrightPdfScraper:
                 await scraper.fetch()
 
         mock_browser.close.assert_called_once()
+
+
+_LEE_LANDING_HTML = """
+<html><body>
+<h1>Tax Deed Reports</h1>
+<ul>
+  <li><a href="/DocumentCenter/View/99/Annual-Escheat-Report-2025.pdf">Annual Escheat Report</a></li>
+  <li><a href="/DocumentCenter/View/88/Weekly-Surplus-Report-2026-04-07.pdf">Weekly Surplus Report</a></li>
+</ul>
+</body></html>
+"""
+
+_FAKE_PDF_BYTES = b"%PDF-1.4 fake-pdf-content"
+
+
+def _make_parent_pdf_scraper(config: dict | None = None) -> PlaywrightParentPagePdfScraper:
+    return PlaywrightParentPagePdfScraper(  # type: ignore[name-defined]
+        county_name="Lee",
+        source_url="https://leeclerk.org/tax-deed-reports",
+        config=config or {},
+    )
+
+
+def _mock_playwright_and_httpx(page_content: str, pdf_bytes: bytes = _FAKE_PDF_BYTES):
+    """Build Playwright mock returning page_content and httpx mock returning pdf_bytes."""
+    mock_async_pw, mock_page, mock_browser = _mock_playwright_context(page_content)
+
+    pdf_resp = MagicMock()
+    pdf_resp.content = pdf_bytes
+    pdf_resp.raise_for_status = MagicMock()
+
+    mock_http_client = MagicMock()
+    mock_http_client.__aenter__ = AsyncMock(return_value=mock_http_client)
+    mock_http_client.__aexit__ = AsyncMock(return_value=False)
+    mock_http_client.get = AsyncMock(return_value=pdf_resp)
+
+    return mock_async_pw, mock_page, mock_browser, mock_http_client
+
+
+@skip_if_no_playwright
+class TestPlaywrightParentPagePdfScraper:
+    @pytest.mark.asyncio
+    async def test_fetch_renders_page_extracts_link_downloads_pdf(self):
+        """fetch() must render the page, extract the surplus PDF link, and download it."""
+        scraper = _make_parent_pdf_scraper(config={
+            "pdf_link_selector": "a[href]",
+            "pdf_link_pattern": "surplus|weekly",
+            "pdf_link_exclude_pattern": "escheat|annual",
+            "base_url": "https://leeclerk.org",
+            "wait_ms": 0,
+        })
+        mock_pw, _, _, mock_http = _mock_playwright_and_httpx(_LEE_LANDING_HTML)
+
+        with (
+            patch("app.ingestion.playwright_html.async_playwright", return_value=mock_pw),
+            patch("app.ingestion.playwright_html.httpx.AsyncClient", return_value=mock_http),
+        ):
+            result = await scraper.fetch()
+
+        assert result == _FAKE_PDF_BYTES
+        downloaded_url = mock_http.get.call_args[0][0]
+        assert "Weekly-Surplus" in downloaded_url
+        assert "Escheat" not in downloaded_url
+
+    @pytest.mark.asyncio
+    async def test_fetch_exclude_pattern_skips_escheat(self):
+        """pdf_link_exclude_pattern must skip the annual escheat report."""
+        scraper = _make_parent_pdf_scraper(config={
+            "pdf_link_selector": "a[href]",
+            "pdf_link_pattern": "(?i)surplus|weekly|escheat",
+            "pdf_link_exclude_pattern": "(?i)escheat|annual",
+            "base_url": "https://leeclerk.org",
+            "wait_ms": 0,
+        })
+        mock_pw, _, _, mock_http = _mock_playwright_and_httpx(_LEE_LANDING_HTML)
+
+        with (
+            patch("app.ingestion.playwright_html.async_playwright", return_value=mock_pw),
+            patch("app.ingestion.playwright_html.httpx.AsyncClient", return_value=mock_http),
+        ):
+            result = await scraper.fetch()
+
+        assert result == _FAKE_PDF_BYTES
+        downloaded_url = mock_http.get.call_args[0][0]
+        assert "Weekly-Surplus" in downloaded_url
+
+    @pytest.mark.asyncio
+    async def test_fetch_closes_browser_on_error(self):
+        """Browser must be closed even if page navigation raises."""
+        scraper = _make_parent_pdf_scraper()
+        mock_pw, mock_page, mock_browser = _mock_playwright_context()
+        mock_page.goto.side_effect = TimeoutError("Navigation timeout")
+
+        with patch("app.ingestion.playwright_html.async_playwright", return_value=mock_pw):
+            with pytest.raises(TimeoutError):
+                await scraper.fetch()
+
+        mock_browser.close.assert_called_once()
+
+    def test_registered_in_factory(self):
+        from app.ingestion.factory import SCRAPER_REGISTRY
+        assert "PlaywrightParentPagePdfScraper" in SCRAPER_REGISTRY
 
 
 @pytest.mark.skipif(_PLAYWRIGHT_AVAILABLE, reason="only run when playwright missing")
