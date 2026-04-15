@@ -1,0 +1,30 @@
+{{ owner_name or "Property Owner" }}
+{{ owner_address or owner_last_known_address or "Address on file" }}
+
+Re: Possible claim for excess proceeds from an Ohio tax foreclosure or forfeited land sale
+
+Dear {{ owner_name or "Property Owner" }},
+
+Our records indicate that property associated with {{ county_name }} County, Ohio may have generated excess proceeds after a tax foreclosure or forfeited land sale. Under Ohio Revised Code § 5721.19 (judicial tax sales) and § 5723 (forfeited land sales), excess proceeds are the funds that remain after the county applies sale proceeds to delinquent taxes, penalties, costs, and other amounts allowed by law. These funds are held by the County Treasurer until claimed.
+
+The property reference we have is:
+- Parcel / Case: {{ parcel_id or case_number }}
+- Sale date: {{ sale_date or "See county records" }}
+- Estimated excess proceeds: {% if surplus_amount is not none %}${{ "%.2f"|format(surplus_amount) }}{% else %}Unknown{% endif %}
+
+Under ORC § 5721.19(D), a former owner or junior lienholder generally has 90 days from the date the court enters its order confirming the sale to file a claim. Claims must be filed by motion in the same court case that ordered the foreclosure — not as a new lawsuit. Claims filed after the 90-day window are typically barred, and unclaimed funds may be transferred to the county general fund.
+
+To file a successful claim you will generally need to demonstrate:
+1. A property interest at the time of sale — such as a recorded deed, mortgage, judgment lien, or other interest of record.
+2. Documentation of that interest, typically a certified copy of the relevant recorded instrument from the county recorder.
+3. If the former owner is deceased, the estate must be opened in probate court, or an affidavit of heirship may be accepted in limited circumstances. The court has discretion on what documentation it requires.
+
+Ohio law does not set a statutory cap on recovery fees for tax-sale excess-proceeds claims. Any fee agreement with a recovery professional should disclose the exact percentage or other compensation method before you sign any assignment or authorization. Review the terms carefully.
+
+Because claim deadlines are strict and the required filings are made inside an active court case, we recommend consulting with an Ohio-licensed attorney familiar with foreclosure proceedings if you believe you have a valid claim.
+
+If you want help evaluating whether a claim is worth pursuing and what documents may be needed, we can review the county records with you and explain the claim process. This letter is informational only and is not legal advice.
+
+Sincerely,
+
+RecoverLead

@@ -126,3 +126,8 @@ class ParentPagePdfScraper(PdfScraper):
     def parse(self, raw_data: bytes) -> list[RawLead]:
         """Delegate to PdfScraper.parse()."""
         return super().parse(raw_data)
+
+
+# Import California parent-page PDF scrapers after the base class exists so
+# _ensure_scrapers_imported() registers them without touching factory.py.
+from app.ingestion import california_pdf_scraper  # noqa: E402,F401

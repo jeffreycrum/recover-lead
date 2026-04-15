@@ -1,0 +1,119 @@
+"""seed california counties
+
+Revision ID: u7v8w9x0y1z2
+Revises: p2q3r4s5t6u7
+Create Date: 2026-04-14 21:30:00.000000
+
+"""
+
+import uuid
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+
+from alembic import op
+
+revision: str = "u7v8w9x0y1z2"
+down_revision: str | Sequence[str] | None = "p2q3r4s5t6u7"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+counties = sa.table(
+    "counties",
+    sa.column("id", sa.Uuid),
+    sa.column("name", sa.String),
+    sa.column("state", sa.String),
+    sa.column("fips_code", sa.String),
+    sa.column("source_url", sa.String),
+    sa.column("source_type", sa.String),
+    sa.column("scraper_class", sa.String),
+    sa.column("scrape_schedule", sa.String),
+    sa.column("is_active", sa.Boolean),
+    sa.column("last_lead_count", sa.Integer),
+    sa.column("config", sa.JSON),
+)
+
+CA_COUNTIES = [
+    ("Alameda", "06001"),
+    ("Alpine", "06003"),
+    ("Amador", "06005"),
+    ("Butte", "06007"),
+    ("Calaveras", "06009"),
+    ("Colusa", "06011"),
+    ("Contra Costa", "06013"),
+    ("Del Norte", "06015"),
+    ("El Dorado", "06017"),
+    ("Fresno", "06019"),
+    ("Glenn", "06021"),
+    ("Humboldt", "06023"),
+    ("Imperial", "06025"),
+    ("Inyo", "06027"),
+    ("Kern", "06029"),
+    ("Kings", "06031"),
+    ("Lake", "06033"),
+    ("Lassen", "06035"),
+    ("Los Angeles", "06037"),
+    ("Madera", "06039"),
+    ("Marin", "06041"),
+    ("Mariposa", "06043"),
+    ("Mendocino", "06045"),
+    ("Merced", "06047"),
+    ("Modoc", "06049"),
+    ("Mono", "06051"),
+    ("Monterey", "06053"),
+    ("Napa", "06055"),
+    ("Nevada", "06057"),
+    ("Orange", "06059"),
+    ("Placer", "06061"),
+    ("Plumas", "06063"),
+    ("Riverside", "06065"),
+    ("Sacramento", "06067"),
+    ("San Benito", "06069"),
+    ("San Bernardino", "06071"),
+    ("San Diego", "06073"),
+    ("San Francisco", "06075"),
+    ("San Joaquin", "06077"),
+    ("San Luis Obispo", "06079"),
+    ("San Mateo", "06081"),
+    ("Santa Barbara", "06083"),
+    ("Santa Clara", "06085"),
+    ("Santa Cruz", "06087"),
+    ("Shasta", "06089"),
+    ("Sierra", "06091"),
+    ("Siskiyou", "06093"),
+    ("Solano", "06095"),
+    ("Sonoma", "06097"),
+    ("Stanislaus", "06099"),
+    ("Sutter", "06101"),
+    ("Tehama", "06103"),
+    ("Trinity", "06105"),
+    ("Tulare", "06107"),
+    ("Tuolumne", "06109"),
+    ("Ventura", "06111"),
+    ("Yolo", "06113"),
+    ("Yuba", "06115"),
+]
+
+
+def upgrade() -> None:
+    rows = [
+        {
+            "id": uuid.uuid4(),
+            "name": name,
+            "state": "CA",
+            "fips_code": fips_code,
+            "source_url": None,
+            "source_type": None,
+            "scraper_class": None,
+            "scrape_schedule": None,
+            "is_active": False,
+            "last_lead_count": 0,
+            "config": None,
+        }
+        for name, fips_code in CA_COUNTIES
+    ]
+    op.bulk_insert(counties, rows)
+
+
+def downgrade() -> None:
+    op.execute("DELETE FROM counties WHERE state = 'CA'")

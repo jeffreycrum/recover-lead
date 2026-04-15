@@ -136,6 +136,8 @@ class TestEnsureScrapersImported:
         assert "HtmlTableScraper" in SCRAPER_REGISTRY
         assert "XlsxScraper" in SCRAPER_REGISTRY
         assert "GulfHtmlScraper" in SCRAPER_REGISTRY
+        assert "CaliforniaExcessProceedsScraper" in SCRAPER_REGISTRY
+        assert "SanDiegoFinalReportScraper" in SCRAPER_REGISTRY
 
     def test_ensure_scrapers_imported_handles_missing_cloudscraper(self):
         """If cloudscraper is missing, _ensure_scrapers_imported must NOT raise."""
