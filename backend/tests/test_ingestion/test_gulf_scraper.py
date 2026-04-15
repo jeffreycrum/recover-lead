@@ -151,6 +151,27 @@ class TestGulfScraper:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Fixture-based smoke test (real saved HTML)
+# ---------------------------------------------------------------------------
+
+
+class TestGulfFixture:
+    def test_gulf_parses_real_fixture(self):
+        """Real Gulf County HTML fixture must yield at least 5 leads with positive surplus."""
+        import pathlib
+
+        fixture_path = (
+            pathlib.Path(__file__).parent.parent / "fixtures" / "gulf_surplus.html"
+        )
+        html_bytes = fixture_path.read_bytes()
+        scraper = _make_scraper()
+        leads = scraper.parse(html_bytes)
+
+        assert len(leads) >= 5
+        assert all(lead.surplus_amount > 0 for lead in leads)
+
+
 class TestFindAmount:
     @pytest.mark.parametrize(
         "text,expected",
