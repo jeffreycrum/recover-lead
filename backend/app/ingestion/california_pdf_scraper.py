@@ -287,7 +287,10 @@ class SanDiegoFinalReportScraper(ParentPagePdfScraper):
 
     @staticmethod
     def _normalize_date(value: str) -> str:
-        return datetime.strptime(value, "%m/%d/%Y").date().isoformat()
+        try:
+            return datetime.strptime(value, "%m/%d/%Y").date().isoformat()
+        except ValueError:
+            return value
 
     @staticmethod
     def _parse_amount(value: str):

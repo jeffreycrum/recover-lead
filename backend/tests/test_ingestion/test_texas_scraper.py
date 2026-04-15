@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from io import BytesIO
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -223,6 +223,7 @@ class TestFortBendCounty:
         return PdfScraper(
             county_name="Fort Bend",
             source_url="https://odysseyreport.fortbendcountytx.gov/District_Clerk/ExcessProceedsFromTaxSale.pdf",
+            state="TX",
             config=self._CONFIG,
         )
 
@@ -333,6 +334,7 @@ class TestDentonCounty:
         return PdfScraper(
             county_name="Denton",
             source_url="https://www.dentoncounty.gov/DocumentCenter/View/3044/Excess-Tax-Funds-PDF",
+            state="TX",
             config=self._CONFIG,
         )
 
@@ -423,7 +425,7 @@ class TestGalvestonCounty:
             county_name="Galveston",
             source_url=(
                 "https://www.galvestoncountytx.gov"
-                "/our-county/district-clerk/excess-proceeds/-folder-665"
+                "/our-county/district-clerk/excess-proceeds"
             ),
             state="TX",
             config=self._CONFIG,

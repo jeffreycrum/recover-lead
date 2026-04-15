@@ -15,14 +15,14 @@ export function useSubscription() {
   });
 }
 
-export function useCounties() {
+export function useCounties(params: Record<string, string> = {}) {
   const { getToken } = useAuth();
   useEffect(() => {
     api.setTokenFn(getToken);
   }, [getToken]);
 
   return useQuery({
-    queryKey: ["counties"],
-    queryFn: () => api.getCounties(),
+    queryKey: ["counties", params],
+    queryFn: () => api.getCounties(params),
   });
 }
