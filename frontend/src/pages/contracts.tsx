@@ -47,6 +47,8 @@ export function ContractsPage() {
 
   const [selectedContract, setSelectedContract] = useState<any>(null);
   const [editContent, setEditContent] = useState("");
+  const [editLoading, setEditLoading] = useState(false);
+  const [pendingGeneration, setPendingGeneration] = useState(false);
   const [showGenDialog, setShowGenDialog] = useState(false);
   const [genForm, setGenForm] = useState<GenerateFormState>({
     lead_id: "",
@@ -59,15 +61,21 @@ export function ContractsPage() {
   const { data: contracts, isLoading } = useQuery({
     queryKey: ["contracts"],
     queryFn: () => api.getContracts(),
+    // Poll while a Celery task is in flight so the new draft surfaces automatically
+    refetchInterval: pendingGeneration ? 4000 : false,
   });
 
   const generateMutation = useMutation({
     mutationFn: (data: any) => api.generateContract(data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["contracts"] });
       setShowGenDialog(false);
       setGenForm({ lead_id: "", fee_percentage: "25", agent_name: "", contract_type: "recovery_agreement" });
       setGenError(null);
+      // Start polling — Celery writes the draft asynchronously
+      setPendingGeneration(true);
+      qc.invalidateQueries({ queryKey: ["contracts"] });
+      // Auto-stop polling after 60 s regardless
+      window.setTimeout(() => setPendingGeneration(false), 60_000);
     },
     onError: (err: any) => {
       setGenError(err?.message || "Failed to queue contract generation");
@@ -82,9 +90,15 @@ export function ContractsPage() {
     },
   });
 
-  const handleOpenEdit = (contract: any) => {
-    setSelectedContract(contract);
-    setEditContent(contract.content);
+  const handleOpenEdit = async (contract: any) => {
+    setEditLoading(true);
+    try {
+      const detail = await api.getContract(contract.id);
+      setSelectedContract(detail);
+      setEditContent(detail.content);
+    } finally {
+      setEditLoading(false);
+    }
   };
 
   const handleSaveEdit = () => {
@@ -137,6 +151,12 @@ export function ContractsPage() {
           Generate Contract
         </Button>
       </div>
+
+      {pendingGeneration && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-200">
+          Contract generation in progress — the new draft will appear shortly.
+        </div>
+      )}
 
       {isLoading ? (
         <div className="space-y-3">
@@ -202,9 +222,10 @@ export function ContractsPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleOpenEdit(contract)}
+                            disabled={editLoading}
                             className="h-8 px-2 text-xs"
                           >
-                            Edit
+                            {editLoading ? "Loading…" : "Edit"}
                           </Button>
                         )}
                         {nextStatus && (

@@ -14,6 +14,7 @@ from app.models.county import County
 from app.models.lead import Lead, LeadActivity, LeadContact, UserLead
 from app.models.user import User
 from app.schemas.lead import (
+    QUALIFIED_STATUSES,
     ActivityCreateRequest,
     BulkQualifyRequest,
     ClaimResponse,
@@ -926,9 +927,7 @@ async def county_exhaustion(
             sql_func.count(
                 case(
                     (
-                        UserLead.status.in_(
-                            ["qualified", "contacted", "signed", "filed", "paid", "closed"]
-                        ),
+                        UserLead.status.in_(QUALIFIED_STATUSES),
                         UserLead.id,
                     )
                 )
@@ -948,9 +947,7 @@ async def county_exhaustion(
             sql_func.count(
                 case(
                     (
-                        UserLead.status.in_(
-                            ["qualified", "contacted", "signed", "filed", "paid", "closed"]
-                        ),
+                        UserLead.status.in_(QUALIFIED_STATUSES),
                         UserLead.id,
                     )
                 )
@@ -963,16 +960,7 @@ async def county_exhaustion(
                     sql_func.count(
                         case(
                             (
-                                UserLead.status.in_(
-                                    [
-                                        "qualified",
-                                        "contacted",
-                                        "signed",
-                                        "filed",
-                                        "paid",
-                                        "closed",
-                                    ]
-                                ),
+                                UserLead.status.in_(QUALIFIED_STATUSES),
                                 UserLead.id,
                             )
                         )

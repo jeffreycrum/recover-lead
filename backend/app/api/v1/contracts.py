@@ -6,7 +6,7 @@ from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import InsufficientCreditsError, NotFoundError
 from app.db.session import get_async_session
 from app.dependencies import get_current_user
 from app.models.contract import Contract
@@ -45,6 +45,12 @@ async def generate_contract(
     if not ul_result.scalar_one_or_none():
         raise NotFoundError("Claimed lead")
 
+    from app.services.billing_service import reserve_usage
+
+    reservation = await reserve_usage(session, user.id, "letter", count=1)
+    if not reservation.allowed:
+        raise InsufficientCreditsError()
+
     from app.core.sse import register_task_owner
     from app.workers.contract_tasks import generate_contract_task
 
@@ -54,8 +60,8 @@ async def generate_contract(
         req.contract_type,
         float(req.fee_percentage),
         req.agent_name,
-        False,
-        "",
+        bool(reservation.overage_count),
+        reservation.period_start_iso,
     )
     register_task_owner(task.id, str(user.id))
 
@@ -258,17 +264,21 @@ async def download_contract_pdf(
 ) -> Response:
     """Download contract as a print-ready PDF."""
     result = await session.execute(
-        select(Contract).where(Contract.id == contract_id, Contract.user_id == user.id)
+        select(Contract, Lead.case_number.label("case_number"))
+        .join(Lead, Contract.lead_id == Lead.id)
+        .where(Contract.id == contract_id, Contract.user_id == user.id)
     )
-    contract = result.scalar_one_or_none()
-    if not contract:
+    row = result.one_or_none()
+    if not row:
         raise NotFoundError("Contract")
+
+    contract, case_number = row
 
     from app.services.letter_service import generate_pdf
 
     pdf_bytes = generate_pdf(
         content=contract.content,
-        case_number=str(contract.lead_id),
+        case_number=case_number,
     )
 
     return Response(

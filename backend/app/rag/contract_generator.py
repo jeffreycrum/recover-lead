@@ -109,7 +109,7 @@ async def _generate_clauses_via_claude(
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
     async with _semaphore:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         response = await loop.run_in_executor(
             None,
             partial(

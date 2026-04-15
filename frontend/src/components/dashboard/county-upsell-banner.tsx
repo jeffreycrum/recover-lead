@@ -30,19 +30,20 @@ export function CountyUpsellBanner() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const [dismissed, setDismissed] = useState<Set<string>>(() => {
-    return new Set(
-      (exhaustion || [])
-        .map((c: any) => c.county_id)
-        .filter(isDismissed)
-    );
-  });
+  // Tracks in-session dismissals so the banner disappears immediately on click.
+  // isDismissed() reads localStorage directly on every render to catch dismissals
+  // from previous sessions — no dependency on exhaustion at init time.
+  const [sessionDismissed, setSessionDismissed] = useState<Set<string>>(
+    () => new Set<string>()
+  );
 
   if (!exhaustion || exhaustion.length === 0) return null;
 
   const nudges = exhaustion.filter(
     (c: any) =>
-      c.exhaustion_pct >= UPSELL_THRESHOLD && !dismissed.has(c.county_id)
+      c.exhaustion_pct >= UPSELL_THRESHOLD &&
+      !sessionDismissed.has(c.county_id) &&
+      !isDismissed(c.county_id)
   );
 
   if (nudges.length === 0) return null;
@@ -53,7 +54,7 @@ export function CountyUpsellBanner() {
 
   const handleDismiss = () => {
     dismiss(top.county_id);
-    setDismissed((prev: Set<string>) => new Set([...prev, top.county_id]));
+    setSessionDismissed((prev) => new Set([...prev, top.county_id]));
   };
 
   return (

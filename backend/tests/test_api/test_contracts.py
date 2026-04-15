@@ -63,8 +63,17 @@ class TestContractGenerate:
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_async_session] = override_session
 
+        reservation = MagicMock()
+        reservation.allowed = True
+        reservation.overage_count = 0
+        reservation.period_start_iso = "2026-04-01T00:00:00"
+
         try:
             with (
+                patch(
+                    "app.services.billing_service.reserve_usage",
+                    new=AsyncMock(return_value=reservation),
+                ),
                 patch("app.workers.contract_tasks.generate_contract_task") as mock_task,
                 patch("app.core.sse.register_task_owner"),
             ):
