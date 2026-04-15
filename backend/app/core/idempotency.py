@@ -38,6 +38,21 @@ async def cache_response(idempotency_key: str, status_code: int, body: dict) -> 
     await r.setex(f"idempotency:{idempotency_key}", IDEMPOTENCY_TTL, data)
 
 
+async def claim_idempotency_key(idempotency_key: str, processing_ttl: int = 30) -> bool:
+    """Atomically claim a key as in-progress using SET NX.
+
+    Returns True if this caller is the sole processor.
+    Returns False if another request already holds the lock.
+    The lock TTL is short (30 s) so a crash doesn't block the key forever;
+    the full IDEMPOTENCY_TTL applies only after the response is stored.
+    """
+    r = get_idempotency_redis()
+    result = await r.set(
+        f"idempotency:lock:{idempotency_key}", "processing", ex=processing_ttl, nx=True
+    )
+    return result is not None
+
+
 def get_idempotency_key(request: Request) -> str | None:
     """Extract idempotency key from request headers."""
     return request.headers.get("Idempotency-Key")

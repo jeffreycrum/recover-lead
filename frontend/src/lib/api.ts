@@ -273,7 +273,9 @@ export class ApiClient {
 
   getContracts(params: Record<string, string> = {}) {
     const qs = new URLSearchParams(params).toString();
-    return this.request<any[]>(`/contracts${qs ? `?${qs}` : ""}`);
+    return this.request<{ items: any[]; next_cursor: string | null; has_more: boolean }>(
+      `/contracts${qs ? `?${qs}` : ""}`
+    );
   }
 
   getContract(id: string) {

@@ -58,28 +58,40 @@ export function ContractsPage() {
     contract_type: "recovery_agreement",
   });
   const [genError, setGenError] = useState<string | null>(null);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [allContracts, setAllContracts] = useState<any[]>([]);
 
   const prevContractCountRef = useRef<number>(0);
 
-  const { data: contracts, isLoading } = useQuery({
-    queryKey: ["contracts"],
-    queryFn: () => api.getContracts(),
+  const { data: page, isLoading } = useQuery({
+    queryKey: ["contracts", cursor],
+    queryFn: () => api.getContracts(cursor ? { cursor } : {}),
     // Poll while a Celery task is in flight so the new draft surfaces automatically
     refetchInterval: pendingGeneration ? 4000 : false,
   });
 
+  // Accumulate pages into allContracts
+  useEffect(() => {
+    if (!page) return;
+    if (cursor === null) {
+      setAllContracts(page.items);
+    } else {
+      setAllContracts((prev) => [...prev, ...page.items]);
+    }
+  }, [page, cursor]);
+
   // Clear pending indicator as soon as a new contract row appears
   useEffect(() => {
-    if (!pendingGeneration || !contracts) return;
-    if (contracts.length > prevContractCountRef.current) {
+    if (!pendingGeneration || !page) return;
+    if (page.items.length > prevContractCountRef.current) {
       setPendingGeneration(false);
       if (pendingTimeoutRef.current !== null) {
         window.clearTimeout(pendingTimeoutRef.current);
         pendingTimeoutRef.current = null;
       }
     }
-    prevContractCountRef.current = contracts.length;
-  }, [contracts, pendingGeneration]);
+    prevContractCountRef.current = page.items.length;
+  }, [page, pendingGeneration]);
 
   // Cancel timeout on unmount
   useEffect(() => {
@@ -96,8 +108,10 @@ export function ContractsPage() {
       setShowGenDialog(false);
       setGenForm({ lead_id: "", fee_percentage: "25", agent_name: "", contract_type: "recovery_agreement" });
       setGenError(null);
-      prevContractCountRef.current = contracts?.length ?? 0;
+      prevContractCountRef.current = page?.items.length ?? 0;
       setPendingGeneration(true);
+      setCursor(null);
+      setAllContracts([]);
       qc.invalidateQueries({ queryKey: ["contracts"] });
       // Fallback: stop polling after 60 s if the contract never appears
       pendingTimeoutRef.current = window.setTimeout(() => setPendingGeneration(false), 60_000);
@@ -197,7 +211,7 @@ export function ContractsPage() {
             <div key={i} className="h-16 rounded-lg bg-muted animate-pulse" />
           ))}
         </div>
-      ) : !contracts || contracts.length === 0 ? (
+      ) : allContracts.length === 0 && !isLoading ? (
         <EmptyState
           icon={<FileSignature size={48} />}
           title="No contracts yet"
@@ -221,7 +235,7 @@ export function ContractsPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {contracts.map((contract: any) => {
+              {allContracts.map((contract: any) => {
                 const nextStatus = NEXT_STATUS[contract.status];
                 return (
                   <tr key={contract.id} className="hover:bg-muted/30 transition-colors">
@@ -290,6 +304,18 @@ export function ContractsPage() {
               })}
             </tbody>
           </table>
+          {page?.has_more && (
+            <div className="flex justify-center py-3 border-t">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setCursor(page.next_cursor)}
+                disabled={isLoading}
+              >
+                {isLoading ? "Loading…" : "Load more"}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

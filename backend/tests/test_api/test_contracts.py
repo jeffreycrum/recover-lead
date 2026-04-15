@@ -75,10 +75,14 @@ class TestContractGenerate:
                     new=AsyncMock(return_value=reservation),
                 ),
                 patch(
-                    "app.core.idempotency.get_cached_response",
+                    "app.api.v1.contracts.get_cached_response",
                     new=AsyncMock(return_value=None),
                 ),
-                patch("app.core.idempotency.cache_response", new=AsyncMock()),
+                patch("app.api.v1.contracts.cache_response", new=AsyncMock()),
+                patch(
+                    "app.api.v1.contracts.claim_idempotency_key",
+                    new=AsyncMock(return_value=True),
+                ),
                 patch("app.workers.contract_tasks.generate_contract_task") as mock_task,
                 patch("app.core.sse.register_task_owner"),
             ):
@@ -245,9 +249,11 @@ class TestContractList:
 
             assert response.status_code == 200
             data = response.json()
-            assert len(data) == 1
-            assert data[0]["case_number"] == "TC-2024-001"
-            assert data[0]["status"] == "draft"
+            assert len(data["items"]) == 1
+            assert data["items"][0]["case_number"] == "TC-2024-001"
+            assert data["items"][0]["status"] == "draft"
+            assert data["has_more"] is False
+            assert data["next_cursor"] is None
         finally:
             app.dependency_overrides.clear()
 
@@ -277,7 +283,10 @@ class TestContractList:
                 response = await client.get("/api/v1/contracts")
 
             assert response.status_code == 200
-            assert response.json() == []
+            data = response.json()
+            assert data["items"] == []
+            assert data["has_more"] is False
+            assert data["next_cursor"] is None
         finally:
             app.dependency_overrides.clear()
 
@@ -531,7 +540,7 @@ class TestContractIdempotency:
         try:
             with (
                 patch(
-                    "app.core.idempotency.get_cached_response",
+                    "app.api.v1.contracts.get_cached_response",
                     new=AsyncMock(return_value={"status_code": 202, "body": cached_body}),
                 ),
                 patch("app.workers.contract_tasks.generate_contract_task") as mock_task,
