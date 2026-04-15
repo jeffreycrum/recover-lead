@@ -17,6 +17,7 @@ from app.schemas.lead import (
     ActivityCreateRequest,
     BulkQualifyRequest,
     ClaimResponse,
+    CountyExhaustionResponse,
     CursorPage,
     DealCloseRequest,
     DealPayRequest,
@@ -433,23 +434,47 @@ async def close_lead(
     )
 
 
-@router.post("/{lead_id}/qualify", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/{lead_id}/qualify")
 async def qualify_lead_endpoint(
     lead_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
     user: User = Depends(get_current_user),
 ) -> dict:
-    """Trigger AI qualification for a lead. Returns task_id for polling."""
+    """Trigger AI qualification for a lead.
+
+    Returns cached result immediately (200) when lead data is unchanged.
+    Returns task_id for async polling (202) when a new LLM call is needed.
+    """
     # Must be claimed
-    result = await session.execute(
+    ul_result = await session.execute(
         select(UserLead).where(
             UserLead.user_id == user.id,
             UserLead.lead_id == lead_id,
         )
     )
-    user_lead = result.scalar_one_or_none()
+    user_lead = ul_result.scalar_one_or_none()
     if not user_lead:
         raise NotFoundError("Claimed lead")
+
+    # Cache hit: skip LLM call and billing entirely when source data is unchanged
+    lead_result = await session.execute(
+        select(Lead.source_hash).where(Lead.id == lead_id)
+    )
+    source_hash = lead_result.scalar_one_or_none()
+
+    if (
+        user_lead.qualified_source_hash is not None
+        and user_lead.quality_score is not None
+        and source_hash is not None
+        and user_lead.qualified_source_hash == source_hash
+    ):
+        logger.info("qualification_cache_hit", lead_id=str(lead_id), user_id=str(user.id))
+        return {
+            "cached": True,
+            "quality_score": user_lead.quality_score,
+            "reasoning": user_lead.quality_reasoning,
+            "status": "qualified",
+        }
 
     from app.services.billing_service import reserve_usage
 
@@ -470,7 +495,12 @@ async def qualify_lead_endpoint(
 
     await record_activity(session, lead_id, user.id, "qualify_started", "AI qualification started")
 
-    return {"task_id": task.id, "status": "queued", "message": "Qualification queued"}
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(
+        status_code=status.HTTP_202_ACCEPTED,
+        content={"task_id": task.id, "status": "queued", "message": "Qualification queued"},
+    )
 
 
 MAX_BULK_QUALIFY_SIZE = 100
@@ -482,7 +512,11 @@ async def bulk_qualify(
     session: AsyncSession = Depends(get_async_session),
     user: User = Depends(get_current_user),
 ) -> dict:
-    """Trigger AI qualification for multiple leads. Returns task_id."""
+    """Trigger AI qualification for multiple leads. Returns task_id.
+
+    Cache hits (unchanged source_hash) are filtered out before dispatching,
+    so users are not billed for leads that don't need re-qualification.
+    """
     if not req.lead_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -497,9 +531,42 @@ async def bulk_qualify(
             },
         )
 
+    # Filter out leads whose source data hasn't changed since last qualification
+
+    rows = await session.execute(
+        select(
+            UserLead.lead_id,
+            UserLead.qualified_source_hash,
+            UserLead.quality_score,
+            Lead.source_hash,
+        )
+        .join(Lead, Lead.id == UserLead.lead_id)
+        .where(
+            UserLead.user_id == user.id,
+            UserLead.lead_id.in_(req.lead_ids),
+        )
+    )
+    cache_state = {str(r.lead_id): r for r in rows.all()}
+
+    billable_ids = [
+        lid
+        for lid in req.lead_ids
+        if not _is_cache_hit(cache_state.get(str(lid)))
+    ]
+    cached_count = len(req.lead_ids) - len(billable_ids)
+
+    if not billable_ids:
+        return {
+            "task_id": None,
+            "status": "all_cached",
+            "lead_count": 0,
+            "cached_count": cached_count,
+            "message": f"All {cached_count} leads are up to date — no qualification needed",
+        }
+
     from app.services.billing_service import reserve_usage
 
-    reservation = await reserve_usage(session, user.id, "qualification", count=len(req.lead_ids))
+    reservation = await reserve_usage(session, user.id, "qualification", count=len(billable_ids))
     if not reservation.allowed:
         raise InsufficientCreditsError()
 
@@ -508,7 +575,7 @@ async def bulk_qualify(
 
     task = qualify_batch.delay(
         str(user.id),
-        [str(lid) for lid in req.lead_ids],
+        [str(lid) for lid in billable_ids],
         reservation.overage_count,
         reservation.period_start_iso,
     )
@@ -517,9 +584,22 @@ async def bulk_qualify(
     return {
         "task_id": task.id,
         "status": "queued",
-        "lead_count": len(req.lead_ids),
+        "lead_count": len(billable_ids),
+        "cached_count": cached_count,
         "message": "Bulk qualification queued",
     }
+
+
+def _is_cache_hit(row) -> bool:
+    """Return True if the lead's qualification result is still valid."""
+    if row is None:
+        return False
+    return (
+        row.qualified_source_hash is not None
+        and row.quality_score is not None
+        and row.source_hash is not None
+        and row.qualified_source_hash == row.source_hash
+    )
 
 
 @router.post("/{lead_id}/skip-trace")
@@ -822,6 +902,100 @@ async def create_lead_activity(
         metadata_=activity.metadata_,
         created_at=activity.created_at,
     )
+
+
+@router.get("/stats/county-exhaustion", response_model=list[CountyExhaustionResponse])
+async def county_exhaustion(
+    session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(get_current_user),
+) -> list[CountyExhaustionResponse]:
+    """Per-county qualification exhaustion stats for the current user.
+
+    Returns counties where the user has at least one qualified lead, sorted by
+    exhaustion percentage descending. Powers the upsell nudge on the dashboard.
+    """
+    from sqlalchemy import Float, case, cast
+    from sqlalchemy import func as sql_func
+
+    result = await session.execute(
+        select(
+            County.id.label("county_id"),
+            County.name.label("county_name"),
+            County.state.label("state"),
+            sql_func.count(Lead.id).label("total_leads"),
+            sql_func.count(
+                case(
+                    (
+                        UserLead.status.in_(
+                            ["qualified", "contacted", "signed", "filed", "paid", "closed"]
+                        ),
+                        UserLead.id,
+                    )
+                )
+            ).label("qualified_leads"),
+        )
+        .join(Lead, Lead.county_id == County.id)
+        .outerjoin(
+            UserLead,
+            (UserLead.lead_id == Lead.id) & (UserLead.user_id == user.id),
+        )
+        .where(
+            County.is_active.is_(True),
+            Lead.archived_at.is_(None),
+        )
+        .group_by(County.id, County.name, County.state)
+        .having(
+            sql_func.count(
+                case(
+                    (
+                        UserLead.status.in_(
+                            ["qualified", "contacted", "signed", "filed", "paid", "closed"]
+                        ),
+                        UserLead.id,
+                    )
+                )
+            )
+            > 0
+        )
+        .order_by(
+            (
+                cast(
+                    sql_func.count(
+                        case(
+                            (
+                                UserLead.status.in_(
+                                    [
+                                        "qualified",
+                                        "contacted",
+                                        "signed",
+                                        "filed",
+                                        "paid",
+                                        "closed",
+                                    ]
+                                ),
+                                UserLead.id,
+                            )
+                        )
+                    ),
+                    Float,
+                )
+                / sql_func.nullif(sql_func.count(Lead.id), 0)
+            ).desc()
+        )
+    )
+    rows = result.all()
+
+    return [
+        CountyExhaustionResponse(
+            county_id=r.county_id,
+            county_name=r.county_name,
+            state=r.state,
+            total_leads=r.total_leads,
+            qualified_leads=r.qualified_leads,
+            exhaustion_pct=(r.qualified_leads / r.total_leads) if r.total_leads > 0 else 0.0,
+        )
+        for r in rows
+    ]
 
 
 @router.get("/stats/roi")

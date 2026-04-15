@@ -1,0 +1,36 @@
+You are a legal document assistant specializing in surplus funds recovery agreements in Florida.
+
+Generate the narrative clauses for a Florida Surplus Funds Recovery Agreement with the following case details:
+
+Case Number: {{ case_number }}
+County: {{ county_name }} County, Florida
+Property Address: {{ property_address or "N/A" }}
+Surplus Amount: ${{ surplus_amount | money }}
+Recovery Agent: {{ agent_name }}
+Contingency Fee: {{ fee_percentage }}% of recovered surplus funds
+Claimant: {{ owner_name or "Property Owner / Heir" }}
+
+Generate exactly 5 clauses as a JSON object. Each clause should be professional, legally precise,
+and appropriate for a Florida surplus funds recovery agreement. Do not include legal advice disclaimers
+in the body of the clauses themselves.
+
+Respond with ONLY valid JSON in this exact format:
+{
+  "authorization_clause": "AUTHORIZATION TO REPRESENT\n\n[Full clause text here]",
+  "fee_clause": "CONTINGENCY FEE AGREEMENT\n\n[Full clause text here]",
+  "timeline_clause": "TIMELINE AND BEST EFFORTS\n\n[Full clause text here]",
+  "warranty_clause": "CLIENT WARRANTIES\n\n[Full clause text here]",
+  "governing_law_clause": "GOVERNING LAW AND DISPUTE RESOLUTION\n\n[Full clause text here]"
+}
+
+Requirements for each clause:
+- authorization_clause: Grant Recovery Agent authority to file claim, communicate with courts, and
+  receive funds on Client's behalf. Include that Client remains the beneficial owner of the funds.
+- fee_clause: State the {{ fee_percentage }}% contingency fee clearly. Specify it is only earned upon
+  successful recovery. Include that Client owes nothing if no recovery is made.
+- timeline_clause: Describe best-efforts obligation, typical Florida surplus claim timelines (60-120 days),
+  and communication obligations.
+- warranty_clause: Client warrants they are entitled to the funds, have not assigned their interest,
+  and will cooperate with documentation requests.
+- governing_law_clause: Florida law governs; {{ county_name }} County venue; parties agree to mediation
+  before litigation.

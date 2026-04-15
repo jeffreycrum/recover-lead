@@ -251,6 +251,51 @@ export class ApiClient {
   getTaskStatus(taskId: string) {
     return this.request<any>(`/tasks/${taskId}`);
   }
+
+  // County exhaustion (upsell)
+  getCountyExhaustion() {
+    return this.request<any[]>("/leads/stats/county-exhaustion");
+  }
+
+  // Contracts
+  generateContract(data: {
+    lead_id: string;
+    contract_type?: string;
+    fee_percentage: number;
+    agent_name: string;
+  }) {
+    return this.request<any>("/contracts/generate", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  getContracts(params: Record<string, string> = {}) {
+    const qs = new URLSearchParams(params).toString();
+    return this.request<any[]>(`/contracts${qs ? `?${qs}` : ""}`);
+  }
+
+  getContract(id: string) {
+    return this.request<any>(`/contracts/${id}`);
+  }
+
+  updateContract(id: string, data: { content?: string; status?: string }) {
+    return this.request<any>(`/contracts/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async downloadContractPdf(id: string): Promise<Blob> {
+    const token = this.getTokenFn ? await this.getTokenFn() : null;
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const response = await fetch(`${API_BASE}/contracts/${id}/pdf`, { headers });
+    if (!response.ok) throw new Error("Failed to download PDF");
+    return response.blob();
+  }
 }
 
 export const api = new ApiClient();

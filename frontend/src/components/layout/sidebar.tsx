@@ -1,7 +1,7 @@
 import { NavLink } from "react-router-dom";
 import {
   BarChart3,
-
+  FileSignature,
   Home,
   Mail,
   Map,
@@ -18,6 +18,7 @@ const navItems = [
   { to: "/leads", icon: Search, label: "Browse Leads" },
   { to: "/my-leads", icon: BarChart3, label: "My Leads" },
   { to: "/letters", icon: Mail, label: "Letters" },
+  { to: "/contracts", icon: FileSignature, label: "Contracts" },
   { to: "/counties", icon: Map, label: "Counties" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];

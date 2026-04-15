@@ -67,6 +67,7 @@ class Lead(Base):
     contacts: Mapped[list["LeadContact"]] = relationship(back_populates="lead")
     activities: Mapped[list["LeadActivity"]] = relationship(back_populates="lead")
     letters: Mapped[list["Letter"]] = relationship(back_populates="lead")  # noqa: F821
+    contracts: Mapped[list["Contract"]] = relationship(back_populates="lead")  # noqa: F821
     skip_trace_results: Mapped[list["SkipTraceResult"]] = relationship(back_populates="lead")  # noqa: F821
 
 
@@ -96,6 +97,9 @@ class UserLead(Base):
     quality_score: Mapped[int | None] = mapped_column(nullable=True)
     quality_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
     priority: Mapped[str | None] = mapped_column(String(10), nullable=True)  # low|medium|high
+
+    # Qualification caching — hash of Lead.source_hash at time of last qualification
+    qualified_source_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     # Deal outcome
     outcome_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
