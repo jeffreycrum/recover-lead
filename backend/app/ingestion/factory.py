@@ -83,6 +83,7 @@ def _ensure_scrapers_imported() -> None:
             raise
 
     from app.ingestion import parent_page_pdf_scraper  # noqa: F401
+    from app.ingestion import texas_scraper  # noqa: F401
 
     # Duval County interactive search scraper (requires playwright)
     try:
