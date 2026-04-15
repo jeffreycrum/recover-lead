@@ -1,0 +1,230 @@
+"""Fixture-based tests for FL county scrapers (expansion batch).
+
+These tests use saved HTML/XLSX/PDF files — never hit real county websites.
+
+Counties covered:
+  - Broward  : HtmlTableScraper, 5-row fixture
+  - Hillsborough: XlsxScraper claims mode, existing fixture
+  - Martin   : PdfScraper text_line_mode, synthetic fixture (fl_martin_overbid.pdf)
+  - Okaloosa : HtmlTableScraper, Power BI page — 0 HTML tables expected
+
+Collier is tested in test_pdf_scraper.py (TestCollierPdfScraper); not duplicated here.
+"""
+
+from __future__ import annotations
+
+from decimal import Decimal
+from pathlib import Path
+
+import pytest
+
+from app.ingestion.html_scraper import HtmlTableScraper
+from app.ingestion.pdf_scraper import PdfScraper
+from app.ingestion.xlsx_scraper import XlsxScraper
+
+FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
+
+
+# ---------------------------------------------------------------------------
+# Broward County — HtmlTableScraper (4-column table)
+# ---------------------------------------------------------------------------
+
+
+class TestBrowardCountyFixture:
+    """Broward County overbid page: simple 4-column HTML table.
+
+    Fixture: tests/fixtures/broward_overbid.html
+    Columns: Case Number, Owner Name, Surplus Amount, Property Address
+    5 data rows, col defaults 0/1/2/3.
+    """
+
+    _CONFIG: dict = {"table_selector": "table"}
+
+    def _load_raw(self) -> bytes:
+        path = FIXTURES_DIR / "broward_overbid.html"
+        return path.read_bytes()
+
+    def test_returns_5_leads(self) -> None:
+        scraper = HtmlTableScraper("Broward", "http://example.com", config=self._CONFIG)
+        leads = scraper.parse(self._load_raw())
+        assert len(leads) == 5
+
+    def test_first_lead_fields(self) -> None:
+        scraper = HtmlTableScraper("Broward", "http://example.com", config=self._CONFIG)
+        leads = scraper.parse(self._load_raw())
+        first = leads[0]
+        assert first.case_number == "2024-FC-001234"
+        assert first.surplus_amount == Decimal("45230.00")
+        assert first.owner_name == "JOHNSON ROBERT L"
+        assert first.property_address == "1234 NW 5TH AVE, FORT LAUDERDALE"
+
+    def test_all_amounts_positive(self) -> None:
+        scraper = HtmlTableScraper("Broward", "http://example.com", config=self._CONFIG)
+        leads = scraper.parse(self._load_raw())
+        for lead in leads:
+            assert lead.surplus_amount > 0
+
+    def test_all_case_numbers_present(self) -> None:
+        scraper = HtmlTableScraper("Broward", "http://example.com", config=self._CONFIG)
+        leads = scraper.parse(self._load_raw())
+        for lead in leads:
+            assert lead.case_number
+
+
+# ---------------------------------------------------------------------------
+# Hillsborough County — XlsxScraper claims mode
+# ---------------------------------------------------------------------------
+
+
+class TestHillsboroughCountyFixture:
+    """Hillsborough County tax-deed claims tracking sheet.
+
+    Fixture: tests/fixtures/hillsborough_surplus.xlsx
+    Mode: claims mode (default, not simple_table_mode).
+    Columns: FILE#, CLAIMS FILED..., CLAIMS PAID — surplus extracted from claims text.
+    """
+
+    _CONFIG: dict = {
+        "extract_from_claims": True,
+    }
+
+    def _load_raw(self) -> bytes:
+        path = FIXTURES_DIR / "hillsborough_surplus.xlsx"
+        if not path.exists():
+            pytest.skip("Hillsborough fixture not present")
+        return path.read_bytes()
+
+    def test_returns_leads(self) -> None:
+        scraper = XlsxScraper("Hillsborough", "http://example.com", config=self._CONFIG)
+        leads = scraper.parse(self._load_raw())
+        assert len(leads) > 0
+
+    def test_all_amounts_positive(self) -> None:
+        scraper = XlsxScraper("Hillsborough", "http://example.com", config=self._CONFIG)
+        leads = scraper.parse(self._load_raw())
+        for lead in leads:
+            assert lead.surplus_amount > 0
+
+    def test_all_case_numbers_present(self) -> None:
+        scraper = XlsxScraper("Hillsborough", "http://example.com", config=self._CONFIG)
+        leads = scraper.parse(self._load_raw())
+        for lead in leads:
+            assert lead.case_number
+
+    def test_owner_name_extracted_from_claims(self) -> None:
+        """_extract_from_claims must parse a non-None owner_name from the narrative column."""
+        scraper = XlsxScraper("Hillsborough", "http://example.com", config=self._CONFIG)
+        leads = scraper.parse(self._load_raw())
+        for lead in leads:
+            assert lead.owner_name is not None, f"owner_name not extracted for {lead.case_number}"
+
+
+# ---------------------------------------------------------------------------
+# Martin County — PdfScraper text_line_mode
+# ---------------------------------------------------------------------------
+
+
+class TestMartinCountyFixture:
+    """Martin County overbid PDF: text-line mode, one record per line.
+
+    Fixture: tests/fixtures/fl_martin_overbid.pdf  (synthetic, generated by
+             tests/fixtures/generate_fl_county_fixtures.py)
+
+    Line format: <CASE_NUM> $<AMOUNT> <DATE> <OWNER_NAME>
+    Example: 2022-TDA-001 $5,234.56 01/15/2022 JOHN SMITH PROPERTIES LLC
+
+    3 data rows in the synthetic fixture.
+    """
+
+    _CONFIG: dict = {
+        "text_line_mode": True,
+        "line_pattern": (
+            r"^(?P<case>\d{4}-TDA-\d+)\s+"
+            r"\$\s*(?P<amt>[\d,]+\.\d{2})\s+"
+            r"(?P<date>\d{1,2}/\d{1,2}/\d{4})\s+"
+            r"(?P<owner>.+)$"
+        ),
+        "fields": {
+            "case": "case_number",
+            "amt": "surplus_amount",
+            "owner": "owner_name",
+            "date": "sale_date",
+        },
+    }
+
+    def _load_raw(self) -> bytes:
+        path = FIXTURES_DIR / "fl_martin_overbid.pdf"
+        if not path.exists():
+            pytest.skip(
+                "fl_martin_overbid.pdf not present — run generate_fl_county_fixtures.py"
+            )
+        return path.read_bytes()
+
+    def test_returns_3_leads(self) -> None:
+        scraper = PdfScraper("Martin", "http://example.com", config=self._CONFIG)
+        leads = scraper.parse(self._load_raw())
+        assert len(leads) == 3
+
+    def test_first_lead_fields(self) -> None:
+        scraper = PdfScraper("Martin", "http://example.com", config=self._CONFIG)
+        leads = scraper.parse(self._load_raw())
+        first = leads[0]
+        assert first.case_number == "2022-TDA-001"
+        assert first.surplus_amount == Decimal("5234.56")
+        assert first.owner_name == "JOHN SMITH PROPERTIES LLC"
+
+    def test_second_lead(self) -> None:
+        scraper = PdfScraper("Martin", "http://example.com", config=self._CONFIG)
+        leads = scraper.parse(self._load_raw())
+        assert leads[1].case_number == "2022-TDA-042"
+        assert leads[1].surplus_amount == Decimal("12450.00")
+        assert leads[1].owner_name == "MARIA GARCIA"
+
+    def test_third_lead(self) -> None:
+        scraper = PdfScraper("Martin", "http://example.com", config=self._CONFIG)
+        leads = scraper.parse(self._load_raw())
+        assert leads[2].case_number == "2023-TDA-007"
+        assert leads[2].surplus_amount == Decimal("34800.25")
+        assert leads[2].owner_name == "PALM CITY INVESTMENTS INC"
+
+    def test_header_and_separator_lines_skipped(self) -> None:
+        """Non-data lines (title, headers, dashes, 'END OF LIST') must not produce leads."""
+        scraper = PdfScraper("Martin", "http://example.com", config=self._CONFIG)
+        leads = scraper.parse(self._load_raw())
+        case_numbers = {lead.case_number for lead in leads}
+        # Ensure header-like strings didn't slip through
+        for cn in case_numbers:
+            assert cn.startswith("20"), f"Non-data case_number leaked: {cn!r}"
+
+
+# ---------------------------------------------------------------------------
+# Okaloosa County — HtmlTableScraper returns 0 leads (Power BI page)
+# ---------------------------------------------------------------------------
+
+
+class TestOkaloosaCountyFixture:
+    """Okaloosa County surplus page: WordPress site with Power BI link — no HTML table.
+
+    Fixture: tests/fixtures/okaloosa_surplus.html
+    The page contains a link to a Microsoft Power BI dashboard
+    (app.powerbigov.us) rather than an embedded HTML table.  When parsed
+    with HtmlTableScraper, no rows should be returned.
+
+    At runtime the production scraper uses PlaywrightHtmlScraper so that
+    Chromium can render the Power BI iframe.  Even then, the current config
+    (wait_ms=8000, wait_until='networkidle') may return 0 leads if the
+    Power BI embed requires authentication.  The test here validates the
+    static-HTML path returns 0.
+    """
+
+    def _load_raw(self) -> bytes:
+        path = FIXTURES_DIR / "okaloosa_surplus.html"
+        if not path.exists():
+            pytest.skip("Okaloosa fixture not present")
+        return path.read_bytes()
+
+    def test_no_html_table_returns_zero_leads(self) -> None:
+        """Okaloosa embeds surplus data in a Power BI iframe — no HTML table present."""
+        scraper = HtmlTableScraper("Okaloosa", "http://example.com")
+        leads = scraper.parse(self._load_raw())
+        assert len(leads) == 0
