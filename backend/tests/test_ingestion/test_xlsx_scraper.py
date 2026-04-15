@@ -241,3 +241,242 @@ class TestSimpleTableMode:
             leads = self._make_simple_scraper().parse(b"fake-xlsx")
 
         assert leads == []
+
+
+# ---------------------------------------------------------------------------
+# Madison County — XlsxScraper simple_table_mode (S3-hosted XLSX)
+# ---------------------------------------------------------------------------
+
+
+class TestMadisonScraper:
+    """Madison County: S3-hosted XLSX, 6-column table.
+
+    Headers: ['Tax Deed Case #', 'Certificate #', 'Parcel ID',
+               'Property Address', 'Tax Deed Surplus', 'Owners']
+    col 0=case, col 3=address, col 4=surplus, col 5=owner.
+    8 leads verified locally 2026-04-14.
+    """
+
+    _CONFIG = {
+        "simple_table_mode": True,
+        "columns": {
+            "case_number": 0,
+            "owner_name": 5,
+            "surplus_amount": 4,
+            "property_address": 3,
+        },
+        "skip_rows_containing": [
+            "Tax Deed Case",
+            "Certificate",
+            "FY25",
+            "Madison County",
+        ],
+    }
+
+    def _make_madison_scraper(self) -> XlsxScraper:
+        return _make_scraper(self._CONFIG)
+
+    def test_madison_simple_table_mode_extracts_leads(self):
+        """Madison 6-column rows must map to correct RawLead fields."""
+        rows = [
+            (
+                "Tax Deed Case #",
+                "Certificate #",
+                "Parcel ID",
+                "Property Address",
+                "Tax Deed Surplus",
+                "Owners",
+            ),  # header — skipped
+            (
+                "24-06-TD",
+                "12345",
+                "01-00-00-0000-00000-0000",
+                "123 Main St",
+                1888.01,
+                "Preston Gillyard",
+            ),
+        ]
+        wb = _make_workbook(rows)
+
+        with patch("openpyxl.load_workbook", return_value=wb):
+            leads = self._make_madison_scraper().parse(b"fake-xlsx")
+
+        assert len(leads) == 1
+        assert leads[0].case_number == "24-06-TD"
+        assert leads[0].owner_name == "Preston Gillyard"
+        assert leads[0].surplus_amount == Decimal("1888.01")
+        assert leads[0].property_address == "123 Main St"
+
+    def test_madison_skips_empty_rows(self):
+        """Rows with None case_number must be skipped entirely."""
+        rows = [
+            (None, "12345", "01-00-00", "123 Main", 500.0, "Owner A"),
+            ("25-01-TD", "67890", "02-00-00", "456 Oak", 750.0, "Owner B"),
+        ]
+        wb = _make_workbook(rows)
+
+        with patch("openpyxl.load_workbook", return_value=wb):
+            leads = self._make_madison_scraper().parse(b"fake-xlsx")
+
+        assert len(leads) == 1
+        assert leads[0].case_number == "25-01-TD"
+
+
+# ---------------------------------------------------------------------------
+# Walton County — XlsxScraper simple_table_mode (no owner column)
+# ---------------------------------------------------------------------------
+
+
+class TestWaltonScraper:
+    """Walton County: direct XLSX download, 5-column table with no owner column.
+
+    Headers: ['TDA', 'SALE DATE', 'PARCEL #', 'REC DATE', 'AMOUNT']
+    col 0=case, col 4=surplus. No owner_name column in this spreadsheet.
+    243 leads verified locally 2026-04-14.
+    """
+
+    _CONFIG = {
+        "simple_table_mode": True,
+        "columns": {
+            "case_number": 0,
+            "surplus_amount": 4,
+        },
+    }
+
+    def _make_walton_scraper(self) -> XlsxScraper:
+        return _make_scraper(self._CONFIG)
+
+    def test_walton_simple_table_mode_extracts_leads(self):
+        """Walton 5-column rows must map to correct RawLead fields."""
+        rows = [
+            ("TDA", "SALE DATE", "PARCEL #", "REC DATE", "AMOUNT", None),  # header — skipped
+            ("C2475", "2009-12-17", "34-3N-19-19500-00B-0090", "2009-12-17", 150.41, None),
+            ("C2501", "2010-03-08", "12-2N-20-00100-00A-0010", "2010-03-08", 980.00, None),
+        ]
+        wb = _make_workbook(rows)
+
+        with patch("openpyxl.load_workbook", return_value=wb):
+            leads = self._make_walton_scraper().parse(b"fake-xlsx")
+
+        assert len(leads) == 2
+        assert leads[0].case_number == "C2475"
+        assert leads[0].surplus_amount == Decimal("150.41")
+        assert leads[1].case_number == "C2501"
+        assert leads[1].surplus_amount == Decimal("980.00")
+
+    def test_walton_no_owner_column(self):
+        """Walton rows must produce leads with owner_name=None (no owner column)."""
+        rows = [
+            ("TDA", "SALE DATE", "PARCEL #", "REC DATE", "AMOUNT"),
+            ("C2475", "2009-12-17", "34-3N-19-19500-00B-0090", "2009-12-17", 150.41),
+        ]
+        wb = _make_workbook(rows)
+
+        with patch("openpyxl.load_workbook", return_value=wb):
+            leads = self._make_walton_scraper().parse(b"fake-xlsx")
+
+        assert len(leads) == 1
+        assert leads[0].owner_name is None
+
+
+# ---------------------------------------------------------------------------
+# Pasco County — XlsxScraper simple_table_mode (IIS-hosted XLSX)
+# ---------------------------------------------------------------------------
+
+
+class TestPascoScraper:
+    """Pasco County: IIS-hosted XLSX, 6-column table, header at row 16.
+
+    Headers: ['DATE RECEIVED', 'TDA #', 'ORIGINAL OWNER', 'PARCEL ID #',
+               'ACTUAL BALANCE', 'DATE PAID']
+    col 1=case, col 2=owner, col 3=parcel, col 4=surplus.
+    96 leads verified locally 2026-04-14. URL changes monthly — check_county_urls.py alerts.
+    """
+
+    _CONFIG = {
+        "simple_table_mode": True,
+        "columns": {
+            "case_number": 1,
+            "owner_name": 2,
+            "surplus_amount": 4,
+            "parcel_id": 3,
+        },
+        "skip_rows_containing": [
+            "DATE RECEIVED",
+            "TDA #",
+            "ORIGINAL OWNER",
+            "UNCLAIMED",
+            "FY ",
+            "FOR THE MONTH",
+            "Office",
+            "DATE PAID",
+            "Nikki",
+        ],
+    }
+
+    def _make_pasco_scraper(self) -> XlsxScraper:
+        return _make_scraper(self._CONFIG)
+
+    def test_pasco_simple_table_mode_extracts_leads(self):
+        """Pasco 6-column rows must map to correct RawLead fields."""
+        rows = [
+            (
+                "DATE RECEIVED",
+                "TDA #",
+                "ORIGINAL OWNER",
+                "PARCEL ID #",
+                "ACTUAL BALANCE",
+                "DATE PAID",
+            ),  # header — skipped
+            (
+                "2023-01-15",
+                "2022-0145-TD",
+                "ROBERT HENDERSON",
+                "17-25-22-0010-00000-0060",
+                4321.50,
+                None,
+            ),
+            (
+                "2023-03-22",
+                "2022-0187-TD",
+                "SUSAN ALVAREZ",
+                "20-26-21-0020-00000-0090",
+                8750.00,
+                None,
+            ),
+        ]
+        wb = _make_workbook(rows)
+
+        with patch("openpyxl.load_workbook", return_value=wb):
+            leads = self._make_pasco_scraper().parse(b"fake-xlsx")
+
+        assert len(leads) == 2
+        assert leads[0].case_number == "2022-0145-TD"
+        assert leads[0].owner_name == "ROBERT HENDERSON"
+        assert leads[0].surplus_amount == Decimal("4321.50")
+        assert leads[0].parcel_id == "17-25-22-0010-00000-0060"
+        assert leads[1].case_number == "2022-0187-TD"
+        assert leads[1].surplus_amount == Decimal("8750.00")
+
+    def test_pasco_skips_metadata_rows(self):
+        """Rows matching skip_rows_containing patterns must be excluded."""
+        rows = [
+            ("UNCLAIMED TAX DEED SURPLUS", None, None, None, None, None),
+            ("FY 2022-2023", None, None, None, None, None),
+            ("FOR THE MONTH ENDING 03/31/2026", None, None, None, None, None),
+            (
+                "2023-01-15",
+                "2022-0145-TD",
+                "ROBERT HENDERSON",
+                "17-25-22-0010-00000-0060",
+                4321.50,
+                None,
+            ),
+        ]
+        wb = _make_workbook(rows)
+
+        with patch("openpyxl.load_workbook", return_value=wb):
+            leads = self._make_pasco_scraper().parse(b"fake-xlsx")
+
+        assert len(leads) == 1
+        assert leads[0].case_number == "2022-0145-TD"

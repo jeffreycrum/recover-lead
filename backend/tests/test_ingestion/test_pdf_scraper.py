@@ -279,26 +279,60 @@ class TestTableMode:
         assert leads[1].surplus_amount == Decimal("3500.00")
 
     def test_sumter_column_mapping(self):
-        """Sumter PDF: [0]=date, [1]=case, [2]=owner/desc, [3]=surplus.
+        """Sumter PDF (Google Sheets export): 7-col table with col_owner=0, col_case=1,
+        col_surplus=3.
 
-        Default mapping reads date as case, case as owner, and description
-        as surplus (producing garbage billions). The Sumter config must fix
-        this by setting case_number=1, owner_name=2, surplus_amount=3.
+        Real headers: ['PROPERTY OWNER & ADDRESS', 'APPLICATION #', 'SALE DATE',
+        'AMOUNT OF SURPLUS', 'PARCEL #', 'APPLICATION DATE', 'CLAIMS'].
+        Default mapping would read PROPERTY OWNER as case_number and APPLICATION #
+        as owner_name. The Sumter config fixes this with case_number=1, owner_name=0,
+        surplus_amount=3, property_address=None.
         """
         config = {
             "columns": {
                 "case_number": 1,
-                "owner_name": 2,
+                "owner_name": 0,
                 "surplus_amount": 3,
                 "property_address": None,
             },
-            "skip_rows_containing": ["Date Filed", "Case Number", "CLERK", "REGISTRY", "SURPLUS"],
+            "skip_rows_containing": [
+                "PROPERTY OWNER",
+                "APPLICATION #",
+                "LIST LAST UPDATED",
+                "ALL FUNDS",
+                "CLAIMS",
+                "SALE DATE",
+            ],
         }
         scraper = _make_scraper(config)
         mock_table = [
-            ["Date Filed", "Case Number", "Description", "Surplus Amount"],  # header
-            ["01/13/2025", "2023CA1033", "MARSHA BLANKENSHIP", "$15,816.00"],
-            ["03/16/2026", "2026CC460", "ETHEL MAE SMITH", "$1,500.00"],
+            [
+                "PROPERTY OWNER & ADDRESS",
+                "APPLICATION #",
+                "SALE DATE",
+                "AMOUNT OF SURPLUS",
+                "PARCEL #",
+                "APPLICATION DATE",
+                "CLAIMS",
+            ],  # header — skipped
+            [
+                "MARSHA BLANKENSHIP\n123 MAIN ST",
+                "APP-2023-001",
+                "01/13/2023",
+                "$15,816.00",
+                "D-01-234",
+                "01/20/2023",
+                "0",
+            ],
+            [
+                "ETHEL MAE SMITH\n456 OAK AVE",
+                "APP-2024-088",
+                "03/16/2024",
+                "$1,500.00",
+                "D-05-678",
+                "03/20/2024",
+                "1",
+            ],
         ]
         mock_page = MagicMock()
         mock_page.extract_tables.return_value = [mock_table]
@@ -310,25 +344,40 @@ class TestTableMode:
             leads = scraper.parse(b"fake-pdf-bytes")
 
         assert len(leads) == 2
-        assert leads[0].case_number == "2023CA1033"
-        assert leads[0].owner_name == "MARSHA BLANKENSHIP"
+        assert leads[0].case_number == "APP-2023-001"
+        assert leads[0].owner_name == "MARSHA BLANKENSHIP\n123 MAIN ST"
         assert leads[0].surplus_amount == Decimal("15816.00")
         assert leads[0].property_address is None
-        assert leads[1].case_number == "2026CC460"
+        assert leads[1].case_number == "APP-2024-088"
         assert leads[1].surplus_amount == Decimal("1500.00")
 
     def test_sumter_default_mapping_shows_bug(self):
         """Without Sumter config, default mapping reads wrong columns.
 
-        col[2] is a description string — if it contains digits that parse
-        under the 10^10 cap, a garbage surplus is stored. If the digits
-        overflow, the row is silently dropped (surplus=0 → skipped).
-        Either way the data is wrong.
+        Real col[0] is PROPERTY OWNER & ADDRESS — becomes case_number (wrong).
+        Real col[1] is APPLICATION # — becomes owner_name (wrong).
+        Real col[2] is SALE DATE — parses to $0 surplus (wrong).
         """
         scraper = _make_scraper()  # default columns
         mock_table = [
-            ["Date Filed", "Case Number", "Description", "Surplus Amount"],
-            ["01/13/2025", "2023CA1033", "CASE 4005605", "$15,816.00"],
+            [
+                "PROPERTY OWNER & ADDRESS",
+                "APPLICATION #",
+                "SALE DATE",
+                "AMOUNT OF SURPLUS",
+                "PARCEL #",
+                "APPLICATION DATE",
+                "CLAIMS",
+            ],
+            [
+                "MARSHA BLANKENSHIP\n123 MAIN ST",
+                "APP-2023-001",
+                "01/13/2023",
+                "$15,816.00",
+                "D-01-234",
+                "01/20/2023",
+                "0",
+            ],
         ]
         mock_page = MagicMock()
         mock_page.extract_tables.return_value = [mock_table]
@@ -339,12 +388,12 @@ class TestTableMode:
         with patch("pdfplumber.open", return_value=mock_pdf):
             leads = scraper.parse(b"fake-pdf-bytes")
 
-        # Default: col[0]=case → gets the date string instead of case number
-        assert leads[0].case_number == "01/13/2025"
-        # Default: col[1]=owner → gets the case number instead of owner name
-        assert leads[0].owner_name == "2023CA1033"
-        # Default: col[2]=surplus → parses digits from description text
-        assert leads[0].surplus_amount == Decimal("4005605")
+        # Default col[0] is PROPERTY OWNER & ADDRESS → used as case_number (wrong)
+        assert leads[0].case_number == "MARSHA BLANKENSHIP\n123 MAIN ST"
+        # Default col[1] is APPLICATION # → used as owner_name (wrong)
+        assert leads[0].owner_name == "APP-2023-001"
+        # Default col[2] is SALE DATE string "01/13/2023" → first numeric group extracts "01" → Decimal("1") (wrong)
+        assert leads[0].surplus_amount == Decimal("1")
         assert leads[0].surplus_amount != Decimal("15816.00")
 
     def test_parse_table_mode_empty_tables_returns_empty(self):
@@ -358,5 +407,249 @@ class TestTableMode:
 
         with patch("pdfplumber.open", return_value=mock_pdf):
             leads = scraper.parse(b"fake-pdf-bytes")
+
+        assert leads == []
+
+
+# ---------------------------------------------------------------------------
+# Baker County — PDF text-line mode
+# ---------------------------------------------------------------------------
+
+
+class TestBakerScraper:
+    """Baker County: WordPress-hosted PDF with one lead per text line.
+
+    Format: '<year>-TD-<seq> <parcel> $ <amount>'
+    Owner name appears on the following line (not captured by the pattern).
+    10 leads verified locally 2026-04-14.
+    """
+
+    _CONFIG = {
+        "text_line_mode": True,
+        "line_pattern": (
+            r"^(?P<case>\d{4}-TD-\d+)\s+\S+\s+\$\s*(?P<amt>[\d,]+\.\d{2})"
+        ),
+    }
+
+    def _make_baker_scraper(self) -> PdfScraper:
+        return _make_scraper(self._CONFIG)
+
+    def test_baker_text_line_mode_extracts_leads(self):
+        """Lines matching Baker format must produce one RawLead each."""
+        page_text = (
+            "TAX DEED SURPLUS FUNDS — BAKER COUNTY\n"
+            "2021-TD-003 22-3S-19-0000-0000-0034 $ 76.03\n"
+            "FOSTERS GENERAL CONTR INC\n"
+            "2022-TD-011 15-2S-20-0000-0000-0012 $ 1,234.56\n"
+            "JANE DOE PROPERTIES LLC\n"
+            "Footer — not a lead\n"
+        )
+        mock_pdf = _build_fake_pdf_mock(page_text)
+
+        with patch("pdfplumber.open", return_value=mock_pdf):
+            leads = self._make_baker_scraper().parse(b"fake-pdf-bytes")
+
+        assert len(leads) == 2
+        assert leads[0].case_number == "2021-TD-003"
+        assert leads[0].surplus_amount == Decimal("76.03")
+        assert leads[1].case_number == "2022-TD-011"
+        assert leads[1].surplus_amount == Decimal("1234.56")
+
+    def test_baker_no_matches_returns_empty(self):
+        """Page text with no matching lines must return an empty list."""
+        page_text = (
+            "TAX DEED SURPLUS FUNDS — BAKER COUNTY\n"
+            "No unclaimed funds at this time.\n"
+        )
+        mock_pdf = _build_fake_pdf_mock(page_text)
+
+        with patch("pdfplumber.open", return_value=mock_pdf):
+            leads = self._make_baker_scraper().parse(b"fake-pdf-bytes")
+
+        assert leads == []
+
+
+# ---------------------------------------------------------------------------
+# DeSoto County — PDF table mode (8-column WordPress-hosted PDF)
+# ---------------------------------------------------------------------------
+
+
+class TestDeSotoScraper:
+    """DeSoto County: WordPress-hosted PDF, 8-column table.
+
+    Real headers (split across 2 rows):
+      Row 1: ['File #', 'Property Owner', 'Parcel Number', 'New Owner',
+               'Sale', 'Surplus', 'Final Date', 'Status']
+      Row 2: ['', '', '', '', 'Price', 'Amount', 'submit claim', 'Disbursement']
+    Data: col 0=case, col 1=owner, col 5=surplus.
+    18 leads verified locally 2026-04-14.
+    """
+
+    _CONFIG = {
+        "columns": {
+            "case_number": 0,
+            "owner_name": 1,
+            "surplus_amount": 5,
+            "property_address": 2,
+        },
+        "skip_rows_containing": [
+            "File #",
+            "Property Owner",
+            "Price",
+            "Amount",
+            "Status",
+            "submit",
+        ],
+    }
+
+    def _make_desoto_scraper(self) -> PdfScraper:
+        return _make_scraper(self._CONFIG)
+
+    def test_desoto_table_mode_extracts_leads(self):
+        """DeSoto 8-column table rows must map to correct RawLead fields."""
+        mock_table = [
+            [
+                "File #",
+                "Property Owner",
+                "Parcel Number",
+                "New Owner",
+                "Sale",
+                "Surplus",
+                "Final Date",
+                "Status",
+            ],  # header row 1 — skipped
+            [
+                "",
+                "",
+                "",
+                "",
+                "Price",
+                "Amount",
+                "submit claim",
+                "Disbursement",
+            ],  # header row 2 — skipped
+            [
+                "22-11-TD",
+                "GENE CONNELL",
+                "26-38-24-0400-0000-0010",
+                "B PROJECTS LLC",
+                "$30,000.00",
+                "$ 26,079.26",
+                "7/25/2023",
+                "SEND TO STATE",
+            ],
+        ]
+        mock_page = MagicMock()
+        mock_page.extract_tables.return_value = [mock_table]
+        mock_pdf = MagicMock()
+        mock_pdf.pages = [mock_page]
+        mock_pdf.close = MagicMock()
+
+        with patch("pdfplumber.open", return_value=mock_pdf):
+            leads = self._make_desoto_scraper().parse(b"fake-pdf-bytes")
+
+        assert len(leads) == 1
+        assert leads[0].case_number == "22-11-TD"
+        assert leads[0].owner_name == "GENE CONNELL"
+        assert leads[0].surplus_amount == Decimal("26079.26")
+        assert leads[0].property_address == "26-38-24-0400-0000-0010"
+
+    def test_desoto_default_mapping_shows_bug(self):
+        """Without DeSoto config, default mapping reads wrong columns.
+
+        Default col[2] is the parcel number — used as property_address.
+        surplus_amount is also read from col[2] (parcel string "26-38-24-..."),
+        extracting the first digit group "26" instead of the real $26,079.26 in col[5].
+        """
+        scraper = _make_scraper()  # default columns
+        mock_table = [
+            [
+                "File #",
+                "Property Owner",
+                "Parcel Number",
+                "New Owner",
+                "Sale",
+                "Surplus",
+                "Final Date",
+                "Status",
+            ],
+            [
+                "22-11-TD",
+                "GENE CONNELL",
+                "26-38-24-0400-0000-0010",
+                "B PROJECTS LLC",
+                "$30,000.00",
+                "$ 26,079.26",
+                "7/25/2023",
+                "SEND TO STATE",
+            ],
+        ]
+        mock_page = MagicMock()
+        mock_page.extract_tables.return_value = [mock_table]
+        mock_pdf = MagicMock()
+        mock_pdf.pages = [mock_page]
+        mock_pdf.close = MagicMock()
+
+        with patch("pdfplumber.open", return_value=mock_pdf):
+            leads = scraper.parse(b"fake-pdf-bytes")
+
+        # Default col[2] is parcel string "26-38-24-0400-0000-0010" → first numeric group extracts "26" → Decimal("26") (wrong)
+        assert leads[0].surplus_amount == Decimal("26")
+        assert leads[0].surplus_amount != Decimal("26079.26")
+
+
+# ---------------------------------------------------------------------------
+# Santa Rosa County — PDF text-line mode via ParentPagePdfScraper
+# ---------------------------------------------------------------------------
+
+
+class TestSantaRosaScraper:
+    """Santa Rosa County: rotating PDF URL, text-line mode.
+
+    Format: '<case_id> $ <amount> <date> <owner_name>'
+    Example: '2020192 $ 17,743.83 11/2/2020 CAPITOL INVESTMENT COMPANY INC'
+    14 leads verified locally 2026-04-14.
+    """
+
+    _CONFIG = {
+        "text_line_mode": True,
+        "line_pattern": (
+            r"^(?P<case>\d{4,10})\s+\$\s*(?P<amt>[\d,]+\.\d{2})\s+"
+            r"(?P<date>\d{1,2}/\d{1,2}/\d{4})\s+(?P<owner>.+)"
+        ),
+    }
+
+    def _make_santa_rosa_scraper(self) -> PdfScraper:
+        return _make_scraper(self._CONFIG)
+
+    def test_santa_rosa_text_line_mode_extracts_leads(self):
+        """Lines matching Santa Rosa format must produce correct RawLead fields."""
+        page_text = (
+            "SANTA ROSA COUNTY TAX DEED SURPLUS FUNDS\n"
+            "FILE# SURPLUS SALE DATE PAYEE\n"
+            "2020192 $ 17,743.83 11/2/2020 CAPITOL INVESTMENT COMPANY INC\n"
+            "2021045 $ 3,250.00 4/15/2021 MARIA GARCIA\n"
+            "\n"
+        )
+        mock_pdf = _build_fake_pdf_mock(page_text)
+
+        with patch("pdfplumber.open", return_value=mock_pdf):
+            leads = self._make_santa_rosa_scraper().parse(b"fake-pdf-bytes")
+
+        assert len(leads) == 2
+        assert leads[0].case_number == "2020192"
+        assert leads[0].surplus_amount == Decimal("17743.83")
+        assert leads[0].owner_name == "CAPITOL INVESTMENT COMPANY INC"
+        assert leads[1].case_number == "2021045"
+        assert leads[1].surplus_amount == Decimal("3250.00")
+        assert leads[1].owner_name == "MARIA GARCIA"
+
+    def test_santa_rosa_header_line_skipped(self):
+        """The 'FILE# SURPLUS SALE DATE PAYEE' header line must not match the pattern."""
+        page_text = "FILE# SURPLUS SALE DATE PAYEE\n"
+        mock_pdf = _build_fake_pdf_mock(page_text)
+
+        with patch("pdfplumber.open", return_value=mock_pdf):
+            leads = self._make_santa_rosa_scraper().parse(b"fake-pdf-bytes")
 
         assert leads == []

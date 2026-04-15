@@ -194,18 +194,19 @@ _MANATEE_HTML = b"""
 <table>
   <tr>
     <th>Case Number</th><th>Sale Date</th>
-    <th>Property Owner</th><th>Surplus Funds</th>
-    <th>1 Year from Sale</th>
+    <th>Property Owner</th><th></th>
+    <th>Surplus Funds</th><th></th>
+    <th>1 Year from Sale Date</th>
   </tr>
   <tr>
     <td>2023-001-TD</td><td>01/09/2023</td>
-    <td>Annie Lee Smith Estate</td>
-    <td>$2,269.01</td><td>01/09/2024</td>
+    <td>Annie Lee Smith Estate</td><td></td>
+    <td>$2,269.01</td><td></td><td>01/09/2024</td>
   </tr>
   <tr>
     <td>2023-002-TD</td><td>04/10/2023</td>
-    <td>Susie M Dooley</td>
-    <td>$3,427.23</td><td>04/10/2024</td>
+    <td>Susie M Dooley</td><td></td>
+    <td>$3,427.23</td><td></td><td>04/10/2024</td>
   </tr>
 </table>
 </body></html>
@@ -235,8 +236,12 @@ class TestColumnMapping:
         assert leads_fixed[0].surplus_amount == Decimal("2269.01")
 
     def test_manatee_col_mapping(self):
-        """Manatee: col_owner=2, col_surplus=3 — owner was showing as date, amount as $0."""
-        scraper = _make_scraper(config={"col_owner": 2, "col_surplus": 3})
+        """Manatee: col_owner=2, col_surplus=4 — real table has 7 cols, col 3 is empty.
+
+        Actual layout: [CaseNum, SaleDate, PropertyOwner, empty, SurplusFunds, empty, Deadline].
+        col_surplus must be 4 (not 3) because col 3 is an empty spacer column.
+        """
+        scraper = _make_scraper(config={"col_owner": 2, "col_surplus": 4})
         leads = scraper.parse(_MANATEE_HTML)
         assert len(leads) == 2
         assert leads[0].owner_name == "Annie Lee Smith Estate"
@@ -245,7 +250,11 @@ class TestColumnMapping:
         assert leads[1].surplus_amount == Decimal("3427.23")
 
     def test_manatee_default_mapping_shows_bug(self):
-        """Without col overrides, Manatee owner shows as date and surplus is $0."""
+        """Without col overrides, Manatee owner shows as date and surplus is $0.
+
+        Default col[1] is SaleDate → shown as owner.
+        Default col[2] is PropertyOwner string → parses to $0.
+        """
         scraper = _make_scraper()
         leads = scraper.parse(_MANATEE_HTML)
         # col[1] is Sale Date — shows up as owner
