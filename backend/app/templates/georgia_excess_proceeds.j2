@@ -1,0 +1,24 @@
+{{ recipient_name or owner_name or "Property Owner" }}
+{{ owner_address or owner_last_known_address or "Address on file" }}
+
+Re: Unclaimed excess proceeds from {{ county_name }} County tax sale
+Case/Parcel Reference: {{ case_number }}
+
+Dear {{ recipient_name or owner_name or "Property Owner" }},
+
+Our records indicate that excess proceeds may still be available from a prior tax sale associated with {{ property_address or "the property identified above" }} in {{ county_name }} County, Georgia. Under O.C.G.A. § 48-4-5, excess proceeds from a tax sale are held for distribution to the parties legally entitled to claim them.
+
+Based on the public records we reviewed, the amount currently shown is approximately ${{ "%.2f"|format(surplus_amount or 0) }}. This figure should be confirmed directly with the county or court clerk before any claim is submitted.
+
+We assist property owners and other eligible claimants with researching entitlement, assembling the supporting documents, and preparing the paperwork needed to pursue a claim for excess proceeds. If you decide to hire a recovery firm or agent, Georgia requires the fee agreement to be in writing. Georgia does not impose the same statutory percentage cap used in some other states, so any compensation terms should be reviewed carefully before you sign.
+
+If you would like help evaluating whether you may be entitled to these funds, please contact us and we can explain the claim process, the documents typically required, and whether additional parties may need to be involved.
+
+There is no obligation to respond, and you may always contact the county directly to make your own claim.
+
+Sincerely,
+
+{{ sender_name or "RecoverLead" }}
+{% if sender_company %}{{ sender_company }}{% endif %}
+{% if sender_phone %}{{ sender_phone }}{% endif %}
+{% if sender_email %}{{ sender_email }}{% endif %}
