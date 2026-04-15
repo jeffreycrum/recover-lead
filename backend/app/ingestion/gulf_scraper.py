@@ -98,6 +98,7 @@ class GulfHtmlScraper(BaseScraper):
             sale_date=sale_date,
             sale_type="tax_deed",
             owner_name=owner_name or None,
+            property_state=self.state,
             raw_data={
                 "applicant": applicant,
                 "location": location,

@@ -77,6 +77,16 @@ class TestCsvScraper:
         leads = scraper.parse(b"case_number,owner_name,surplus_amount\n")
         assert len(leads) == 0
 
+    def test_property_state_defaults_to_fl(self):
+        scraper = CsvScraper("Test County", "http://example.com/surplus.csv")
+        leads = scraper.parse(b"case_number,owner_name,surplus_amount\n2024-001,Jane,1000\n")
+        assert leads[0].property_state == "FL"
+
+    def test_property_state_reflects_non_fl_state(self):
+        scraper = CsvScraper("Test County", "http://example.com/surplus.csv", state="OH")
+        leads = scraper.parse(b"case_number,owner_name,surplus_amount\n2024-OH-001,John,2500\n")
+        assert leads[0].property_state == "OH"
+
 
 class TestHtmlTableScraper:
     def test_parse_html_fixture(self):

@@ -480,3 +480,45 @@ class TestPascoScraper:
 
         assert len(leads) == 1
         assert leads[0].case_number == "2022-0145-TD"
+
+
+# ---------------------------------------------------------------------------
+# property_state propagation
+# ---------------------------------------------------------------------------
+
+
+class TestXlsxPropertyState:
+    def test_claims_mode_property_state_reflects_scraper_state(self):
+        """Claims-mode leads must carry the scraper's configured state."""
+        scraper = XlsxScraper(
+            county_name="Cuyahoga",
+            source_url="http://example.com",
+            state="OH",
+        )
+        rows = [
+            ("Case No", "Claims"),
+            ("2024-OH-001", "1. John Smith, 01/15, $25,000.00"),
+        ]
+        wb = _make_workbook(rows)
+        with patch("openpyxl.load_workbook", return_value=wb):
+            leads = scraper.parse(b"fake-xlsx")
+        assert leads[0].property_state == "OH"
+
+    def test_simple_table_mode_property_state_reflects_scraper_state(self):
+        """Simple-table-mode leads must carry the scraper's configured state."""
+        scraper = XlsxScraper(
+            county_name="Madison",
+            source_url="http://example.com",
+            state="OH",
+            config={
+                "simple_table_mode": True,
+                "columns": {"case_number": 0, "surplus_amount": 1},
+            },
+        )
+        rows = [
+            ("2024-OH-001", 5000.0),
+        ]
+        wb = _make_workbook(rows)
+        with patch("openpyxl.load_workbook", return_value=wb):
+            leads = scraper.parse(b"fake-xlsx")
+        assert leads[0].property_state == "OH"

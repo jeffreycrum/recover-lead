@@ -283,6 +283,39 @@ class TestColumnMapping:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# property_state propagation
+# ---------------------------------------------------------------------------
+
+
+class TestHtmlPropertyState:
+    def test_property_state_defaults_to_fl(self):
+        """Scraper with no explicit state must tag leads as FL."""
+        scraper = HtmlTableScraper(
+            county_name="Broward", source_url="http://example.com"
+        )
+        html = b"""
+        <table>
+          <tr><th>Case</th><th>Owner</th><th>Amount</th><th>Addr</th></tr>
+          <tr><td>2024-001</td><td>Jane</td><td>$1,000.00</td><td>1 Main</td></tr>
+        </table>"""
+        leads = scraper.parse(html)
+        assert leads[0].property_state == "FL"
+
+    def test_property_state_reflects_non_fl_state(self):
+        """When scraper is configured for OH, leads must have property_state='OH'."""
+        scraper = HtmlTableScraper(
+            county_name="Cuyahoga", source_url="http://example.com", state="OH"
+        )
+        html = b"""
+        <table>
+          <tr><th>Case</th><th>Owner</th><th>Amount</th><th>Addr</th></tr>
+          <tr><td>2024-OH-001</td><td>John</td><td>$2,500.00</td><td>2 Elm</td></tr>
+        </table>"""
+        leads = scraper.parse(html)
+        assert leads[0].property_state == "OH"
+
+
 class TestHtmlParseAmount:
     @pytest.mark.parametrize(
         "raw,expected",

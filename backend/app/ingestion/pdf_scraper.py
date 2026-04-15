@@ -151,6 +151,7 @@ class PdfScraper(BaseScraper):
         kwargs: dict[str, object] = {
             "case_number": case_number,
             "surplus_amount": surplus_amount,
+            "property_state": self.state,
             "sale_type": "tax_deed",
             "raw_data": {"line": raw_line, **groups},
         }
@@ -193,9 +194,11 @@ class PdfScraper(BaseScraper):
             if not case_number:
                 return None
 
-            # Skip header/metadata rows
+            # Skip header/metadata rows — check ALL cells so keywords in any
+            # column (e.g. "TOTAL" in an owner column) are caught.
+            row_lower = " ".join(cell or "" for cell in row).lower()
             for skip_text in skip_rows_containing:
-                if skip_text.lower() in case_number.lower():
+                if skip_text.lower() in row_lower:
                     return None
 
             owner_name = (row[owner_col] or "").strip() if owner_col < len(row) else None
@@ -216,6 +219,7 @@ class PdfScraper(BaseScraper):
                 owner_name=owner_name,
                 surplus_amount=surplus_amount,
                 property_address=property_address,
+                property_state=self.state,
                 sale_type="tax_deed",
                 raw_data={"row": [cell or "" for cell in row]},
             )

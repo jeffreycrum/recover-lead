@@ -172,6 +172,31 @@ class TestGulfFixture:
         assert all(lead.surplus_amount > 0 for lead in leads)
 
 
+# ---------------------------------------------------------------------------
+# property_state propagation
+# ---------------------------------------------------------------------------
+
+
+class TestGulfPropertyState:
+    _BLOCK_HTML = b"""
+    <div class="shadow">
+      <span>Case No.</span><a>2025-001</a>
+      <p>$1,396.95</p>
+    </div>"""
+
+    def test_property_state_defaults_to_fl(self):
+        scraper = GulfHtmlScraper(county_name="Gulf", source_url="http://gulf.gov/surplus")
+        leads = scraper.parse(self._BLOCK_HTML)
+        assert leads[0].property_state == "FL"
+
+    def test_property_state_reflects_non_fl_state(self):
+        scraper = GulfHtmlScraper(
+            county_name="Gulf", source_url="http://gulf.gov/surplus", state="TX"
+        )
+        leads = scraper.parse(self._BLOCK_HTML)
+        assert leads[0].property_state == "TX"
+
+
 class TestFindAmount:
     @pytest.mark.parametrize(
         "text,expected",

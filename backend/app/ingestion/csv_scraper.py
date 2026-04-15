@@ -55,6 +55,7 @@ class CsvScraper(BaseScraper):
                     owner_name=row.get(owner_col, "").strip() or None,
                     surplus_amount=surplus_amount,
                     property_address=row.get(address_col, "").strip() or None,
+                    property_state=self.state,
                     sale_type="tax_deed",
                     raw_data=dict(row),
                 )

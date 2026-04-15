@@ -85,6 +85,7 @@ class HtmlTableScraper(BaseScraper):
                 owner_name=owner_name,
                 surplus_amount=surplus_amount,
                 property_address=property_address,
+                property_state=self.state,
                 sale_type="tax_deed",
                 raw_data={"row": row},
             )
