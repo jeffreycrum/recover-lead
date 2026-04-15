@@ -1,7 +1,7 @@
 """seed ohio counties
 
 Revision ID: w9x0y1z2a3b4
-Revises: p2q3r4s5t6u7
+Revises: v8w9x0y1z2a3
 Create Date: 2026-04-14 12:00:00.000000
 
 Seeds all 88 Ohio counties into the counties table with is_active=False.

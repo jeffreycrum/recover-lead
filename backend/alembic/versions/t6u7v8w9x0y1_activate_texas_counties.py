@@ -56,8 +56,8 @@ Denton County (pop. ~860k) — PdfScraper
 
 ─────────────────────────────────────────────────────────────────
 Galveston County (pop. ~340k) — ParentPagePdfScraper (text_line_mode)
-  Source: District Clerk Excess Proceeds folder, 2026 subfolder
-  URL: https://www.galvestoncountytx.gov/our-county/district-clerk/excess-proceeds/-folder-665
+  Source: District Clerk Excess Proceeds stable parent page
+  URL: https://www.galvestoncountytx.gov/our-county/district-clerk/excess-proceeds
   Format: Positional-text PDF, one record per line.
   Line format:
     YY-TX-NNNN  AccountName  Registry Account  MM/DD/YYYY  MM/DD/YYYY  AMOUNT
@@ -67,8 +67,7 @@ Galveston County (pop. ~340k) — ParentPagePdfScraper (text_line_mode)
     amt    → surplus_amount (e.g. 28,197.23 — no $ prefix)
   pdf_link_selector: a[href*='showpublisheddocument'] — CivicPlus uses
     document IDs, not .pdf extensions; the selector matches those links.
-  The -folder-665 path covers 2026. When 2027 data is published, update
-    source_url to the new folder (expected: -folder-666).
+  Parent page lists all year subfolders; selector picks the latest link.
   50+ records in the 2026 March report.
 
 ─────────────────────────────────────────────────────────────────

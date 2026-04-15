@@ -1,7 +1,7 @@
 """seed georgia counties
 
 Revision ID: q3r4s5t6u7v8
-Revises: p2q3r4s5t6u7
+Revises: x0y1z2a3b4c5
 Create Date: 2026-04-14 21:15:00.000000
 
 Seeds all 159 Georgia counties as inactive rows so verified counties can be

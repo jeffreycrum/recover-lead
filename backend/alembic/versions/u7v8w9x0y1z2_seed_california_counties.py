@@ -1,7 +1,7 @@
 """seed california counties
 
 Revision ID: u7v8w9x0y1z2
-Revises: p2q3r4s5t6u7
+Revises: t6u7v8w9x0y1
 Create Date: 2026-04-14 21:30:00.000000
 
 """

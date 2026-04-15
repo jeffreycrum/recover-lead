@@ -64,26 +64,26 @@ class TestDallasFixture:
     def test_case_numbers(self):
         """Both case numbers must be extracted from the fixture."""
         leads = self._leads()
-        cases = [l.case_number for l in leads]
+        cases = [lead.case_number for lead in leads]
         assert "TX-18-01345" in cases
         assert "TX-20-00762" in cases
 
     def test_surplus_amount_spaced_tokens(self):
         """Split-token amount '$ 2 6,440.02' must reassemble to Decimal('26440.02')."""
         leads = self._leads()
-        first = next(l for l in leads if l.case_number == "TX-18-01345")
+        first = next(lead for lead in leads if lead.case_number == "TX-18-01345")
         assert first.surplus_amount == Decimal("26440.02")
 
     def test_surplus_amount_second_row(self):
         """Split-token amount '$ 4 6,894.56' must reassemble to Decimal('46894.56')."""
         leads = self._leads()
-        second = next(l for l in leads if l.case_number == "TX-20-00762")
+        second = next(lead for lead in leads if lead.case_number == "TX-20-00762")
         assert second.surplus_amount == Decimal("46894.56")
 
     def test_owner_name_extracted(self):
         """Style text between case number and SHERIFF keyword becomes owner_name."""
         leads = self._leads()
-        first = next(l for l in leads if l.case_number == "TX-18-01345")
+        first = next(lead for lead in leads if lead.case_number == "TX-18-01345")
         assert first.owner_name == "DALLAS COUNTY et al vs WILLIAM J JACKSON"
 
     def test_property_state_is_tx(self):
@@ -135,22 +135,22 @@ class TestFortBendFixture:
     def test_case_numbers(self):
         """col 1 (Case Number) must become case_number for both rows."""
         leads = self._leads()
-        cases = [l.case_number for l in leads]
+        cases = [lead.case_number for lead in leads]
         assert "11-DCV-192585" in cases
         assert "07-DCV-156513" in cases
 
     def test_surplus_amounts(self):
         """col 3 (Ending Balance) must parse correctly for both rows."""
         leads = self._leads()
-        first = next(l for l in leads if l.case_number == "11-DCV-192585")
-        second = next(l for l in leads if l.case_number == "07-DCV-156513")
+        first = next(lead for lead in leads if lead.case_number == "11-DCV-192585")
+        second = next(lead for lead in leads if lead.case_number == "07-DCV-156513")
         assert first.surplus_amount == Decimal("14223.86")
         assert second.surplus_amount == Decimal("388.54")
 
     def test_owner_name(self):
         """col 2 (Style) must become owner_name."""
         leads = self._leads()
-        first = next(l for l in leads if l.case_number == "11-DCV-192585")
+        first = next(lead for lead in leads if lead.case_number == "11-DCV-192585")
         assert first.owner_name == "Fort Bend County vs Dora Sanders ET AL"
 
     def test_header_row_excluded(self):
@@ -205,22 +205,22 @@ class TestDentonFixture:
     def test_case_numbers(self):
         """col 0 (Cause Number) must become case_number."""
         leads = self._leads()
-        cases = [l.case_number for l in leads]
+        cases = [lead.case_number for lead in leads]
         assert "18-9095-362" in cases
         assert "19-1234-100" in cases
 
     def test_surplus_amounts(self):
         """col 2 (Amt Deposit) must parse $-prefixed amounts correctly."""
         leads = self._leads()
-        first = next(l for l in leads if l.case_number == "18-9095-362")
-        second = next(l for l in leads if l.case_number == "19-1234-100")
+        first = next(lead for lead in leads if lead.case_number == "18-9095-362")
+        second = next(lead for lead in leads if lead.case_number == "19-1234-100")
         assert first.surplus_amount == Decimal("60750.20")
         assert second.surplus_amount == Decimal("12500.00")
 
     def test_owner_name(self):
         """col 1 (Name) must become owner_name."""
         leads = self._leads()
-        first = next(l for l in leads if l.case_number == "18-9095-362")
+        first = next(lead for lead in leads if lead.case_number == "18-9095-362")
         assert first.owner_name == "Arreola Gabriel Guillermo"
 
     def test_header_rows_excluded(self):
@@ -282,22 +282,22 @@ class TestGalvestonFixture:
     def test_case_numbers(self):
         """YY-TX-NNNN formatted case numbers must be extracted."""
         leads = self._leads()
-        cases = [l.case_number for l in leads]
+        cases = [lead.case_number for lead in leads]
         assert "15-TX-0451" in cases
         assert "23-TX-0532" in cases
 
     def test_surplus_amounts_no_dollar_sign(self):
         """Amounts have no dollar sign prefix; must still parse correctly."""
         leads = self._leads()
-        first = next(l for l in leads if l.case_number == "15-TX-0451")
-        second = next(l for l in leads if l.case_number == "23-TX-0532")
+        first = next(lead for lead in leads if lead.case_number == "15-TX-0451")
+        second = next(lead for lead in leads if lead.case_number == "23-TX-0532")
         assert first.surplus_amount == Decimal("5842.82")
         assert second.surplus_amount == Decimal("28197.23")
 
     def test_owner_name(self):
         """Text between case number and 'Registry Account' becomes owner_name."""
         leads = self._leads()
-        first = next(l for l in leads if l.case_number == "15-TX-0451")
+        first = next(lead for lead in leads if lead.case_number == "15-TX-0451")
         assert first.owner_name == "Wilson Smith"
 
     def test_header_line_excluded(self):
@@ -347,15 +347,15 @@ class TestYoungFixture:
     def test_case_numbers(self):
         """col 0 (Cause Number) must become case_number."""
         leads = self._leads()
-        cases = [l.case_number for l in leads]
+        cases = [lead.case_number for lead in leads]
         assert "T04911" in cases
         assert "T05345" in cases
 
     def test_surplus_amounts_no_dollar_sign(self):
         """Amounts have no dollar sign prefix; comma-separated values must parse."""
         leads = self._leads()
-        first = next(l for l in leads if l.case_number == "T04911")
-        second = next(l for l in leads if l.case_number == "T05345")
+        first = next(lead for lead in leads if lead.case_number == "T04911")
+        second = next(lead for lead in leads if lead.case_number == "T05345")
         assert first.surplus_amount == Decimal("5469.86")
         assert second.surplus_amount == Decimal("1986.30")
 
@@ -416,15 +416,15 @@ class TestHoustonTxFixture:
     def test_case_numbers(self):
         """col 2 (Cause Number) must become case_number."""
         leads = self._leads()
-        cases = [l.case_number for l in leads]
+        cases = [lead.case_number for lead in leads]
         assert "21-0188" in cases
         assert "20-1044" in cases
 
     def test_surplus_amounts(self):
         """col 1 (Amount) with $-prefix must parse correctly."""
         leads = self._leads()
-        first = next(l for l in leads if l.case_number == "21-0188")
-        second = next(l for l in leads if l.case_number == "20-1044")
+        first = next(lead for lead in leads if lead.case_number == "21-0188")
+        second = next(lead for lead in leads if lead.case_number == "20-1044")
         assert first.surplus_amount == Decimal("95292.90")
         assert second.surplus_amount == Decimal("7804.05")
 
