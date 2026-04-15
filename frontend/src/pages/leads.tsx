@@ -67,7 +67,9 @@ export function LeadsPage() {
           value={filters.property_state || ""}
           onChange={(e) =>
             updateFilter((f) => {
-              const { county_id: _dropped, ...rest } = f;
+              const rest = Object.fromEntries(
+                Object.entries(f).filter(([k]) => k !== "county_id")
+              );
               return e.target.value
                 ? { ...rest, property_state: e.target.value }
                 : rest;

@@ -84,8 +84,6 @@ def upgrade() -> None:
         ),
         {"now": now, "threshold": _BAD_LEAD_THRESHOLD},
     )
-    if result.rowcount:
-        print(f"  Archived {result.rowcount} bad Sumter lead(s) (surplus >= ${_BAD_LEAD_THRESHOLD:,})")
 
     # 2. Update skip-row config
     conn.execute(
