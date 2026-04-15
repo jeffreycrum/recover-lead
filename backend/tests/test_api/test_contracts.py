@@ -74,6 +74,11 @@ class TestContractGenerate:
                     "app.services.billing_service.reserve_usage",
                     new=AsyncMock(return_value=reservation),
                 ),
+                patch(
+                    "app.core.idempotency.get_cached_response",
+                    new=AsyncMock(return_value=None),
+                ),
+                patch("app.core.idempotency.cache_response", new=AsyncMock()),
                 patch("app.workers.contract_tasks.generate_contract_task") as mock_task,
                 patch("app.core.sse.register_task_owner"),
             ):
@@ -91,6 +96,7 @@ class TestContractGenerate:
                             "fee_percentage": 25.0,
                             "agent_name": "John Doe",
                         },
+                        headers={"Idempotency-Key": str(uuid.uuid4())},
                     )
 
             assert response.status_code == 202

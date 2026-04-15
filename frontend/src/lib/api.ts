@@ -267,6 +267,7 @@ export class ApiClient {
     return this.request<any>("/contracts/generate", {
       method: "POST",
       body: JSON.stringify(data),
+      headers: { "Idempotency-Key": crypto.randomUUID() },
     });
   }
 

@@ -1,7 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/clerk-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
 import { api } from "@/lib/api";
 import { EmptyState } from "@/components/common/empty-state";
 import { formatDate } from "@/lib/utils";
@@ -48,7 +47,9 @@ export function ContractsPage() {
   const [selectedContract, setSelectedContract] = useState<any>(null);
   const [editContent, setEditContent] = useState("");
   const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const [pendingGeneration, setPendingGeneration] = useState(false);
+  const pendingTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const [showGenDialog, setShowGenDialog] = useState(false);
   const [genForm, setGenForm] = useState<GenerateFormState>({
     lead_id: "",
@@ -58,6 +59,8 @@ export function ContractsPage() {
   });
   const [genError, setGenError] = useState<string | null>(null);
 
+  const prevContractCountRef = useRef<number>(0);
+
   const { data: contracts, isLoading } = useQuery({
     queryKey: ["contracts"],
     queryFn: () => api.getContracts(),
@@ -65,17 +68,39 @@ export function ContractsPage() {
     refetchInterval: pendingGeneration ? 4000 : false,
   });
 
+  // Clear pending indicator as soon as a new contract row appears
+  useEffect(() => {
+    if (!pendingGeneration || !contracts) return;
+    if (contracts.length > prevContractCountRef.current) {
+      setPendingGeneration(false);
+      if (pendingTimeoutRef.current !== null) {
+        window.clearTimeout(pendingTimeoutRef.current);
+        pendingTimeoutRef.current = null;
+      }
+    }
+    prevContractCountRef.current = contracts.length;
+  }, [contracts, pendingGeneration]);
+
+  // Cancel timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (pendingTimeoutRef.current !== null) {
+        window.clearTimeout(pendingTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const generateMutation = useMutation({
     mutationFn: (data: any) => api.generateContract(data),
     onSuccess: () => {
       setShowGenDialog(false);
       setGenForm({ lead_id: "", fee_percentage: "25", agent_name: "", contract_type: "recovery_agreement" });
       setGenError(null);
-      // Start polling — Celery writes the draft asynchronously
+      prevContractCountRef.current = contracts?.length ?? 0;
       setPendingGeneration(true);
       qc.invalidateQueries({ queryKey: ["contracts"] });
-      // Auto-stop polling after 60 s regardless
-      window.setTimeout(() => setPendingGeneration(false), 60_000);
+      // Fallback: stop polling after 60 s if the contract never appears
+      pendingTimeoutRef.current = window.setTimeout(() => setPendingGeneration(false), 60_000);
     },
     onError: (err: any) => {
       setGenError(err?.message || "Failed to queue contract generation");
@@ -92,10 +117,13 @@ export function ContractsPage() {
 
   const handleOpenEdit = async (contract: any) => {
     setEditLoading(true);
+    setEditError(null);
     try {
       const detail = await api.getContract(contract.id);
       setSelectedContract(detail);
       setEditContent(detail.content);
+    } catch {
+      setEditError("Failed to load contract. Please try again.");
     } finally {
       setEditLoading(false);
     }
@@ -157,6 +185,11 @@ export function ContractsPage() {
           Contract generation in progress — the new draft will appear shortly.
         </div>
       )}
+      {editError && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {editError}
+        </div>
+      )}
 
       {isLoading ? (
         <div className="space-y-3">
@@ -166,10 +199,12 @@ export function ContractsPage() {
         </div>
       ) : !contracts || contracts.length === 0 ? (
         <EmptyState
-          icon={FileSignature}
+          icon={<FileSignature size={48} />}
           title="No contracts yet"
           description="Generate a recovery agreement for a claimed lead to get started."
-          action={{ label: "Generate Contract", onClick: () => setShowGenDialog(true) }}
+          action={
+            <Button onClick={() => setShowGenDialog(true)}>Generate Contract</Button>
+          }
         />
       ) : (
         <div className="border rounded-lg overflow-hidden">

@@ -1,12 +1,13 @@
 import uuid
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import InsufficientCreditsError, NotFoundError
+from app.core.idempotency import cache_response, get_cached_response, get_idempotency_key
 from app.db.session import get_async_session
 from app.dependencies import get_current_user
 from app.models.contract import Contract
@@ -28,13 +29,22 @@ DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 100
 
 
-@router.post("/generate", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/generate")
 async def generate_contract(
+    request: Request,
     req: ContractGenerateRequest,
     session: AsyncSession = Depends(get_async_session),
     user: User = Depends(get_current_user),
-) -> dict:
+) -> JSONResponse:
     """Generate a contract for a claimed lead. Returns task_id for polling."""
+    # Idempotency: replay cached 202 without re-queuing or re-charging
+    idem_key = get_idempotency_key(request)
+    if idem_key:
+        scoped_key = f"{user.id}:{idem_key}"
+        cached = await get_cached_response(scoped_key)
+        if cached:
+            return JSONResponse(status_code=cached["status_code"], content=cached["body"])
+
     # Verify lead is claimed by this user
     ul_result = await session.execute(
         select(UserLead).where(
@@ -65,7 +75,10 @@ async def generate_contract(
     )
     register_task_owner(task.id, str(user.id))
 
-    return {"task_id": task.id, "status": "queued", "message": "Contract generation queued"}
+    body = {"task_id": task.id, "status": "queued", "message": "Contract generation queued"}
+    if idem_key:
+        await cache_response(scoped_key, status.HTTP_202_ACCEPTED, body)
+    return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=body)
 
 
 @router.get("", response_model=list[ContractListResponse])
