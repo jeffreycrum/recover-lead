@@ -2,23 +2,29 @@
 {{ owner_address or owner_last_known_address or "Address on file" }}
 
 Re: Unclaimed excess proceeds from {{ county_name }} County tax sale
-Case/Parcel Reference: {{ case_number }}
+Case / Parcel Reference: {{ parcel_id or case_number }}
 
 Dear {{ recipient_name or owner_name or "Property Owner" }},
 
-Our records indicate that excess proceeds may still be available from a prior tax sale associated with {{ property_address or "the property identified above" }} in {{ county_name }} County, Georgia. Under O.C.G.A. § 48-4-5, excess proceeds from a tax sale are held for distribution to the parties legally entitled to claim them.
+I am writing about unclaimed excess proceeds from a tax sale on the property at {{ property_address or "the above-referenced property" }} in {{ county_name }} County, Georgia. Under O.C.G.A. Section 48-4-5, excess proceeds from a tax sale are held by the county for distribution to the parties legally entitled to claim them.
 
-Based on the public records we reviewed, the amount currently shown is approximately ${{ "%.2f"|format(surplus_amount or 0) }}. This figure should be confirmed directly with the county or court clerk before any claim is submitted.
+Here are the details we have from the public record:
 
-We assist property owners and other eligible claimants with researching entitlement, assembling the supporting documents, and preparing the paperwork needed to pursue a claim for excess proceeds. If you decide to hire a recovery firm or agent, Georgia requires the fee agreement to be in writing. Georgia does not impose the same statutory percentage cap used in some other states, so any compensation terms should be reviewed carefully before you sign.
+Case / Parcel: {{ parcel_id or case_number }}
+Sale date: {{ sale_date or "See county records" }}
+Amount currently shown: approximately ${{ (surplus_amount or 0)|money }}
 
-If you would like help evaluating whether you may be entitled to these funds, please contact us and we can explain the claim process, the documents typically required, and whether additional parties may need to be involved.
+You should confirm the exact amount directly with the county or court clerk before submitting any claim. The process and timeline for filing vary by county, so it is worth contacting {{ county_name }} County directly to understand what is required and whether any deadline applies to your situation.
 
-There is no obligation to respond, and you may always contact the county directly to make your own claim.
+If you decide to work with someone to help pursue a claim, Georgia requires fee agreements to be in writing. Review the terms carefully before signing.
+
+We help property owners and other eligible claimants research their entitlement, assemble the supporting documents, and navigate the claim process for {{ county_name }} County. If you have questions about whether you have a valid claim or what is involved, we are glad to discuss it with you.
+
+You are also welcome to contact the county directly to make your own claim. There is no obligation to respond to this letter.
 
 Sincerely,
 
 {{ sender_name or "RecoverLead" }}
-{% if sender_company %}{{ sender_company }}{% endif %}
-{% if sender_phone %}{{ sender_phone }}{% endif %}
-{% if sender_email %}{{ sender_email }}{% endif %}
+{% if sender_company %}{{ sender_company }}
+{% endif %}{% if sender_phone %}{{ sender_phone }}
+{% endif %}{% if sender_email %}{{ sender_email }}{% endif %}
