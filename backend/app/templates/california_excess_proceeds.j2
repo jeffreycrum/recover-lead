@@ -1,0 +1,25 @@
+{{ owner_name or "Property Owner" }}
+{{ owner_address or owner_last_known_address or "Address on file" }}
+
+Re: Possible claim for excess proceeds from a California tax-defaulted property sale
+
+Dear {{ owner_name or "Property Owner" }},
+
+Our records indicate that property associated with {{ county_name }} County, California may have generated excess proceeds after a tax-defaulted property sale. Under California Revenue and Taxation Code sections 4671 through 4675, excess proceeds are the funds that remain after the county applies sale proceeds to delinquent taxes, penalties, costs, and other amounts allowed by law.
+
+The property reference we have is:
+- APN / Parcel: {{ parcel_id or case_number }}
+- Sale date / deed reference: {{ sale_date or "See county records" }}
+- Estimated excess proceeds: {% if surplus_amount is not none %}${{ "%.2f"|format(surplus_amount) }}{% else %}Unknown{% endif %}
+
+California law generally gives parties of interest one year from the date of the tax sale deed recordation to file a claim. Claims are filed directly with the county Tax Collector, not with a court. If you may have owned the property at the time of sale, or held a qualifying recorded interest, you may be entitled to some or all of the funds.
+
+The county will usually require documentation showing your right to claim, such as proof of ownership at the time of sale, including a deed, title report, probate order, or similar record. If the former owner is deceased, counties commonly require a certified copy of Letters Testamentary or Letters of Administration before they will release funds to an estate representative.
+
+If you choose to hire help, fee arrangements should be reviewed carefully. California Business and Professions Code section 6148 generally requires written fee agreements for attorneys. If a non-attorney recovery agent is used, the fee should be clearly disclosed as a percentage or other compensation method before any assignment or authorization is signed. California does not set a specific statutory fee cap for tax-sale excess-proceeds recovery claims.
+
+If you want help evaluating whether a claim is worth pursuing and what documents may be needed, we can review the county records with you and explain the claim process. This letter is informational only and is not legal advice.
+
+Sincerely,
+
+RecoverLead
