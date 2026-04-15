@@ -58,6 +58,7 @@ def _ensure_scrapers_imported() -> None:
     # noqa imports — side effects only
     from app.ingestion import (  # noqa: F401
         csv_scraper,
+        georgia_pdf_scraper,
         gulf_scraper,
         html_scraper,
         pdf_scraper,
@@ -83,6 +84,7 @@ def _ensure_scrapers_imported() -> None:
             raise
 
     from app.ingestion import parent_page_pdf_scraper  # noqa: F401
+    from app.ingestion import parent_page_xlsx_scraper  # noqa: F401
     from app.ingestion import texas_scraper  # noqa: F401
 
     # Duval County interactive search scraper (requires playwright)
