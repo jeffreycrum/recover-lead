@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
 import { RoiStats } from "@/components/dashboard/roi-stats";
 import { PipelineFunnel } from "@/components/dashboard/pipeline-funnel";
+import { CountyUpsellBanner } from "@/components/dashboard/county-upsell-banner";
 
 export function DashboardPage() {
   const { data: sub } = useSubscription();
@@ -76,6 +77,7 @@ export function DashboardPage() {
         <p className="text-muted-foreground">Welcome to RecoverLead</p>
       </div>
 
+      <CountyUpsellBanner />
       <RoiStats />
       <PipelineFunnel />
 

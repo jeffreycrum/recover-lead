@@ -30,6 +30,7 @@ class User(Base):
     subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="user")  # noqa: F821
     user_leads: Mapped[list["UserLead"]] = relationship(back_populates="user")  # noqa: F821
     letters: Mapped[list["Letter"]] = relationship(back_populates="user")  # noqa: F821
+    contracts: Mapped[list["Contract"]] = relationship(back_populates="user")  # noqa: F821
     skip_trace_credits: Mapped["SkipTraceCredits | None"] = relationship(  # noqa: F821
         back_populates="user", uselist=False
     )

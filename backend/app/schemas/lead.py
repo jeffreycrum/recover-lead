@@ -6,6 +6,9 @@ from decimal import Decimal
 
 from pydantic import BaseModel, field_validator
 
+# Qualification statuses that count as "exhausted" for the upsell nudge
+QUALIFIED_STATUSES = {"qualified", "contacted", "signed", "filed", "paid", "closed"}
+
 
 class LeadBrowseResponse(BaseModel):
     id: uuid.UUID
@@ -143,3 +146,12 @@ class DealCloseRequest(BaseModel):
             valid = ", ".join(sorted(VALID_CLOSED_REASONS))
             raise ValueError(f"closed_reason must be one of: {valid}")
         return v
+
+
+class CountyExhaustionResponse(BaseModel):
+    county_id: uuid.UUID
+    county_name: str
+    state: str
+    total_leads: int
+    qualified_leads: int
+    exhaustion_pct: float

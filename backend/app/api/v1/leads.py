@@ -1,22 +1,35 @@
+import asyncio
+import hashlib
+import json as _json
 import uuid
 from decimal import Decimal
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import InsufficientCreditsError, NotFoundError
+from app.core.idempotency import (
+    cache_response,
+    claim_idempotency_key,
+    get_cached_response,
+    get_idempotency_key,
+    release_idempotency_key,
+)
 from app.db.session import get_async_session
 from app.dependencies import get_current_user
 from app.models.county import County
 from app.models.lead import Lead, LeadActivity, LeadContact, UserLead
 from app.models.user import User
 from app.schemas.lead import (
+    QUALIFIED_STATUSES,
     ActivityCreateRequest,
     BulkQualifyRequest,
     ClaimResponse,
+    CountyExhaustionResponse,
     CursorPage,
     DealCloseRequest,
     DealPayRequest,
@@ -433,44 +446,101 @@ async def close_lead(
     )
 
 
-@router.post("/{lead_id}/qualify", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/{lead_id}/qualify")
 async def qualify_lead_endpoint(
     lead_id: uuid.UUID,
+    request: Request,
     session: AsyncSession = Depends(get_async_session),
     user: User = Depends(get_current_user),
 ) -> dict:
-    """Trigger AI qualification for a lead. Returns task_id for polling."""
+    """Trigger AI qualification for a lead.
+
+    Returns cached result immediately (200) when lead data is unchanged.
+    Returns task_id for async polling (202) when a new LLM call is needed.
+    """
     # Must be claimed
-    result = await session.execute(
+    ul_result = await session.execute(
         select(UserLead).where(
             UserLead.user_id == user.id,
             UserLead.lead_id == lead_id,
         )
     )
-    user_lead = result.scalar_one_or_none()
+    user_lead = ul_result.scalar_one_or_none()
     if not user_lead:
         raise NotFoundError("Claimed lead")
 
-    from app.services.billing_service import reserve_usage
-
-    reservation = await reserve_usage(session, user.id, "qualification", count=1)
-    if not reservation.allowed:
-        raise InsufficientCreditsError()
-
-    from app.core.sse import register_task_owner
-    from app.workers.qualification_tasks import qualify_single
-
-    task = qualify_single.delay(
-        str(user.id),
-        str(lead_id),
-        reservation.overage_count > 0,
-        reservation.period_start_iso,
+    # Cache hit: skip LLM call and billing entirely when source data is unchanged
+    lead_result = await session.execute(
+        select(Lead.source_hash).where(Lead.id == lead_id)
     )
-    register_task_owner(task.id, str(user.id))
+    source_hash = lead_result.scalar_one_or_none()
 
-    await record_activity(session, lead_id, user.id, "qualify_started", "AI qualification started")
+    if (
+        user_lead.qualified_source_hash is not None
+        and user_lead.quality_score is not None
+        and source_hash is not None
+        and user_lead.qualified_source_hash == source_hash
+    ):
+        logger.info("qualification_cache_hit", lead_id=str(lead_id), user_id=str(user.id))
+        return {
+            "cached": True,
+            "quality_score": user_lead.quality_score,
+            "reasoning": user_lead.quality_reasoning,
+            "status": "qualified",
+        }
 
-    return {"task_id": task.id, "status": "queued", "message": "Qualification queued"}
+    # Idempotency: replay cached 202 without re-billing. Scoped to endpoint path.
+    idem_key = get_idempotency_key(request)
+    scoped_key: str | None = None
+    if idem_key:
+        scoped_key = f"{user.id}:POST/leads/{lead_id}/qualify:{idem_key}"
+        cached = await get_cached_response(scoped_key)
+        if cached:
+            return JSONResponse(status_code=cached["status_code"], content=cached["body"])
+        claimed = await claim_idempotency_key(scoped_key)
+        if not claimed:
+            await asyncio.sleep(0.5)
+            cached = await get_cached_response(scoped_key)
+            if cached:
+                return JSONResponse(status_code=cached["status_code"], content=cached["body"])
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "IDEMPOTENCY_CONFLICT",
+                    "message": "Another request with the same idempotency key is in progress",
+                },
+            )
+
+    try:
+        from app.services.billing_service import reserve_usage
+
+        reservation = await reserve_usage(session, user.id, "qualification", count=1)
+        if not reservation.allowed:
+            raise InsufficientCreditsError()
+
+        from app.core.sse import register_task_owner
+        from app.workers.qualification_tasks import qualify_single
+
+        task = qualify_single.delay(
+            str(user.id),
+            str(lead_id),
+            reservation.overage_count > 0,
+            reservation.period_start_iso,
+        )
+        register_task_owner(task.id, str(user.id))
+
+        await record_activity(
+            session, lead_id, user.id, "qualify_started", "AI qualification started"
+        )
+
+        body = {"task_id": task.id, "status": "queued", "message": "Qualification queued"}
+        if scoped_key:
+            await cache_response(scoped_key, status.HTTP_202_ACCEPTED, body)
+        return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=body)
+    except Exception:
+        if scoped_key:
+            await release_idempotency_key(scoped_key)
+        raise
 
 
 MAX_BULK_QUALIFY_SIZE = 100
@@ -479,10 +549,15 @@ MAX_BULK_QUALIFY_SIZE = 100
 @router.post("/bulk-qualify", status_code=status.HTTP_202_ACCEPTED)
 async def bulk_qualify(
     req: BulkQualifyRequest,
+    request: Request,
     session: AsyncSession = Depends(get_async_session),
     user: User = Depends(get_current_user),
 ) -> dict:
-    """Trigger AI qualification for multiple leads. Returns task_id."""
+    """Trigger AI qualification for multiple leads. Returns task_id.
+
+    Cache hits (unchanged source_hash) are filtered out before dispatching,
+    so users are not billed for leads that don't need re-qualification.
+    """
     if not req.lead_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -497,29 +572,110 @@ async def bulk_qualify(
             },
         )
 
-    from app.services.billing_service import reserve_usage
+    # Filter out leads whose source data hasn't changed since last qualification
 
-    reservation = await reserve_usage(session, user.id, "qualification", count=len(req.lead_ids))
-    if not reservation.allowed:
-        raise InsufficientCreditsError()
-
-    from app.core.sse import register_task_owner
-    from app.workers.qualification_tasks import qualify_batch
-
-    task = qualify_batch.delay(
-        str(user.id),
-        [str(lid) for lid in req.lead_ids],
-        reservation.overage_count,
-        reservation.period_start_iso,
+    rows = await session.execute(
+        select(
+            UserLead.lead_id,
+            UserLead.qualified_source_hash,
+            UserLead.quality_score,
+            Lead.source_hash,
+        )
+        .join(Lead, Lead.id == UserLead.lead_id)
+        .where(
+            UserLead.user_id == user.id,
+            UserLead.lead_id.in_(req.lead_ids),
+        )
     )
-    register_task_owner(task.id, str(user.id))
+    cache_state = {str(r.lead_id): r for r in rows.all()}
 
-    return {
-        "task_id": task.id,
-        "status": "queued",
-        "lead_count": len(req.lead_ids),
-        "message": "Bulk qualification queued",
-    }
+    billable_ids = [
+        lid
+        for lid in req.lead_ids
+        if not _is_cache_hit(cache_state.get(str(lid)))
+    ]
+    cached_count = len(req.lead_ids) - len(billable_ids)
+
+    if not billable_ids:
+        return {
+            "task_id": None,
+            "status": "all_cached",
+            "lead_count": 0,
+            "cached_count": cached_count,
+            "message": f"All {cached_count} leads are up to date — no qualification needed",
+        }
+
+    # Idempotency: replay cached 202 without re-billing. Scoped to endpoint path + body hash.
+    idem_key = get_idempotency_key(request)
+    scoped_key: str | None = None
+    if idem_key:
+        body_hash = hashlib.sha256(
+            _json.dumps(req.model_dump(), sort_keys=True, default=str).encode()
+        ).hexdigest()[:16]
+        scoped_key = f"{user.id}:POST/leads/bulk-qualify:{idem_key}:{body_hash}"
+        cached = await get_cached_response(scoped_key)
+        if cached:
+            return JSONResponse(status_code=cached["status_code"], content=cached["body"])
+        claimed = await claim_idempotency_key(scoped_key)
+        if not claimed:
+            await asyncio.sleep(0.5)
+            cached = await get_cached_response(scoped_key)
+            if cached:
+                return JSONResponse(status_code=cached["status_code"], content=cached["body"])
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "IDEMPOTENCY_CONFLICT",
+                    "message": "Another request with the same idempotency key is in progress",
+                },
+            )
+
+    try:
+        from app.services.billing_service import reserve_usage
+
+        reservation = await reserve_usage(
+            session, user.id, "qualification", count=len(billable_ids)
+        )
+        if not reservation.allowed:
+            raise InsufficientCreditsError()
+
+        from app.core.sse import register_task_owner
+        from app.workers.qualification_tasks import qualify_batch
+
+        task = qualify_batch.delay(
+            str(user.id),
+            [str(lid) for lid in billable_ids],
+            reservation.overage_count,
+            reservation.period_start_iso,
+        )
+        register_task_owner(task.id, str(user.id))
+
+        body = {
+            "task_id": task.id,
+            "status": "queued",
+            "lead_count": len(billable_ids),
+            "cached_count": cached_count,
+            "message": "Bulk qualification queued",
+        }
+        if scoped_key:
+            await cache_response(scoped_key, status.HTTP_202_ACCEPTED, body)
+        return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=body)
+    except Exception:
+        if scoped_key:
+            await release_idempotency_key(scoped_key)
+        raise
+
+
+def _is_cache_hit(row) -> bool:
+    """Return True if the lead's qualification result is still valid."""
+    if row is None:
+        return False
+    return (
+        row.qualified_source_hash is not None
+        and row.quality_score is not None
+        and row.source_hash is not None
+        and row.qualified_source_hash == row.source_hash
+    )
 
 
 @router.post("/{lead_id}/skip-trace")
@@ -822,6 +978,87 @@ async def create_lead_activity(
         metadata_=activity.metadata_,
         created_at=activity.created_at,
     )
+
+
+@router.get("/stats/county-exhaustion", response_model=list[CountyExhaustionResponse])
+async def county_exhaustion(
+    session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(get_current_user),
+) -> list[CountyExhaustionResponse]:
+    """Per-county qualification exhaustion stats for the current user.
+
+    Returns counties where the user has at least one qualified lead, sorted by
+    exhaustion percentage descending. Powers the upsell nudge on the dashboard.
+    """
+    from sqlalchemy import Float, case, cast
+    from sqlalchemy import func as sql_func
+
+    result = await session.execute(
+        select(
+            County.id.label("county_id"),
+            County.name.label("county_name"),
+            County.state.label("state"),
+            sql_func.count(Lead.id).label("total_leads"),
+            sql_func.count(
+                case(
+                    (
+                        UserLead.status.in_(QUALIFIED_STATUSES),
+                        UserLead.id,
+                    )
+                )
+            ).label("qualified_leads"),
+        )
+        .join(Lead, Lead.county_id == County.id)
+        .outerjoin(
+            UserLead,
+            (UserLead.lead_id == Lead.id) & (UserLead.user_id == user.id),
+        )
+        .where(
+            County.is_active.is_(True),
+            Lead.archived_at.is_(None),
+        )
+        .group_by(County.id, County.name, County.state)
+        .having(
+            sql_func.count(
+                case(
+                    (
+                        UserLead.status.in_(QUALIFIED_STATUSES),
+                        UserLead.id,
+                    )
+                )
+            )
+            > 0
+        )
+        .order_by(
+            (
+                cast(
+                    sql_func.count(
+                        case(
+                            (
+                                UserLead.status.in_(QUALIFIED_STATUSES),
+                                UserLead.id,
+                            )
+                        )
+                    ),
+                    Float,
+                )
+                / sql_func.nullif(sql_func.count(Lead.id), 0)
+            ).desc()
+        )
+    )
+    rows = result.all()
+
+    return [
+        CountyExhaustionResponse(
+            county_id=r.county_id,
+            county_name=r.county_name,
+            state=r.state,
+            total_leads=r.total_leads,
+            qualified_leads=r.qualified_leads,
+            exhaustion_pct=(r.qualified_leads / r.total_leads) if r.total_leads > 0 else 0.0,
+        )
+        for r in rows
+    ]
 
 
 @router.get("/stats/roi")

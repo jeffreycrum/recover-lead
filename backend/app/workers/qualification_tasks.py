@@ -35,6 +35,8 @@ def _get_worker_session() -> AsyncSession:
     retry_backoff=True,
     max_retries=3,
     queue="rag",
+    soft_time_limit=540,
+    time_limit=600,
 )
 def qualify_single(
     self,
@@ -208,6 +210,8 @@ async def _qualify_single(user_id: str, lead_id: str, task, is_overage: bool = F
             user_lead.quality_score = quality_score
             user_lead.quality_reasoning = reasoning
             user_lead.status = "qualified"
+            # Cache the source hash so re-qualification can be skipped if data hasn't changed
+            user_lead.qualified_source_hash = lead.source_hash
 
             # Update lead embedding
             lead.embedding = embedding

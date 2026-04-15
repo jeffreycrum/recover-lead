@@ -6,6 +6,7 @@ import { DashboardPage } from "@/pages/dashboard";
 import { LeadsPage } from "@/pages/leads";
 import { MyLeadsPage } from "@/pages/my-leads";
 import { LettersPage } from "@/pages/letters";
+import { ContractsPage } from "@/pages/contracts";
 import { CountiesPage } from "@/pages/counties";
 import { SettingsPage } from "@/pages/settings";
 
@@ -33,6 +34,7 @@ export default function App() {
             <Route path="/leads" element={<LeadsPage />} />
             <Route path="/my-leads" element={<MyLeadsPage />} />
             <Route path="/letters" element={<LettersPage />} />
+            <Route path="/contracts" element={<ContractsPage />} />
             <Route path="/counties" element={<CountiesPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>

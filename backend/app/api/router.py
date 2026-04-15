@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     auth,
     billing,
+    contracts,
     counties,
     health,
     leads,
@@ -17,6 +18,7 @@ api_router.include_router(auth.router)
 api_router.include_router(billing.router)
 api_router.include_router(leads.router)
 api_router.include_router(letters.router)
+api_router.include_router(contracts.router)
 api_router.include_router(counties.router)
 api_router.include_router(tasks.router)
 api_router.include_router(webhooks.router)
