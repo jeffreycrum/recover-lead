@@ -83,8 +83,9 @@ class TexasPositionalPdfScraper(ParentPagePdfScraper):
             return []
 
         leads: list[RawLead] = []
-        pdf = pdfplumber.open(BytesIO(raw_data))
+        pdf = None
         try:
+            pdf = pdfplumber.open(BytesIO(raw_data))
             for page in pdf.pages:
                 text = page.extract_text() or ""
                 for line in text.split("\n"):
@@ -117,5 +118,6 @@ class TexasPositionalPdfScraper(ParentPagePdfScraper):
                         )
                     )
         finally:
-            pdf.close()
+            if pdf is not None:
+                pdf.close()
         return leads
