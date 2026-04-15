@@ -195,7 +195,7 @@ async def generate_letters_batch(
             user_id=user_id,
             lead_data=lead,
             county_name=county_names.get(str(lead.get("county_id")), "Unknown"),
-            state=lead.get("property_state", "FL"),
+            state=lead.get("county_state") or lead.get("property_state") or "FL",
             letter_type=letter_type,
         )
         for lead in leads_data

@@ -97,12 +97,8 @@ async def _generate_letter(
 
             lead_data = {
                 "case_number": lead.case_number,
-                "parcel_id": lead.parcel_id if hasattr(lead, "parcel_id") else None,
-                "sale_date": (
-                    str(lead.sale_date)
-                    if hasattr(lead, "sale_date") and lead.sale_date
-                    else None
-                ),
+                "parcel_id": lead.parcel_id,
+                "sale_date": str(lead.sale_date) if lead.sale_date else None,
                 "owner_name": lead.owner_name,
                 "owner_last_known_address": lead.owner_last_known_address,
                 "property_address": lead.property_address,

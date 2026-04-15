@@ -12,7 +12,7 @@ rows are informational and for future UI display.
 """
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 
@@ -53,7 +53,7 @@ _BODY_PLACEHOLDER = "(Rendered from app/templates/{state}_excess_proceeds.j2)"
 
 def upgrade() -> None:
     conn = op.get_bind()
-    now = datetime.utcnow()
+    now = datetime.now(tz=UTC)
     for tmpl in _TEMPLATES:
         conn.execute(
             sa.text(
