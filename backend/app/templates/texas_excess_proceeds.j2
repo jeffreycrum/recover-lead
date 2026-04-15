@@ -6,25 +6,23 @@ Case Reference: {{ case_number }}
 
 Dear {{ recipient_name or owner_name or "Property Owner" }},
 
-Our records indicate that excess proceeds may still be available from a prior tax sale associated with {{ property_address or "the property identified above" }} in {{ county_name }} County, Texas. Under Texas Tax Code § 34.04, excess proceeds from a tax sale are deposited with the court and may be claimed by the former owner or other parties with a legal interest in the property.
+I am writing about unclaimed excess proceeds from a tax sale on the property at {{ property_address or "the above-referenced property" }} in {{ county_name }} County, Texas. According to public court records, funds remain on deposit that may belong to you or your estate.
 
-Based on the public records we reviewed, the amount currently shown is approximately ${{ "%.2f"|format(surplus_amount or 0) }}. This figure should be confirmed directly with the district clerk before any claim is submitted.
+The amount currently shown in the records is approximately ${{ (surplus_amount or 0)|money }}. You should confirm the exact figure directly with the district clerk before filing anything.
 
-**Important deadlines and process under Texas law:**
+A few things worth knowing about how Texas handles these claims:
 
-- Claims must be filed within **two years** from the date of the tax sale (Tax Code § 34.04(b)). After that period, the funds may be distributed to taxing units and become unrecoverable.
-- Claims are filed by **petition to the court that issued the tax judgment**, not directly with the county clerk. The district court will review the petition and may schedule a hearing.
-- If the former owner is **deceased**, heirs must establish heirship through an affidavit of heirship or a probate proceeding before a claim can be approved by the court.
+Under Texas Tax Code Section 34.04(b), a claim must be filed within two years of the tax sale date. After that window closes, the funds are distributed to the taxing units and cannot be recovered. The claim is not filed with the county clerk's office; it is filed by petition with the district court that issued the original tax judgment, and the court may schedule a hearing before approving distribution.
 
-We assist property owners and eligible claimants with researching entitlement, gathering the required documentation, and preparing the petition and supporting materials needed to pursue a claim. Texas does not impose a statutory fee cap on recovery agreements for tax sale excess proceeds (unlike some other states), so any compensation terms should be reviewed carefully before you sign.
+If the former owner is deceased, heirs generally need to establish heirship through an affidavit of heirship or a formal probate proceeding before the court will approve a claim on the estate's behalf. Texas does not set a statutory cap on fees for this type of recovery, so if you work with anyone to help file, review the fee terms carefully before signing anything.
 
-If you would like help evaluating whether you may be entitled to these funds, please contact us. We can explain the specific documents required by {{ county_name }} County's district court, identify any other parties who may have a competing claim, and walk you through the petition process.
+We help property owners and eligible claimants gather the required documentation and prepare the petition for {{ county_name }} County's district court. If you have questions about whether you have a valid claim, what documents you will need, or whether anyone else may have a competing interest in the funds, we are glad to walk through it with you.
 
-There is no obligation to respond, and you may always contact the district clerk of {{ county_name }} County directly to pursue your own claim.
+You are also welcome to contact the district clerk of {{ county_name }} County directly to pursue the claim on your own. There is no obligation to respond to this letter.
 
 Sincerely,
 
 {{ sender_name or "RecoverLead" }}
-{% if sender_company %}{{ sender_company }}{% endif %}
-{% if sender_phone %}{{ sender_phone }}{% endif %}
-{% if sender_email %}{{ sender_email }}{% endif %}
+{% if sender_company %}{{ sender_company }}
+{% endif %}{% if sender_phone %}{{ sender_phone }}
+{% endif %}{% if sender_email %}{{ sender_email }}{% endif %}

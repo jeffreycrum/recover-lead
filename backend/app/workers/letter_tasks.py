@@ -68,7 +68,11 @@ async def _generate_letter(
         async with session.begin():
             # Get lead + county
             result = await session.execute(
-                select(Lead, County.name.label("county_name"))
+                select(
+                    Lead,
+                    County.name.label("county_name"),
+                    County.state.label("county_state"),
+                )
                 .join(County, Lead.county_id == County.id)
                 .where(Lead.id == uuid.UUID(lead_id))
             )
@@ -76,7 +80,7 @@ async def _generate_letter(
             if not row:
                 return {"error": "Lead not found"}
 
-            lead, county_name = row
+            lead, county_name, county_state = row
 
             # Verify claimed
             result = await session.execute(
@@ -88,8 +92,17 @@ async def _generate_letter(
             if not result.scalar_one_or_none():
                 return {"error": "Lead not claimed"}
 
+            # county_state is authoritative; fall back to lead.property_state
+            state = county_state or lead.property_state or "FL"
+
             lead_data = {
                 "case_number": lead.case_number,
+                "parcel_id": lead.parcel_id if hasattr(lead, "parcel_id") else None,
+                "sale_date": (
+                    str(lead.sale_date)
+                    if hasattr(lead, "sale_date") and lead.sale_date
+                    else None
+                ),
                 "owner_name": lead.owner_name,
                 "owner_last_known_address": lead.owner_last_known_address,
                 "property_address": lead.property_address,
@@ -104,6 +117,7 @@ async def _generate_letter(
                 user_id=uuid.UUID(user_id),
                 lead_data=lead_data,
                 county_name=county_name,
+                state=state,
                 letter_type=letter_type,
             )
 
