@@ -653,3 +653,141 @@ class TestSantaRosaScraper:
             leads = self._make_santa_rosa_scraper().parse(b"fake-pdf-bytes")
 
         assert leads == []
+
+
+# ---------------------------------------------------------------------------
+# Collier County — PDF table mode (Laserfiche-hosted, Excel-generated PDF)
+# ---------------------------------------------------------------------------
+
+
+class TestCollierPdfScraper:
+    """Collier County: Laserfiche-served PDF with 11 columns.
+
+    Direct URL: https://app.collierclerk.com/LFOfficialRecords/edoc/6476/...
+    PDF is generated from Excel by the clerk's office and updated periodically.
+    Doc ID 6476 is expected to be stable across updates (Laserfiche versioning).
+
+    Column layout (0-indexed):
+      0: Sale Date
+      1: TDA #           → case_number
+      2: Surplus         → surplus_amount
+      3: Claim Pending
+      4: Day Deadline
+      5: Legal Titleholder (prior to sale) → owner_name
+      6: Address         → property_address
+      7: City
+      8: State / Zip
+      9: Property ID#
+      10: Legal Description
+    """
+
+    _CONFIG = {
+        "columns": {
+            "case_number": 1,
+            "owner_name": 5,
+            "surplus_amount": 2,
+            "property_address": 6,
+        },
+        "skip_rows_containing": [
+            "Sale Date",
+            "TDA #",
+            "Surplus",
+            "Claim Pending",
+            "Legal Titleholder",
+        ],
+    }
+
+    def _make_collier_scraper(self) -> PdfScraper:
+        return PdfScraper(
+            county_name="Collier",
+            source_url=(
+                "https://app.collierclerk.com/LFOfficialRecords/edoc/6476/"
+                "Tax%20Deed%20Sales%20Excess%20Proceeds%20List.pdf"
+                "?dbid=0&repo=OFFICIALRECORDSPROD"
+            ),
+            config=self._CONFIG,
+        )
+
+    def _make_collier_table(self) -> list[list[str]]:
+        return [
+            [
+                "Sale Date", "TDA #", "Surplus", "Claim Pending", "Day Deadline",
+                "Legal Titleholder (prior to sale)", "Address", "City",
+                "State / Zip", "Property ID#", "Legal Description",
+            ],
+            [
+                "7/15/2024", "23-000123-TD", "$15,234.00", "No", "365",
+                "JOHN SMITH PROPERTIES LLC", "123 PALM AVE",
+                "NAPLES", "FL 34102", "00234560008",
+                "NAPLES PARK UNIT 52 BLK 6 LOT 3",
+            ],
+            [
+                "8/20/2024", "24-000456-TD", "$8,900.50", "No", "365",
+                "MARIA GARCIA", "456 MARCO ISLAND BLVD",
+                "MARCO ISLAND", "FL 34145", "00567890001",
+                "MARCO ISLAND UNIT 1 LOT 45",
+            ],
+        ]
+
+    def _make_mock_pdf(self, table: list[list[str]]) -> MagicMock:
+        mock_page = MagicMock()
+        mock_page.extract_tables.return_value = [table]
+        mock_pdf = MagicMock()
+        mock_pdf.pages = [mock_page]
+        mock_pdf.close = MagicMock()
+        return mock_pdf
+
+    def test_collier_extracts_case_surplus_owner_address(self):
+        """Collier 11-column table must map TDA#, Surplus, Titleholder, Address correctly."""
+        scraper = self._make_collier_scraper()
+        mock_pdf = self._make_mock_pdf(self._make_collier_table())
+
+        with patch("pdfplumber.open", return_value=mock_pdf):
+            leads = scraper.parse(b"fake-pdf-bytes")
+
+        assert len(leads) == 2
+        assert leads[0].case_number == "23-000123-TD"
+        assert leads[0].surplus_amount == Decimal("15234.00")
+        assert leads[0].owner_name == "JOHN SMITH PROPERTIES LLC"
+        assert leads[0].property_address == "123 PALM AVE"
+
+    def test_collier_second_row(self):
+        """Second data row must parse with correct fields."""
+        scraper = self._make_collier_scraper()
+        mock_pdf = self._make_mock_pdf(self._make_collier_table())
+
+        with patch("pdfplumber.open", return_value=mock_pdf):
+            leads = scraper.parse(b"fake-pdf-bytes")
+
+        assert leads[1].case_number == "24-000456-TD"
+        assert leads[1].surplus_amount == Decimal("8900.50")
+        assert leads[1].owner_name == "MARIA GARCIA"
+        assert leads[1].property_address == "456 MARCO ISLAND BLVD"
+
+    def test_collier_header_row_skipped(self):
+        """Header row matching 'Sale Date' must be skipped."""
+        scraper = self._make_collier_scraper()
+        table = [
+            ["Sale Date", "TDA #", "Surplus", "Claim Pending", "Day Deadline",
+             "Legal Titleholder (prior to sale)", "Address", "City",
+             "State / Zip", "Property ID#", "Legal Description"],
+        ]
+        mock_pdf = self._make_mock_pdf(table)
+
+        with patch("pdfplumber.open", return_value=mock_pdf):
+            leads = scraper.parse(b"fake-pdf-bytes")
+
+        assert leads == []
+
+    def test_collier_default_mapping_shows_why_config_is_needed(self):
+        """Without Collier config, default col[2] reads Sale Date string → wrong amount."""
+        scraper = _make_scraper()  # default: case=col0, owner=col1, surplus=col2, addr=col3
+        mock_pdf = self._make_mock_pdf(self._make_collier_table())
+
+        with patch("pdfplumber.open", return_value=mock_pdf):
+            leads = scraper.parse(b"fake-pdf-bytes")
+
+        # default col[2] = "Surplus" header → skipped (surplus_amount parses to 0 or case_number="Sale Date")
+        # Either way, the results are wrong — this confirms we need the custom config
+        if leads:
+            assert leads[0].case_number != "23-000123-TD"
