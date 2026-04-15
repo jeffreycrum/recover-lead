@@ -41,6 +41,14 @@ def _make_browser_mock(page_html: str) -> tuple[MagicMock, MagicMock]:
     page_mock.content = AsyncMock(return_value=page_html)
     page_mock.close = AsyncMock()
 
+    # Results table locator — raises TimeoutError on pages with no <table>
+    table_locator_mock = AsyncMock()
+    if "<table" not in page_html.lower():
+        table_locator_mock.wait_for = AsyncMock(
+            side_effect=TimeoutError("results table not found")
+        )
+    page_mock.locator = MagicMock(return_value=table_locator_mock)
+
     # reCAPTCHA iframe mock
     checkbox_mock = AsyncMock()
     checkbox_mock.click = AsyncMock()
@@ -156,7 +164,7 @@ class TestParse:
     def test_large_estate_amount(self):
         scraper = _make_scraper()
         leads = scraper.parse(self._fixture_json())
-        estate_lead = next(l for l in leads if "LEON SMITH" in (l.owner_name or ""))
+        estate_lead = next(lead for lead in leads if "LEON SMITH" in (lead.owner_name or ""))
         assert estate_lead.surplus_amount == Decimal("191644.22")
         assert estate_lead.case_number == "207595"
         assert estate_lead.sale_date == "2025-10-31"
@@ -165,7 +173,7 @@ class TestParse:
     def test_small_amounts_parsed(self):
         scraper = _make_scraper()
         leads = scraper.parse(self._fixture_json())
-        steven = next(l for l in leads if l.case_number == "679129")
+        steven = next(lead for lead in leads if lead.case_number == "679129")
         assert steven.surplus_amount == Decimal("30.00")
         assert steven.owner_name == "STEVEN SMITH"
 
@@ -307,5 +315,12 @@ class TestFetch:
 
 class TestRegistration:
     def test_registered_in_factory(self):
-        from app.ingestion.factory import SCRAPER_REGISTRY
+        from app.ingestion.factory import SCRAPER_REGISTRY, _ensure_scrapers_imported
+
+        # _ensure_scrapers_imported is the production code path that makes scrapers
+        # available to the factory. Calling it here verifies the full wiring: the
+        # module is importable, the @register_scraper decorator ran, and the factory
+        # can look up DuvalClerkScraper by name.
+        _ensure_scrapers_imported()
         assert "DuvalClerkScraper" in SCRAPER_REGISTRY
+        assert SCRAPER_REGISTRY["DuvalClerkScraper"].__name__ == "DuvalClerkScraper"

@@ -58,7 +58,7 @@ _CONFIG = {
 
 def upgrade() -> None:
     conn = op.get_bind()
-    conn.execute(
+    result = conn.execute(
         sa.text(
             "UPDATE counties "
             "SET is_active = true, "
@@ -76,13 +76,24 @@ def upgrade() -> None:
             "cfg": json.dumps(_CONFIG),
         },
     )
+    if result.rowcount != 1:
+        raise RuntimeError(
+            f"Expected exactly 1 counties row for Duval, FL — got {result.rowcount}. "
+            "Ensure the Duval county seed row exists before running this migration."
+        )
 
 
 def downgrade() -> None:
     conn = op.get_bind()
     conn.execute(
         sa.text(
-            "UPDATE counties SET is_active = false "
+            "UPDATE counties "
+            "SET is_active = false, "
+            "    source_url = NULL, "
+            "    source_type = NULL, "
+            "    scraper_class = NULL, "
+            "    scrape_schedule = NULL, "
+            "    config = NULL "
             "WHERE name = 'Duval' AND state = 'FL'"
         )
     )

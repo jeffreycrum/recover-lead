@@ -29,7 +29,7 @@ from decimal import Decimal
 from bs4 import BeautifulSoup
 from playwright.async_api import Browser, async_playwright
 
-from app.ingestion.base_scraper import BaseScraper, RawLead
+from app.ingestion.base_scraper import BaseScraper, RawLead, sanitize_text
 from app.ingestion.factory import register_scraper
 
 # High-yield 3-letter prefixes covering Anglo and Hispanic FL surname demographics.
@@ -125,7 +125,14 @@ class DuvalClerkScraper(BaseScraper):
             await page.wait_for_timeout(wait_ms)
 
             await page.click(search_selector)
-            await page.wait_for_timeout(inter_search_ms)
+
+            # Wait for results table (or bail out cleanly on no-results pages)
+            try:
+                await page.locator("table").wait_for(
+                    state="visible", timeout=inter_search_ms + 5000
+                )
+            except Exception:
+                return []
 
             content = await page.content()
             return self._parse_results_html(content)
@@ -163,6 +170,10 @@ class DuvalClerkScraper(BaseScraper):
             check_number = rec.get("check_number", "").strip()
             if not check_number:
                 continue
+            sanitized_rec = {
+                k: sanitize_text(v) if isinstance(v, str) else v
+                for k, v in rec.items()
+            }
             leads.append(
                 RawLead(
                     case_number=check_number,
@@ -170,7 +181,7 @@ class DuvalClerkScraper(BaseScraper):
                     surplus_amount=self._parse_amount(rec.get("amount", "")),
                     sale_date=self._parse_date(rec.get("issued_date", "")),
                     sale_type="unclaimed_funds",
-                    raw_data=rec,
+                    raw_data=sanitized_rec,
                 )
             )
         return leads
