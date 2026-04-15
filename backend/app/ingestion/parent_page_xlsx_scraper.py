@@ -62,7 +62,6 @@ class ParentPageXlsxScraper(XlsxScraper):
             timeout=60.0,
             headers=SCRAPER_HEADERS,
             follow_redirects=True,
-            verify=False,
         ) as client:
             landing = await client.get(self.source_url)
             landing.raise_for_status()

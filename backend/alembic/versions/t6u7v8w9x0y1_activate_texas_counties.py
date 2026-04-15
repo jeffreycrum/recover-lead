@@ -194,7 +194,7 @@ _DENTON_CONFIG = {
 
 _GALVESTON_URL = (
     "https://www.galvestoncountytx.gov"
-    "/our-county/district-clerk/excess-proceeds/-folder-665"
+    "/our-county/district-clerk/excess-proceeds"
 )
 _GALVESTON_CONFIG = {
     "pdf_link_selector": "a[href*='showpublisheddocument']",
@@ -214,10 +214,10 @@ _GALVESTON_CONFIG = {
         "amt": "surplus_amount",
     },
     "notes": (
-        "Activated 2026-04-14. CivicPlus folder-665 = 2026 subfolder. "
+        "Activated 2026-04-14. Stable parent page at /excess-proceeds lists all "
+        "year subfolders; selector finds the latest showpublisheddocument link. "
         "Document links use /home/showpublisheddocument/ pattern (no .pdf ext). "
         "Text-line mode: YY-TX-NNNN format case numbers, no $ prefix on amounts. "
-        "When 2027 folder is published, update source_url to -folder-666. "
         "50+ records in 2026-03 report."
     ),
 }
@@ -271,7 +271,7 @@ _HOUSTON_TX_CONFIG = {
 # ─── Activation list ──────────────────────────────────────────────────────────
 
 _COUNTIES = [
-    ("Dallas", "TX", _DALLAS_URL, "html", "TexasPositionalPdfScraper", _DALLAS_CONFIG),
+    ("Dallas", "TX", _DALLAS_URL, "pdf", "TexasPositionalPdfScraper", _DALLAS_CONFIG),
     ("Fort Bend", "TX", _FORT_BEND_URL, "pdf", "PdfScraper", _FORT_BEND_CONFIG),
     ("Denton", "TX", _DENTON_URL, "pdf", "PdfScraper", _DENTON_CONFIG),
     ("Galveston", "TX", _GALVESTON_URL, "pdf", "ParentPagePdfScraper", _GALVESTON_CONFIG),
