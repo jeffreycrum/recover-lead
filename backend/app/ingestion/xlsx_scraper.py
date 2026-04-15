@@ -110,6 +110,7 @@ class XlsxScraper(BaseScraper):
                     case_number=case_number,
                     owner_name=owner_name,
                     surplus_amount=surplus_amount,
+                    property_state=self.state,
                     sale_type="tax_deed",
                     raw_data={"row": cells},
                 )
@@ -172,6 +173,7 @@ class XlsxScraper(BaseScraper):
                         property_address=cell(row, addr_col) or None,
                         owner_name=cell(row, owner_col) or None,
                         surplus_amount=surplus_amount,
+                        property_state=self.state,
                         sale_type="tax_deed",
                         raw_data={"row": [str(c) if c is not None else "" for c in row]},
                     )
