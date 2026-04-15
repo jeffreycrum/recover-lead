@@ -437,3 +437,120 @@ class TestContractUpdate:
             assert response.json()["status"] == "approved"
         finally:
             app.dependency_overrides.clear()
+
+
+class TestContractPdf:
+    @pytest.mark.asyncio
+    async def test_pdf_returns_pdf_content_type(self):
+        """GET /contracts/{id}/pdf returns application/pdf with correct header."""
+        user = _make_user()
+        contract = _make_contract(user_id=user.id)
+        contract_id = contract.id
+        lead = MagicMock()
+        lead.case_number = "TC-2024-001"
+
+        from app.db.session import get_async_session
+        from app.dependencies import get_current_user
+
+        session = AsyncMock()
+        result = MagicMock()
+        result.one_or_none.return_value = (contract, "TC-2024-001")
+        session.execute = AsyncMock(return_value=result)
+
+        async def override_session():
+            yield session
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_async_session] = override_session
+
+        try:
+            with patch(
+                "app.services.letter_service.generate_pdf",
+                return_value=b"%PDF-1.4 fake",
+            ):
+                transport = ASGITransport(app=app)
+                async with AsyncClient(transport=transport, base_url="http://test") as client:
+                    response = await client.get(f"/api/v1/contracts/{contract_id}/pdf")
+
+            assert response.status_code == 200
+            assert response.headers["content-type"] == "application/pdf"
+            assert "attachment" in response.headers["content-disposition"]
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_pdf_returns_404_for_another_users_contract(self):
+        """GET /contracts/{id}/pdf returns 404 when contract belongs to another user."""
+        user = _make_user()
+        contract_id = uuid.uuid4()
+
+        from app.db.session import get_async_session
+        from app.dependencies import get_current_user
+
+        session = AsyncMock()
+        result = MagicMock()
+        result.one_or_none.return_value = None
+        session.execute = AsyncMock(return_value=result)
+
+        async def override_session():
+            yield session
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_async_session] = override_session
+
+        try:
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.get(f"/api/v1/contracts/{contract_id}/pdf")
+
+            assert response.status_code == 404
+        finally:
+            app.dependency_overrides.clear()
+
+
+class TestContractIdempotency:
+    @pytest.mark.asyncio
+    async def test_replays_cached_202_without_requeing(self):
+        """Second POST /contracts/generate with same Idempotency-Key returns cached 202."""
+        user = _make_user()
+        lead_id = uuid.uuid4()
+        idem_key = str(uuid.uuid4())
+        cached_body = {"task_id": "task-cached-abc", "status": "queued", "message": "..."}
+
+        from app.db.session import get_async_session
+        from app.dependencies import get_current_user
+
+        session = AsyncMock()
+
+        async def override_session():
+            yield session
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_async_session] = override_session
+
+        try:
+            with (
+                patch(
+                    "app.core.idempotency.get_cached_response",
+                    new=AsyncMock(return_value={"status_code": 202, "body": cached_body}),
+                ),
+                patch("app.workers.contract_tasks.generate_contract_task") as mock_task,
+            ):
+                transport = ASGITransport(app=app)
+                async with AsyncClient(transport=transport, base_url="http://test") as client:
+                    response = await client.post(
+                        "/api/v1/contracts/generate",
+                        json={
+                            "lead_id": str(lead_id),
+                            "fee_percentage": 25.0,
+                            "agent_name": "Jane Doe",
+                        },
+                        headers={"Idempotency-Key": idem_key},
+                    )
+
+            assert response.status_code == 202
+            assert response.json()["task_id"] == "task-cached-abc"
+            # Task must NOT be queued again on replay
+            mock_task.delay.assert_not_called()
+        finally:
+            app.dependency_overrides.clear()

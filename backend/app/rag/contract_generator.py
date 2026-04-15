@@ -122,11 +122,29 @@ async def _generate_clauses_via_claude(
 
     raw_text = response.content[0].text.strip()
 
+    expected_clause_keys = frozenset(
+        {
+            "authorization_clause",
+            "fee_clause",
+            "timeline_clause",
+            "warranty_clause",
+            "governing_law_clause",
+        }
+    )
+
     try:
-        clauses = json.loads(raw_text)
+        parsed = json.loads(raw_text)
     except json.JSONDecodeError:
         match = re.search(r"\{.*\}", raw_text, re.DOTALL)
-        clauses = json.loads(match.group()) if match else _placeholder_clauses(fee_percentage)
+        parsed = json.loads(match.group()) if match else {}
+
+    # Whitelist: only pass known clause keys to the template; fall back to
+    # placeholders for any key that Claude omitted or added unexpectedly.
+    placeholders = _placeholder_clauses(fee_percentage)
+    clauses = {
+        key: str(parsed[key]) if key in parsed else placeholders[key]
+        for key in expected_clause_keys
+    }
 
     usage = LLMUsage(
         user_id=user_id,
