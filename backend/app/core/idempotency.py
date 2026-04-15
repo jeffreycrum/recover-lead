@@ -53,6 +53,16 @@ async def claim_idempotency_key(idempotency_key: str, processing_ttl: int = 30) 
     return result is not None
 
 
+async def release_idempotency_key(idempotency_key: str) -> None:
+    """Release an in-progress idempotency lock.
+
+    Call this when a request fails after claiming the lock so that retries
+    receive the real error response rather than a 409 conflict.
+    """
+    r = get_idempotency_redis()
+    await r.delete(f"idempotency:lock:{idempotency_key}")
+
+
 def get_idempotency_key(request: Request) -> str | None:
     """Extract idempotency key from request headers."""
     return request.headers.get("Idempotency-Key")

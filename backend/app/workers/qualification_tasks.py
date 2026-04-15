@@ -35,6 +35,8 @@ def _get_worker_session() -> AsyncSession:
     retry_backoff=True,
     max_retries=3,
     queue="rag",
+    soft_time_limit=540,
+    time_limit=600,
 )
 def qualify_single(
     self,

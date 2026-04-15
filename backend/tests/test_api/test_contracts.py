@@ -517,6 +517,55 @@ class TestContractPdf:
             app.dependency_overrides.clear()
 
 
+class TestContractPagination:
+    @pytest.mark.asyncio
+    async def test_list_has_more_true_when_extra_row_exists(self):
+        """GET /contracts returns has_more=True and next_cursor when more rows exist."""
+        user = _make_user()
+
+        from app.db.session import get_async_session
+        from app.dependencies import get_current_user
+
+        session = AsyncMock()
+        result = MagicMock()
+
+        # Simulate DB returning limit+1 rows (26 for default page size 25)
+        def make_row(i: int):
+            c = _make_contract(user_id=user.id)
+            return (
+                c,
+                f"TC-2024-{i:03d}",
+                "Jane Smith",
+                Decimal("12000.00"),
+                "123 Main St",
+                "Hillsborough",
+            )
+
+        rows = [make_row(i) for i in range(26)]  # one extra triggers has_more
+        result.all.return_value = rows
+        # cursor lookup returns nothing (no cursor given)
+        session.execute = AsyncMock(return_value=result)
+
+        async def override_session():
+            yield session
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_async_session] = override_session
+
+        try:
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.get("/api/v1/contracts")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert len(data["items"]) == 25  # limit, not 26
+            assert data["has_more"] is True
+            assert data["next_cursor"] is not None
+        finally:
+            app.dependency_overrides.clear()
+
+
 class TestContractIdempotency:
     @pytest.mark.asyncio
     async def test_replays_cached_202_without_requeing(self):
@@ -561,5 +610,54 @@ class TestContractIdempotency:
             assert response.json()["task_id"] == "task-cached-abc"
             # Task must NOT be queued again on replay
             mock_task.delay.assert_not_called()
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_409_when_concurrent_request_holds_lock(self):
+        """POST /contracts/generate returns 409 when claim returns False and cache stays empty."""
+        user = _make_user()
+        lead_id = uuid.uuid4()
+        idem_key = str(uuid.uuid4())
+
+        from app.db.session import get_async_session
+        from app.dependencies import get_current_user
+
+        session = AsyncMock()
+
+        async def override_session():
+            yield session
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_async_session] = override_session
+
+        try:
+            with (
+                # Both cache probes return None (concurrent winner hasn't stored yet)
+                patch(
+                    "app.api.v1.contracts.get_cached_response",
+                    new=AsyncMock(return_value=None),
+                ),
+                # Another request holds the lock
+                patch(
+                    "app.api.v1.contracts.claim_idempotency_key",
+                    new=AsyncMock(return_value=False),
+                ),
+                patch("asyncio.sleep", new=AsyncMock()),  # skip the 0.5s wait
+            ):
+                transport = ASGITransport(app=app)
+                async with AsyncClient(transport=transport, base_url="http://test") as client:
+                    response = await client.post(
+                        "/api/v1/contracts/generate",
+                        json={
+                            "lead_id": str(lead_id),
+                            "fee_percentage": 25.0,
+                            "agent_name": "Jane Doe",
+                        },
+                        headers={"Idempotency-Key": idem_key},
+                    )
+
+            assert response.status_code == 409
+            assert response.json()["detail"]["code"] == "IDEMPOTENCY_CONFLICT"
         finally:
             app.dependency_overrides.clear()

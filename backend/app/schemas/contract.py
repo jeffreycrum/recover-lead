@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 VALID_CONTRACT_TYPES = {"recovery_agreement"}
 VALID_CONTRACT_STATUSES = {"draft", "approved", "signed"}
@@ -46,7 +46,7 @@ class ContractGenerateRequest(BaseModel):
 
 
 class ContractUpdateRequest(BaseModel):
-    content: str | None = None
+    content: str | None = Field(default=None, max_length=500_000)
     status: str | None = None
 
     @field_validator("status")

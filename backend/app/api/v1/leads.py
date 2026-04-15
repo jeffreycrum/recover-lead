@@ -1,13 +1,24 @@
+import asyncio
+import hashlib
+import json as _json
 import uuid
 from decimal import Decimal
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import InsufficientCreditsError, NotFoundError
+from app.core.idempotency import (
+    cache_response,
+    claim_idempotency_key,
+    get_cached_response,
+    get_idempotency_key,
+    release_idempotency_key,
+)
 from app.db.session import get_async_session
 from app.dependencies import get_current_user
 from app.models.county import County
@@ -438,6 +449,7 @@ async def close_lead(
 @router.post("/{lead_id}/qualify")
 async def qualify_lead_endpoint(
     lead_id: uuid.UUID,
+    request: Request,
     session: AsyncSession = Depends(get_async_session),
     user: User = Depends(get_current_user),
 ) -> dict:
@@ -477,31 +489,58 @@ async def qualify_lead_endpoint(
             "status": "qualified",
         }
 
-    from app.services.billing_service import reserve_usage
+    # Idempotency: replay cached 202 without re-billing. Scoped to endpoint path.
+    idem_key = get_idempotency_key(request)
+    scoped_key: str | None = None
+    if idem_key:
+        scoped_key = f"{user.id}:POST/leads/{lead_id}/qualify:{idem_key}"
+        cached = await get_cached_response(scoped_key)
+        if cached:
+            return JSONResponse(status_code=cached["status_code"], content=cached["body"])
+        claimed = await claim_idempotency_key(scoped_key)
+        if not claimed:
+            await asyncio.sleep(0.5)
+            cached = await get_cached_response(scoped_key)
+            if cached:
+                return JSONResponse(status_code=cached["status_code"], content=cached["body"])
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "IDEMPOTENCY_CONFLICT",
+                    "message": "Another request with the same idempotency key is in progress",
+                },
+            )
 
-    reservation = await reserve_usage(session, user.id, "qualification", count=1)
-    if not reservation.allowed:
-        raise InsufficientCreditsError()
+    try:
+        from app.services.billing_service import reserve_usage
 
-    from app.core.sse import register_task_owner
-    from app.workers.qualification_tasks import qualify_single
+        reservation = await reserve_usage(session, user.id, "qualification", count=1)
+        if not reservation.allowed:
+            raise InsufficientCreditsError()
 
-    task = qualify_single.delay(
-        str(user.id),
-        str(lead_id),
-        reservation.overage_count > 0,
-        reservation.period_start_iso,
-    )
-    register_task_owner(task.id, str(user.id))
+        from app.core.sse import register_task_owner
+        from app.workers.qualification_tasks import qualify_single
 
-    await record_activity(session, lead_id, user.id, "qualify_started", "AI qualification started")
+        task = qualify_single.delay(
+            str(user.id),
+            str(lead_id),
+            reservation.overage_count > 0,
+            reservation.period_start_iso,
+        )
+        register_task_owner(task.id, str(user.id))
 
-    from fastapi.responses import JSONResponse
+        await record_activity(
+            session, lead_id, user.id, "qualify_started", "AI qualification started"
+        )
 
-    return JSONResponse(
-        status_code=status.HTTP_202_ACCEPTED,
-        content={"task_id": task.id, "status": "queued", "message": "Qualification queued"},
-    )
+        body = {"task_id": task.id, "status": "queued", "message": "Qualification queued"}
+        if scoped_key:
+            await cache_response(scoped_key, status.HTTP_202_ACCEPTED, body)
+        return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=body)
+    except Exception:
+        if scoped_key:
+            await release_idempotency_key(scoped_key)
+        raise
 
 
 MAX_BULK_QUALIFY_SIZE = 100
@@ -510,6 +549,7 @@ MAX_BULK_QUALIFY_SIZE = 100
 @router.post("/bulk-qualify", status_code=status.HTTP_202_ACCEPTED)
 async def bulk_qualify(
     req: BulkQualifyRequest,
+    request: Request,
     session: AsyncSession = Depends(get_async_session),
     user: User = Depends(get_current_user),
 ) -> dict:
@@ -565,30 +605,65 @@ async def bulk_qualify(
             "message": f"All {cached_count} leads are up to date — no qualification needed",
         }
 
-    from app.services.billing_service import reserve_usage
+    # Idempotency: replay cached 202 without re-billing. Scoped to endpoint path + body hash.
+    idem_key = get_idempotency_key(request)
+    scoped_key: str | None = None
+    if idem_key:
+        body_hash = hashlib.sha256(
+            _json.dumps(req.model_dump(), sort_keys=True, default=str).encode()
+        ).hexdigest()[:16]
+        scoped_key = f"{user.id}:POST/leads/bulk-qualify:{idem_key}:{body_hash}"
+        cached = await get_cached_response(scoped_key)
+        if cached:
+            return JSONResponse(status_code=cached["status_code"], content=cached["body"])
+        claimed = await claim_idempotency_key(scoped_key)
+        if not claimed:
+            await asyncio.sleep(0.5)
+            cached = await get_cached_response(scoped_key)
+            if cached:
+                return JSONResponse(status_code=cached["status_code"], content=cached["body"])
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "IDEMPOTENCY_CONFLICT",
+                    "message": "Another request with the same idempotency key is in progress",
+                },
+            )
 
-    reservation = await reserve_usage(session, user.id, "qualification", count=len(billable_ids))
-    if not reservation.allowed:
-        raise InsufficientCreditsError()
+    try:
+        from app.services.billing_service import reserve_usage
 
-    from app.core.sse import register_task_owner
-    from app.workers.qualification_tasks import qualify_batch
+        reservation = await reserve_usage(
+            session, user.id, "qualification", count=len(billable_ids)
+        )
+        if not reservation.allowed:
+            raise InsufficientCreditsError()
 
-    task = qualify_batch.delay(
-        str(user.id),
-        [str(lid) for lid in billable_ids],
-        reservation.overage_count,
-        reservation.period_start_iso,
-    )
-    register_task_owner(task.id, str(user.id))
+        from app.core.sse import register_task_owner
+        from app.workers.qualification_tasks import qualify_batch
 
-    return {
-        "task_id": task.id,
-        "status": "queued",
-        "lead_count": len(billable_ids),
-        "cached_count": cached_count,
-        "message": "Bulk qualification queued",
-    }
+        task = qualify_batch.delay(
+            str(user.id),
+            [str(lid) for lid in billable_ids],
+            reservation.overage_count,
+            reservation.period_start_iso,
+        )
+        register_task_owner(task.id, str(user.id))
+
+        body = {
+            "task_id": task.id,
+            "status": "queued",
+            "lead_count": len(billable_ids),
+            "cached_count": cached_count,
+            "message": "Bulk qualification queued",
+        }
+        if scoped_key:
+            await cache_response(scoped_key, status.HTTP_202_ACCEPTED, body)
+        return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=body)
+    except Exception:
+        if scoped_key:
+            await release_idempotency_key(scoped_key)
+        raise
 
 
 def _is_cache_hit(row) -> bool:

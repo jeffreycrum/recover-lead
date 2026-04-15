@@ -21,6 +21,8 @@ logger = structlog.get_logger()
     retry_backoff=True,
     max_retries=3,
     queue="rag",
+    soft_time_limit=540,
+    time_limit=600,
 )
 def generate_contract_task(
     self,
@@ -69,6 +71,12 @@ async def _generate_contract(
     is_overage: bool = False,
 ) -> dict:
     async with async_session_factory() as session:
+        # Phase 1: Read-only queries in a short transaction.
+        # Extract primitive values so they survive session expiry after commit.
+        lead_data: dict = {}
+        county_name: str = ""
+        state: str = "FL"
+
         async with session.begin():
             result = await session.execute(
                 select(
@@ -95,7 +103,6 @@ async def _generate_contract(
                 return {"error": "Lead not claimed"}
 
             state = county_state or lead.property_state or "FL"
-
             lead_data = {
                 "case_number": lead.case_number,
                 "owner_name": lead.owner_name,
@@ -103,39 +110,45 @@ async def _generate_contract(
                 "property_city": lead.property_city,
                 "surplus_amount": lead.surplus_amount,
             }
+        # Phase 1 transaction committed; DB connection returned to pool.
 
-            content = await generate_contract_content(
-                session=session,
-                user_id=uuid.UUID(user_id),
-                lead_data=lead_data,
-                county_name=county_name,
-                state=state,
-                contract_type=contract_type,
-                fee_percentage=fee_percentage,
-                agent_name=agent_name,
-            )
+        # Phase 2: LLM call — no transaction held, no connection consumed.
+        # generate_contract_content calls session.add(LLMUsage) which autobegins.
+        content = await generate_contract_content(
+            session=session,
+            user_id=uuid.UUID(user_id),
+            lead_data=lead_data,
+            county_name=county_name,
+            state=state,
+            contract_type=contract_type,
+            fee_percentage=fee_percentage,
+            agent_name=agent_name,
+        )
 
-            contract = Contract(
-                lead_id=uuid.UUID(lead_id),
-                user_id=uuid.UUID(user_id),
-                contract_type=contract_type,
-                content=content,
-                status="draft",
-                fee_percentage=fee_percentage,
-                agent_name=agent_name,
-            )
-            session.add(contract)
+        # Phase 3: Write contract + activity in the autobegun transaction and commit.
+        contract = Contract(
+            lead_id=uuid.UUID(lead_id),
+            user_id=uuid.UUID(user_id),
+            contract_type=contract_type,
+            content=content,
+            status="draft",
+            fee_percentage=fee_percentage,
+            agent_name=agent_name,
+        )
+        session.add(contract)
 
-            from app.services.lead_service import record_activity
+        from app.services.lead_service import record_activity
 
-            await record_activity(
-                session,
-                uuid.UUID(lead_id),
-                uuid.UUID(user_id),
-                "contract_generated",
-                f"Contract generated ({contract_type})",
-                {"contract_type": contract_type, "fee_percentage": fee_percentage},
-            )
+        await record_activity(
+            session,
+            uuid.UUID(lead_id),
+            uuid.UUID(user_id),
+            "contract_generated",
+            f"Contract generated ({contract_type})",
+            {"contract_type": contract_type, "fee_percentage": fee_percentage},
+        )
+
+        await session.commit()
 
         if is_overage:
             from app.services.billing_service import record_overage_usage

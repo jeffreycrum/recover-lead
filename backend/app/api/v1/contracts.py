@@ -15,6 +15,7 @@ from app.core.idempotency import (
     claim_idempotency_key,
     get_cached_response,
     get_idempotency_key,
+    release_idempotency_key,
 )
 from app.db.session import get_async_session
 from app.dependencies import get_current_user
@@ -46,13 +47,15 @@ async def generate_contract(
     user: User = Depends(get_current_user),
 ) -> JSONResponse:
     """Generate a contract for a claimed lead. Returns task_id for polling."""
-    # Idempotency: replay cached 202 without re-queuing or re-charging
+    # Idempotency: replay cached 202 without re-queuing or re-charging.
+    # Scoped to endpoint path so keys can't cross endpoints.
     idem_key = get_idempotency_key(request)
+    scoped_key: str | None = None
     if idem_key:
         body_hash = hashlib.sha256(
             _json.dumps(req.model_dump(), sort_keys=True, default=str).encode()
         ).hexdigest()[:16]
-        scoped_key = f"{user.id}:{idem_key}:{body_hash}"
+        scoped_key = f"{user.id}:POST/contracts/generate:{idem_key}:{body_hash}"
         cached = await get_cached_response(scoped_key)
         if cached:
             return JSONResponse(status_code=cached["status_code"], content=cached["body"])
@@ -70,40 +73,46 @@ async def generate_contract(
                 },
             )
 
-    # Verify lead is claimed by this user
-    ul_result = await session.execute(
-        select(UserLead).where(
-            UserLead.user_id == user.id,
-            UserLead.lead_id == req.lead_id,
+    # Release the lock if anything below fails so retries get the real error.
+    try:
+        # Verify lead is claimed by this user
+        ul_result = await session.execute(
+            select(UserLead).where(
+                UserLead.user_id == user.id,
+                UserLead.lead_id == req.lead_id,
+            )
         )
-    )
-    if not ul_result.scalar_one_or_none():
-        raise NotFoundError("Claimed lead")
+        if not ul_result.scalar_one_or_none():
+            raise NotFoundError("Claimed lead")
 
-    from app.services.billing_service import reserve_usage
+        from app.services.billing_service import reserve_usage
 
-    reservation = await reserve_usage(session, user.id, "letter", count=1)
-    if not reservation.allowed:
-        raise InsufficientCreditsError()
+        reservation = await reserve_usage(session, user.id, "letter", count=1)
+        if not reservation.allowed:
+            raise InsufficientCreditsError()
 
-    from app.core.sse import register_task_owner
-    from app.workers.contract_tasks import generate_contract_task
+        from app.core.sse import register_task_owner
+        from app.workers.contract_tasks import generate_contract_task
 
-    task = generate_contract_task.delay(
-        str(user.id),
-        str(req.lead_id),
-        req.contract_type,
-        float(req.fee_percentage),
-        req.agent_name,
-        bool(reservation.overage_count),
-        reservation.period_start_iso,
-    )
-    register_task_owner(task.id, str(user.id))
+        task = generate_contract_task.delay(
+            str(user.id),
+            str(req.lead_id),
+            req.contract_type,
+            float(req.fee_percentage),
+            req.agent_name,
+            bool(reservation.overage_count),
+            reservation.period_start_iso,
+        )
+        register_task_owner(task.id, str(user.id))
 
-    body = {"task_id": task.id, "status": "queued", "message": "Contract generation queued"}
-    if idem_key:
-        await cache_response(scoped_key, status.HTTP_202_ACCEPTED, body)
-    return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=body)
+        body = {"task_id": task.id, "status": "queued", "message": "Contract generation queued"}
+        if scoped_key:
+            await cache_response(scoped_key, status.HTTP_202_ACCEPTED, body)
+        return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=body)
+    except Exception:
+        if scoped_key:
+            await release_idempotency_key(scoped_key)
+        raise
 
 
 @router.get("", response_model=CursorPage)
@@ -126,7 +135,7 @@ async def list_contracts(
         .join(Lead, Contract.lead_id == Lead.id)
         .join(County, Lead.county_id == County.id)
         .where(Contract.user_id == user.id)
-        .order_by(Contract.created_at.desc(), Contract.id)
+        .order_by(Contract.created_at.desc(), Contract.id.desc())
     )
 
     if cursor:
@@ -141,7 +150,7 @@ async def list_contracts(
             if cursor_time is not None:
                 query = query.where(
                     (Contract.created_at < cursor_time)
-                    | ((Contract.created_at == cursor_time) & (Contract.id > cursor_uuid))
+                    | ((Contract.created_at == cursor_time) & (Contract.id < cursor_uuid))
                 )
         except ValueError:
             pass

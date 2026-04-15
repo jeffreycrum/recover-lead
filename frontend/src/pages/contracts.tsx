@@ -61,7 +61,9 @@ export function ContractsPage() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [allContracts, setAllContracts] = useState<any[]>([]);
 
-  const prevContractCountRef = useRef<number>(0);
+  // Track the IDs that were visible when generation was queued so we can
+  // detect a new contract even when page 1 is already full (length won't grow).
+  const knownContractIdsRef = useRef<Set<string>>(new Set());
 
   const { data: page, isLoading } = useQuery({
     queryKey: ["contracts", cursor],
@@ -70,7 +72,8 @@ export function ContractsPage() {
     refetchInterval: pendingGeneration ? 4000 : false,
   });
 
-  // Accumulate pages into allContracts
+  // Accumulate pages into allContracts.
+  // When cursor is null we replace the list (covers invalidations and fresh loads).
   useEffect(() => {
     if (!page) return;
     if (cursor === null) {
@@ -80,17 +83,20 @@ export function ContractsPage() {
     }
   }, [page, cursor]);
 
-  // Clear pending indicator as soon as a new contract row appears
+  // Clear pending indicator when any new contract ID appears in the first page.
+  // Comparing IDs handles the full-page case where total count stays at 25.
   useEffect(() => {
     if (!pendingGeneration || !page) return;
-    if (page.items.length > prevContractCountRef.current) {
+    const hasNewContract = page.items.some(
+      (c: any) => !knownContractIdsRef.current.has(c.id)
+    );
+    if (hasNewContract) {
       setPendingGeneration(false);
       if (pendingTimeoutRef.current !== null) {
         window.clearTimeout(pendingTimeoutRef.current);
         pendingTimeoutRef.current = null;
       }
     }
-    prevContractCountRef.current = page.items.length;
   }, [page, pendingGeneration]);
 
   // Cancel timeout on unmount
@@ -108,7 +114,8 @@ export function ContractsPage() {
       setShowGenDialog(false);
       setGenForm({ lead_id: "", fee_percentage: "25", agent_name: "", contract_type: "recovery_agreement" });
       setGenError(null);
-      prevContractCountRef.current = page?.items.length ?? 0;
+      // Snapshot current IDs before clearing so we can detect the new contract on refetch.
+      knownContractIdsRef.current = new Set(allContracts.map((c: any) => c.id));
       setPendingGeneration(true);
       setCursor(null);
       setAllContracts([]);
@@ -124,8 +131,12 @@ export function ContractsPage() {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: any }) => api.updateContract(id, data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["contracts"] });
+      // Reset to page 1 before invalidating so the refetch replaces the list
+      // rather than appending into a stale page-2+ cursor.
+      setCursor(null);
+      setAllContracts([]);
       setSelectedContract(null);
+      qc.invalidateQueries({ queryKey: ["contracts"] });
     },
   });
 
