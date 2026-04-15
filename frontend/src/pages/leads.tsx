@@ -17,6 +17,14 @@ export function LeadsPage() {
     cursor ? { ...filters, cursor } : filters,
   );
   const { data: counties } = useCounties();
+
+  const allStates = Array.from(
+    new Set((counties ?? []).map((c: any) => c.state as string))
+  ).sort();
+
+  const visibleCounties = filters.property_state
+    ? (counties ?? []).filter((c: any) => c.state === filters.property_state)
+    : (counties ?? []);
   const claimMutation = useClaimLead();
 
   useEffect(() => {
@@ -47,13 +55,31 @@ export function LeadsPage() {
         <div>
           <h1 className="text-2xl font-bold">Browse Leads</h1>
           <p className="text-muted-foreground">
-            All surplus fund leads across Florida counties
+            All surplus fund leads across available counties
           </p>
         </div>
       </div>
 
       {/* Filters */}
       <div className="flex gap-3 flex-wrap">
+        <select
+          className="px-3 py-2 border rounded-md text-sm bg-white"
+          value={filters.property_state || ""}
+          onChange={(e) =>
+            updateFilter((f) => {
+              const { county_id: _dropped, ...rest } = f;
+              return e.target.value
+                ? { ...rest, property_state: e.target.value }
+                : rest;
+            })
+          }
+        >
+          <option value="">All States</option>
+          {allStates.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+
         <select
           className="px-3 py-2 border rounded-md text-sm bg-white"
           value={filters.county_id || ""}
@@ -65,7 +91,7 @@ export function LeadsPage() {
           }
         >
           <option value="">All Counties</option>
-          {counties?.map((c: any) => (
+          {visibleCounties.map((c: any) => (
             <option key={c.id} value={c.id}>
               {c.name} ({c.lead_count})
             </option>

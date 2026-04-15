@@ -1,25 +1,46 @@
+import { useState } from "react";
 import { useCounties } from "@/hooks/use-subscription";
 import { formatDate } from "@/lib/utils";
 import { Map, CheckCircle, XCircle, Phone, Mail, ExternalLink } from "lucide-react";
 import { EmptyState } from "@/components/common/empty-state";
 
 export function CountiesPage() {
+  const [stateFilter, setStateFilter] = useState("");
   const { data: counties, isLoading } = useCounties();
+
+  const allStates = Array.from(
+    new Set((counties ?? []).map((c: any) => c.state as string))
+  ).sort();
+
+  const visibleCounties = stateFilter
+    ? (counties ?? []).filter((c: any) => c.state === stateFilter)
+    : (counties ?? []);
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">Counties</h1>
         <p className="text-muted-foreground">
-          Florida counties with surplus fund data
+          All counties with surplus fund data
         </p>
       </div>
 
+      <select
+        className="px-3 py-2 border rounded-md text-sm bg-white"
+        value={stateFilter}
+        onChange={(e) => setStateFilter(e.target.value)}
+      >
+        <option value="">All States</option>
+        {allStates.map((s) => (
+          <option key={s} value={s}>{s}</option>
+        ))}
+      </select>
+
       {isLoading ? (
         <div className="py-16 text-center text-muted-foreground">Loading...</div>
-      ) : counties && counties.length > 0 ? (
+      ) : visibleCounties.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {counties.map((county: any) => (
+          {visibleCounties.map((county: any) => (
             <div
               key={county.id}
               className="p-4 bg-white rounded-lg border hover:border-emerald/50 transition-colors"
@@ -81,8 +102,8 @@ export function CountiesPage() {
       ) : (
         <EmptyState
           icon={<Map size={48} />}
-          title="No counties available"
-          description="County data is being loaded. Check back shortly."
+          title={stateFilter ? `No counties found for ${stateFilter}` : "No counties available"}
+          description={stateFilter ? "Try selecting a different state." : "County data is being loaded. Check back shortly."}
         />
       )}
     </div>

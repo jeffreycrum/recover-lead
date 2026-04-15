@@ -52,6 +52,7 @@ async def browse_leads(
     surplus_min: Decimal | None = Query(None),
     surplus_max: Decimal | None = Query(None),
     sale_type: str | None = Query(None),
+    property_state: str | None = Query(None, max_length=2),
     cursor: str | None = Query(None),
     limit: int = Query(DEFAULT_PAGE_SIZE, le=MAX_PAGE_SIZE),
 ) -> CursorPage:
@@ -71,6 +72,8 @@ async def browse_leads(
         query = query.where(Lead.surplus_amount <= surplus_max)
     if sale_type:
         query = query.where(Lead.sale_type == sale_type)
+    if property_state:
+        query = query.where(Lead.property_state == property_state.upper())
 
     # Cursor pagination (cursor is the last lead ID)
     if cursor:
