@@ -63,7 +63,14 @@ async def _scrape_county(county_id: str, task) -> dict:
 
         # Dispatch embedding generation to rag queue (model not loaded in ingestion workers)
         from app.workers.rag_tasks import generate_county_embeddings
-        generate_county_embeddings.delay(str(county.id))
+        try:
+            generate_county_embeddings.delay(str(county.id))
+        except Exception as exc:
+            logger.error(
+                "embedding_dispatch_failed",
+                county_id=str(county.id),
+                error=str(exc),
+            )
 
         return {
             "county": county.name,

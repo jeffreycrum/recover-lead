@@ -35,7 +35,10 @@ def generate_county_embeddings(self, county_id: str) -> dict:
 
 
 async def _generate_embeddings(county_id_str: str) -> dict:
-    county_uuid = uuid.UUID(county_id_str)
+    try:
+        county_uuid = uuid.UUID(county_id_str)
+    except ValueError:
+        return {"error": "invalid_county_id", "county_id": county_id_str}
 
     async with make_worker_session() as session:
         county_result = await session.execute(
