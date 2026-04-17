@@ -100,6 +100,22 @@ async def get_county(
     }
 
 
+@router.post("/ingest-all", status_code=status.HTTP_202_ACCEPTED)
+async def trigger_ingest_all(
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Trigger scrape for all active counties. Admin only."""
+    if user.role != "admin":
+        from app.core.exceptions import ForbiddenError
+
+        raise ForbiddenError()
+
+    from app.workers.ingestion_tasks import scrape_all_active_counties
+
+    task = scrape_all_active_counties.delay()
+    return {"task_id": task.id, "status": "queued"}
+
+
 @router.post("/{county_id}/ingest", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_ingest(
     county_id: uuid.UUID,
