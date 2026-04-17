@@ -5,7 +5,7 @@ Revises: p2q3r4s5t6u7
 Create Date: 2026-04-15 12:00:00.000000
 
 Activates 5 Florida counties that were classified as "Scrapable" in the
-fl_county_surplus_research.csv survey but had not yet been wired up.
+county surplus research CSV but had not yet been wired up.
 
 ─────────────────────────────────────────────────────────────────────────────
 Broward County — broward.org

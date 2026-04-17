@@ -148,7 +148,7 @@ Ordered by phase and severity. Check off tasks as completed.
   - Skip trace overage: `price_1TLBNmACGBKrDLNGGuLlUdXu`
   - Mailing overage: `price_1TL9AWACGBKrDLNGCsDQptXj`
   - Price IDs set as env vars on Railway (api + worker)
-- [x] Run `scripts/create_stripe_products.sh` if not already done
+- [x] Run `utils/create_stripe_products.sh` if not already done
 
 #### Clerk Configuration
 - [x] Enable email verification: Clerk Dashboard > Email, Phone, Username > Require email verification
@@ -174,7 +174,7 @@ These counties do not publish bulk surplus fund lists online. Contact each to re
 #### Staging Verification (After Code Complete)
 - [ ] Test Stripe webhooks on staging: `stripe listen --forward-to <staging-url>/api/v1/billing/webhook`
 - [ ] Test Clerk webhooks on staging: configure endpoint in Clerk Dashboard
-- [ ] Run `python scripts/pre_ingest.py` on staging to seed initial leads
+- [ ] Run `cd backend && python scripts/pre_ingest.py` on staging to seed initial leads
 - [ ] Verify staging with real Stripe test payment flow
 - [ ] Verify staging with real Clerk sign-up flow
 
@@ -200,8 +200,8 @@ These counties do not publish bulk surplus fund lists online. Contact each to re
 - [x] Polk reactivated with new domain polkcountyclerk.net via PlaywrightHtmlScraper
 - [x] Pinellas reactivated via PlaywrightPdfScraper (was 403 Cloudflare)
 - [x] Refresh county access classifications from live clerk sources (2026-04-12): Alachua→Web Form, Charlotte→Web Form, Citrus→Email, Clay→Web Form, Escambia→Email, Flagler→Web Form, Hernando→Web Form, Lake→Web Form, Monroe→Phone, Nassau→Web Form, St. Johns→Web Form, Sarasota→Web Form, Seminole→Web Form, St. Lucie→Phone
-- [x] Monthly scraper URL health check — `scripts/check_county_urls.py` created
-- [x] Update `scripts/fl_county_surplus_research.csv` when county URLs change
+- [x] Monthly scraper URL health check — `utils/check_county_urls.py` created
+- [x] Update `utils/fl_county_surplus_research.csv` when county URLs change
 
 ### Manual Tasks — County Outreach
 
@@ -216,7 +216,7 @@ These counties do not publish bulk surplus fund lists online. Contact each to re
 - [x] ROI dashboard: `roi-stats.tsx` — total recovered, fees earned, deals closed, avg days to close
 - [x] Pipeline metrics: `pipeline-funnel.tsx` — 7-stage Recharts funnel (new→qualified→contacted→signed→filed→paid→closed)
 - [ ] Multi-county upsell prompts ("You've qualified 90% of Hillsborough leads...")
-- [ ] Expand to 20+ FL counties — currently 17 active (5 original + 12 new). 33 identified as scrapable.
+- [x] Expand to 20+ FL counties — 33 active as of PR #21 (all scrapable counties activated).
 - [ ] Qualification result caching: skip re-qualification of unchanged leads
 - [ ] Contract generation: template-based with Claude filling case-specific fields
 
@@ -226,10 +226,10 @@ These counties do not publish bulk surplus fund lists online. Contact each to re
 
 ### P1
 
-- [ ] California county parsers (excess proceeds)
-- [ ] Georgia, Texas, Ohio county parsers
-- [ ] State-specific letter templates and legal disclosures
-- [ ] Expand to all 33 scrapable FL counties (see `scripts/fl_county_surplus_research.csv`). Remaining 34 require phone/email/payment.
+- [x] California county parsers (excess proceeds)
+- [x] Georgia, Texas, Ohio county parsers
+- [x] State-specific letter templates and legal disclosures
+- [x] Expand to all 33 scrapable FL counties (see `utils/fl_county_surplus_research.csv`). Remaining 34 require phone/email/payment.
 
 ### P2
 

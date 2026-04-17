@@ -5,7 +5,7 @@ Revises: g2f3e4d5c6b7
 Create Date: 2026-04-13 02:00:00.000000
 
 Adds contact_phone and contact_email columns to the counties table and
-populates them from the fl_county_surplus_research.csv data.
+populates them from the county surplus research CSV data.
 
 These fields surface on county cards in the UI so users can call or email
 the clerk's office for counties that require manual data requests.
@@ -22,7 +22,7 @@ down_revision: str | Sequence[str] | None = "g2f3e4d5c6b7"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-# (name, phone, email)  — sourced from fl_county_surplus_research.csv 2026-04-13
+# (name, phone, email)  — sourced from the county surplus research CSV 2026-04-13
 CONTACT_DATA: list[tuple[str, str | None, str | None]] = [
     ("Alachua",      None,                              "taxdeeds@alachuaclerk.org"),
     ("Baker",        "(904) 259-8113",                  None),
