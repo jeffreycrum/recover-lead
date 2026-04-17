@@ -84,10 +84,10 @@ export function LeadsPage() {
           className="px-3 py-2 border rounded-md text-sm bg-white"
           value={filters.county_id || ""}
           onChange={(e) =>
-            updateFilter((f) => ({
-              ...f,
-              county_id: e.target.value || undefined!,
-            }))
+            updateFilter((f) => {
+              const { county_id: _dropped, ...rest } = f;
+              return e.target.value ? { ...rest, county_id: e.target.value } : rest;
+            })
           }
         >
           <option value="">All Counties</option>
@@ -103,7 +103,10 @@ export function LeadsPage() {
           placeholder="Min surplus ($)"
           className="px-3 py-2 border rounded-md text-sm w-36"
           onChange={(e) =>
-            updateFilter((f) => ({ ...f, surplus_min: e.target.value || undefined! }))
+            updateFilter((f) => {
+              const { surplus_min: _dropped, ...rest } = f;
+              return e.target.value ? { ...rest, surplus_min: e.target.value } : rest;
+            })
           }
         />
         <input
@@ -111,14 +114,20 @@ export function LeadsPage() {
           placeholder="Max surplus ($)"
           className="px-3 py-2 border rounded-md text-sm w-36"
           onChange={(e) =>
-            updateFilter((f) => ({ ...f, surplus_max: e.target.value || undefined! }))
+            updateFilter((f) => {
+              const { surplus_max: _dropped, ...rest } = f;
+              return e.target.value ? { ...rest, surplus_max: e.target.value } : rest;
+            })
           }
         />
         <select
           className="px-3 py-2 border rounded-md text-sm bg-white"
           value={filters.sale_type || ""}
           onChange={(e) =>
-            updateFilter((f) => ({ ...f, sale_type: e.target.value || undefined! }))
+            updateFilter((f) => {
+              const { sale_type: _dropped, ...rest } = f;
+              return e.target.value ? { ...rest, sale_type: e.target.value } : rest;
+            })
           }
         >
           <option value="">All Types</option>
