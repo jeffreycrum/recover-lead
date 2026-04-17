@@ -114,7 +114,9 @@ class CaliforniaExcessProceedsScraper(ParentPagePdfScraper):
         }
 
         for group_name, field_name in fields.items():
-            if field_name in {"case_number", "surplus_amount"} or field_name not in _SUPPORTED_FIELDS:
+            if field_name in {"case_number", "surplus_amount"} or (
+                field_name not in _SUPPORTED_FIELDS
+            ):
                 continue
 
             value = (groups.get(group_name) or "").strip() or None
@@ -135,7 +137,9 @@ class CaliforniaExcessProceedsScraper(ParentPagePdfScraper):
                     split_match = body_pattern.match(body_text)
                     if split_match:
                         owner_name = owner_name or split_match.groupdict().get("owner")
-                        property_address = property_address or split_match.groupdict().get("address")
+                        property_address = (
+                            property_address or split_match.groupdict().get("address")
+                        )
                 else:
                     owner_name = owner_name or body_text
 
@@ -231,7 +235,8 @@ class SanDiegoFinalReportScraper(ParentPagePdfScraper):
             purchaser = lines[i] if i < len(lines) else None
             i += 1 if purchaser else 0
 
-            deed_date = lines[i] if i < len(lines) and self._DATE_PATTERN.fullmatch(lines[i]) else None
+            has_date = i < len(lines) and self._DATE_PATTERN.fullmatch(lines[i])
+            deed_date = lines[i] if has_date else None
             if deed_date:
                 i += 1
 

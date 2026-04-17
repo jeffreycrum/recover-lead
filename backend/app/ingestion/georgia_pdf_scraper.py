@@ -15,6 +15,7 @@ Georgia-specific table parsing with per-county layouts selected via config.
 from __future__ import annotations
 
 import re
+from decimal import Decimal
 from io import BytesIO
 
 import pdfplumber
@@ -71,7 +72,7 @@ class GeorgiaExcessFundsPdfScraper(PdfScraper):
         return " ".join(str(value or "").split())
 
     @staticmethod
-    def _parse_amount(value: str) -> "Decimal":
+    def _parse_amount(value: str) -> Decimal:
         # Henry County extracts "$ 3 85.05" instead of "$385.05".
         normalized = re.sub(r"(?<=\d)\s+(?=\d)", "", value or "")
         return PdfScraper._parse_amount(normalized)
