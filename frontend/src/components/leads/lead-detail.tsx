@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLead, useClaimLead, useReleaseLead, useQualifyLead } from "@/hooks/use-leads";
+import { useTaskPoller } from "@/hooks/use-task-poller";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { LeadScoreBadge } from "./lead-score-badge";
@@ -15,11 +16,22 @@ interface LeadDetailProps {
 }
 
 export function LeadDetail({ leadId, onClose }: LeadDetailProps) {
+  const qc = useQueryClient();
   const { data: lead, isLoading } = useLead(leadId);
   const claimMutation = useClaimLead();
   const releaseMutation = useReleaseLead();
   const qualifyMutation = useQualifyLead();
   const [showDealDialog, setShowDealDialog] = useState(false);
+  const [qualifyTaskId, setQualifyTaskId] = useState<string | null>(null);
+
+  useTaskPoller({
+    taskId: qualifyTaskId,
+    invalidateKeys: [["leads", leadId]],
+    onDone: () => setQualifyTaskId(null),
+    onError: () => setQualifyTaskId(null),
+  });
+
+  const isQualifying = qualifyMutation.isPending || qualifyTaskId !== null;
 
   if (isLoading) {
     return (
@@ -117,11 +129,29 @@ export function LeadDetail({ leadId, onClose }: LeadDetailProps) {
           ) : (
             <>
               <button
-                onClick={() => qualifyMutation.mutate(leadId)}
-                disabled={qualifyMutation.isPending}
+                onClick={() =>
+                  qualifyMutation.mutate(leadId, {
+                    onSuccess: (data) => {
+                      if (data.task_id) {
+                        // Async path — poll until done
+                        setQualifyTaskId(data.task_id);
+                      } else {
+                        // Cache hit — result inline, just refetch
+                        qc.invalidateQueries({ queryKey: ["leads", leadId] });
+                      }
+                    },
+                  })
+                }
+                disabled={isQualifying}
                 className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 text-sm font-medium"
               >
-                {qualifyMutation.isPending ? "Qualifying..." : "Qualify with AI"}
+                {isQualifying ? (
+                  <span className="flex items-center justify-center gap-1">
+                    <Loader2 size={14} className="animate-spin" /> Qualifying...
+                  </span>
+                ) : (
+                  "Qualify with AI"
+                )}
               </button>
               <button
                 onClick={() => releaseMutation.mutate(leadId)}
