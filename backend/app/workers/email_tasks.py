@@ -63,7 +63,7 @@ async def _send_daily_alerts() -> dict:
         )
         users = result.scalars().all()
 
-        since = datetime.now(UTC) - timedelta(hours=24)
+        since = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=24)
 
         for user in users:
             # Find counties the user has claimed leads in
