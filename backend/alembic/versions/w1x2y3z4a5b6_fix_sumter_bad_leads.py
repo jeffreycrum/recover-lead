@@ -69,7 +69,7 @@ def upgrade() -> None:
     conn = op.get_bind()
 
     # 1. Soft-archive implausibly large Sumter leads
-    now = datetime.now(UTC)
+    now = datetime.now(UTC).replace(tzinfo=None)
     result = conn.execute(
         sa.text(
             """
