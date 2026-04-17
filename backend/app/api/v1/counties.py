@@ -6,11 +6,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
+from app.core.rate_limiter import get_rate_limit_redis
 from app.db.session import get_async_session
 from app.dependencies import get_current_user
 from app.models.county import County
 from app.models.lead import Lead
 from app.models.user import User
+
+_INGEST_ALL_COOLDOWN_SECONDS = 300  # 5 minutes
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/counties", tags=["counties"])
@@ -98,6 +101,31 @@ async def get_county(
         "last_scraped_at": county.last_scraped_at.isoformat() if county.last_scraped_at else None,
         "lead_count": lead_count,
     }
+
+
+@router.post("/ingest-all", status_code=status.HTTP_202_ACCEPTED)
+async def trigger_ingest_all(
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Trigger scrape for all active counties. Admin only. 5-minute cooldown."""
+    if user.role != "admin":
+        from app.core.exceptions import ForbiddenError
+
+        raise ForbiddenError()
+
+    from app.core.sse import register_task_owner
+    from app.workers.ingestion_tasks import scrape_all_active_counties
+
+    r = get_rate_limit_redis()
+    cooldown_key = "admin:ingest_all:cooldown"
+    existing_task_id = await r.get(cooldown_key)
+    if existing_task_id:
+        return {"task_id": existing_task_id.decode(), "status": "queued"}
+
+    task = scrape_all_active_counties.delay()
+    await r.set(cooldown_key, task.id, ex=_INGEST_ALL_COOLDOWN_SECONDS)
+    register_task_owner(task.id, str(user.id))
+    return {"task_id": task.id, "status": "queued"}
 
 
 @router.post("/{county_id}/ingest", status_code=status.HTTP_202_ACCEPTED)
