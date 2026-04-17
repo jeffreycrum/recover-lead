@@ -12,7 +12,6 @@ rows are informational and for future UI display.
 """
 
 import uuid
-from datetime import UTC, datetime
 
 import sqlalchemy as sa
 
@@ -53,7 +52,6 @@ _BODY_PLACEHOLDER = "(Rendered from app/templates/{state}_excess_proceeds.j2)"
 
 def upgrade() -> None:
     conn = op.get_bind()
-    now = datetime.now(tz=UTC)
     for tmpl in _TEMPLATES:
         conn.execute(
             sa.text(
@@ -61,7 +59,7 @@ def upgrade() -> None:
                 INSERT INTO letter_templates
                     (id, name, letter_type, template_body, state, is_default, created_at)
                 VALUES
-                    (:id, :name, :letter_type, :template_body, :state, :is_default, :created_at)
+                    (:id, :name, :letter_type, :template_body, :state, :is_default, NOW())
                 ON CONFLICT DO NOTHING
                 """
             ),
@@ -72,7 +70,6 @@ def upgrade() -> None:
                 "template_body": _BODY_PLACEHOLDER.format(state=tmpl["state"].lower()),
                 "state": tmpl["state"],
                 "is_default": True,
-                "created_at": now,
             },
         )
 
