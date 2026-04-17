@@ -1,6 +1,6 @@
 """seed state-specific letter templates for TX, OH, CA, GA
 
-Revision ID: y1z2a3b4c5d6
+Revision ID: y0z1a2b3c4d5
 Revises: x0y1z2a3b4c5
 Create Date: 2026-04-15 10:00:00.000000
 
@@ -18,7 +18,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision = "y1z2a3b4c5d6"
+revision = "y0z1a2b3c4d5"
 down_revision = "x0y1z2a3b4c5"
 branch_labels = None
 depends_on = None
