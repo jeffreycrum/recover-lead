@@ -6,7 +6,7 @@ import structlog
 from celery.schedules import crontab
 from sqlalchemy import select, update
 
-from app.db.engine import async_session_factory
+from app.db.engine import make_worker_session
 from app.models.billing import SkipTraceCredits, Subscription
 from app.models.county import County
 from app.services.billing_service import get_plan_limits
@@ -66,7 +66,7 @@ async def _reset_monthly_credits() -> dict:
     reset_count = 0
     now = datetime.now(UTC).replace(tzinfo=None)
 
-    async with async_session_factory() as session:
+    async with make_worker_session() as session:
         # Only reset subs whose current period rolled over AND haven't been
         # reset since. Prevents double-reset while waiting for Stripe webhook
         # to advance current_period_end.
@@ -123,7 +123,7 @@ def refresh_pipeline_metrics() -> dict:
 async def _refresh_pipeline_metrics() -> dict:
     from sqlalchemy import text
 
-    async with async_session_factory() as session:
+    async with make_worker_session() as session:
         # Check if the materialized view exists before refreshing
         result = await session.execute(
             text(
@@ -167,7 +167,7 @@ async def _check_county_urls() -> dict:
     """
     ok_count = 0
     broken_count = 0
-    async with async_session_factory() as session:
+    async with make_worker_session() as session:
         result = await session.execute(
             select(County).where(County.source_url.isnot(None), County.is_active.is_(True))
         )
