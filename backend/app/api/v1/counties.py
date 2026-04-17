@@ -1,7 +1,7 @@
 import uuid
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -113,19 +113,18 @@ async def trigger_ingest_all(
 
         raise ForbiddenError()
 
-    r = get_rate_limit_redis()
-    cooldown_key = "admin:ingest_all:cooldown"
-    if await r.exists(cooldown_key):
-        ttl = await r.ttl(cooldown_key)
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Scrape already queued. Try again in {ttl}s.",
-        )
-    await r.set(cooldown_key, "1", ex=_INGEST_ALL_COOLDOWN_SECONDS)
-
+    from app.core.sse import register_task_owner
     from app.workers.ingestion_tasks import scrape_all_active_counties
 
+    r = get_rate_limit_redis()
+    cooldown_key = "admin:ingest_all:cooldown"
+    existing_task_id = await r.get(cooldown_key)
+    if existing_task_id:
+        return {"task_id": existing_task_id.decode(), "status": "queued"}
+
     task = scrape_all_active_counties.delay()
+    await r.set(cooldown_key, task.id, ex=_INGEST_ALL_COOLDOWN_SECONDS)
+    register_task_owner(task.id, str(user.id))
     return {"task_id": task.id, "status": "queued"}
 
 
