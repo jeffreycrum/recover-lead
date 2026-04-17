@@ -8,21 +8,6 @@ from httpx import ASGITransport, AsyncClient
 
 from app.main import app
 
-_RATE_LIMIT_HEADERS = {
-    "X-RateLimit-Limit": 5,
-    "X-RateLimit-Remaining": 4,
-    "X-RateLimit-Reset": 9_999_999_999,
-}
-
-
-@pytest.fixture(autouse=True)
-def mock_rate_limit():
-    """Prevent all tests in this module from hitting Redis."""
-    with patch(
-        "app.dependencies.check_rate_limit",
-        new=AsyncMock(return_value=_RATE_LIMIT_HEADERS),
-    ):
-        yield
 
 
 def _make_user(user_id: uuid.UUID | None = None) -> MagicMock:
@@ -51,10 +36,7 @@ def _make_session(*execute_results: MagicMock) -> AsyncMock:
     session = AsyncMock()
     session.__aenter__ = AsyncMock(return_value=session)
     session.__aexit__ = AsyncMock(return_value=False)
-    # get_current_subscription_plan always fires first; prepend a "free" result.
-    sub_result = MagicMock()
-    sub_result.scalar_one_or_none.return_value = "free"
-    session.execute = AsyncMock(side_effect=[sub_result, *execute_results])
+    session.execute = AsyncMock(side_effect=list(execute_results))
     return session
 
 
