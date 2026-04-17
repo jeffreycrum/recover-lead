@@ -24,6 +24,27 @@ class LeadBrowseResponse(BaseModel):
     created_at: datetime
 
 
+class SkipTracePersonResponse(BaseModel):
+    first_name: str = ""
+    last_name: str = ""
+    full_name: str = ""
+    dob: str | None = None
+    age: int | None = None
+    deceased: bool = False
+    property_owner: bool = False
+    phones: list[dict] = []
+    emails: list[dict] = []
+    mailing_address: dict | None = None
+
+
+class SkipTraceResultSummary(BaseModel):
+    id: uuid.UUID
+    status: str
+    hit_count: int
+    persons: list[SkipTracePersonResponse]
+    created_at: datetime
+
+
 class LeadDetailResponse(BaseModel):
     id: uuid.UUID
     county_id: uuid.UUID
@@ -41,6 +62,7 @@ class LeadDetailResponse(BaseModel):
     owner_last_known_address: str | None
     contacts: list[LeadContactResponse]
     user_lead: UserLeadResponse | None
+    skip_trace_results: list[SkipTraceResultSummary] = []
 
 
 class LeadContactResponse(BaseModel):

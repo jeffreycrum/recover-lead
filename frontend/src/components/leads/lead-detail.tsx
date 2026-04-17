@@ -172,21 +172,21 @@ function SkipTraceSection({
 }) {
   const qc = useQueryClient();
 
-  // Source of truth: lead detail query already loads skip_trace_results.
-  // This query just mirrors it, keyed on leadId, so we get proper
-  // cache invalidation when the lead is refetched.
+  // Seed from lead detail; update optimistically on mutation success.
   const { data: results = [] } = useQuery<any[]>({
     queryKey: ["skip-trace", leadId],
     queryFn: () => Promise.resolve(skipTraceResults || []),
     initialData: skipTraceResults || [],
+    staleTime: Infinity, // driven by setQueryData below, not polling
   });
 
   const mutation = useMutation({
     mutationFn: () => api.skipTraceLead(leadId),
-    onSuccess: () => {
-      // Invalidate the lead so it refetches with the new skip trace result
+    onSuccess: (data) => {
+      // Prepend the fresh result immediately without a round-trip
+      qc.setQueryData(["skip-trace", leadId], (old: any[] = []) => [data, ...old]);
+      // Also invalidate the lead so contacts + shared results refresh
       qc.invalidateQueries({ queryKey: ["leads", leadId] });
-      qc.invalidateQueries({ queryKey: ["skip-trace", leadId] });
     },
   });
 
@@ -194,7 +194,8 @@ function SkipTraceSection({
     ? (() => {
         const e = mutation.error as any;
         const detail = e?.detail || e?.message || "Skip trace failed";
-        return typeof detail === "string" ? detail : detail.message || "Skip trace failed";
+        if (typeof detail === "object" && detail?.message) return detail.message;
+        return typeof detail === "string" ? detail : "Skip trace failed";
       })()
     : null;
 
