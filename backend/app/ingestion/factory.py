@@ -84,6 +84,7 @@ def _ensure_scrapers_imported() -> None:
             raise
 
     from app.ingestion import (
+        california_pdf_scraper,  # noqa: F401
         parent_page_pdf_scraper,  # noqa: F401
         parent_page_xlsx_scraper,  # noqa: F401
         texas_scraper,  # noqa: F401
