@@ -239,15 +239,14 @@ class TestPlaywrightPdfScraper:
         mock_browser.close.assert_called_once()
 
 
-_LEE_LANDING_HTML = """
-<html><body>
-<h1>Tax Deed Reports</h1>
-<ul>
-  <li><a href="/DocumentCenter/View/99/Annual-Escheat-Report-2025.pdf">Annual Escheat Report</a></li>
-  <li><a href="/DocumentCenter/View/88/Weekly-Surplus-Report-2026-04-07.pdf">Weekly Surplus Report</a></li>
-</ul>
-</body></html>
-"""
+_LEE_LANDING_HTML = (
+    "<html><body><h1>Tax Deed Reports</h1><ul>"
+    '<li><a href="/DocumentCenter/View/99/Annual-Escheat-Report-2025.pdf">'
+    "Annual Escheat Report</a></li>"
+    '<li><a href="/DocumentCenter/View/88/Weekly-Surplus-Report-2026-04-07.pdf">'
+    "Weekly Surplus Report</a></li>"
+    "</ul></body></html>"
+)
 
 _FAKE_PDF_BYTES = b"%PDF-1.4 fake-pdf-content"
 
@@ -292,7 +291,7 @@ class TestPlaywrightParentPagePdfScraper:
 
         with (
             patch("app.ingestion.playwright_html.async_playwright", return_value=mock_pw),
-            patch("app.ingestion.playwright_html.httpx.AsyncClient", return_value=mock_http),
+            patch("app.ingestion.tls.httpx.AsyncClient", return_value=mock_http),
         ):
             result = await scraper.fetch()
 
@@ -315,7 +314,7 @@ class TestPlaywrightParentPagePdfScraper:
 
         with (
             patch("app.ingestion.playwright_html.async_playwright", return_value=mock_pw),
-            patch("app.ingestion.playwright_html.httpx.AsyncClient", return_value=mock_http),
+            patch("app.ingestion.tls.httpx.AsyncClient", return_value=mock_http),
         ):
             result = await scraper.fetch()
 
@@ -373,7 +372,7 @@ _REALTDM_DEFAULT_CONFIG = {
 }
 
 
-def _make_realtdm_scraper(county: str = "Polk") -> "RealTdmScraper":
+def _make_realtdm_scraper(county: str = "Polk") -> RealTdmScraper:
     return RealTdmScraper(  # type: ignore[name-defined]
         county_name=county,
         source_url=f"https://{county.lower()}.realtdm.com/public/cases/list",

@@ -2,11 +2,13 @@ import uuid
 
 import structlog
 from fastapi import Depends
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clerk import get_clerk_user_id
 from app.core.exceptions import ForbiddenError
+from app.core.rate_limiter import check_rate_limit
 from app.db.session import get_async_session
 from app.models.billing import SkipTraceCredits, Subscription
 from app.models.user import User
@@ -59,3 +61,31 @@ async def get_current_user_id(
 ) -> uuid.UUID:
     """Get just the user ID for simpler dependency injection."""
     return user.id
+
+
+async def get_current_subscription_plan(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+) -> str:
+    """Return the active subscription plan for the current user."""
+    result = await session.execute(
+        select(Subscription.plan).where(
+            Subscription.user_id == user.id,
+            Subscription.status.in_(["active", "trialing"]),
+        )
+    )
+    return result.scalar_one_or_none() or "free"
+
+
+async def require_rate_limit(
+    response: Response,
+    user: User = Depends(get_current_user),
+    plan: str = Depends(get_current_subscription_plan),
+) -> None:
+    """Enforce per-user rate limits and attach X-RateLimit-* headers to the response.
+
+    Apply to expensive endpoints via router decorator dependencies=[Depends(require_rate_limit)].
+    """
+    headers = await check_rate_limit(str(user.id), plan)
+    for key, value in headers.items():
+        response.headers[key] = str(value)

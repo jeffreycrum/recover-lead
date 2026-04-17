@@ -21,12 +21,12 @@ from __future__ import annotations
 import re
 from urllib.parse import urljoin
 
-import httpx
 from bs4 import BeautifulSoup
 
-from app.ingestion.base_scraper import SCRAPER_HEADERS, RawLead
+from app.ingestion.base_scraper import RawLead
 from app.ingestion.factory import register_scraper
 from app.ingestion.pdf_scraper import PdfScraper
+from app.ingestion.tls import scraper_client
 
 
 @register_scraper("ParentPagePdfScraper")
@@ -51,12 +51,7 @@ class ParentPagePdfScraper(PdfScraper):
         exclude_str = self.config.get("pdf_link_exclude_pattern")
         base_url = self.config.get("base_url", self.source_url)
 
-        async with httpx.AsyncClient(
-            timeout=60.0,
-            headers=SCRAPER_HEADERS,
-            follow_redirects=True,
-            verify=False,
-        ) as client:
+        async with scraper_client(self.source_url) as client:
             landing = await client.get(self.source_url)
             landing.raise_for_status()
 

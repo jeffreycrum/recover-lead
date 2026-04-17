@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
-from datetime import UTC, datetime
 
 import sqlalchemy as sa
 
@@ -69,12 +68,11 @@ def upgrade() -> None:
     conn = op.get_bind()
 
     # 1. Soft-archive implausibly large Sumter leads
-    now = datetime.now(UTC)
     result = conn.execute(
         sa.text(
             """
             UPDATE leads
-            SET archived_at = :now
+            SET archived_at = NOW()
             WHERE county_id = (
                 SELECT id FROM counties WHERE name = 'Sumter' AND state = 'FL'
             )
@@ -82,7 +80,7 @@ def upgrade() -> None:
             AND archived_at IS NULL
             """
         ),
-        {"now": now, "threshold": _BAD_LEAD_THRESHOLD},
+        {"threshold": _BAD_LEAD_THRESHOLD},
     )
     if result.rowcount:
         print(f"  Archived {result.rowcount} bad Sumter lead(s) (surplus >= ${_BAD_LEAD_THRESHOLD:,})")

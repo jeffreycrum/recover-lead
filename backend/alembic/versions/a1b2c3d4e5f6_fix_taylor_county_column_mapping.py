@@ -31,10 +31,10 @@ def upgrade() -> None:
         sa.text("""
             UPDATE counties
             SET config = jsonb_set(
-                COALESCE(config, '{}'),
+                COALESCE(config::jsonb, '{}'),
                 '{col_surplus}',
                 '4'
-            )
+            )::json
             WHERE name = 'Taylor' AND state = 'FL'
         """)
     )
@@ -44,7 +44,7 @@ def downgrade() -> None:
     op.execute(
         sa.text("""
             UPDATE counties
-            SET config = config - 'col_surplus'
+            SET config = (config::jsonb - 'col_surplus')::json
             WHERE name = 'Taylor' AND state = 'FL'
         """)
     )

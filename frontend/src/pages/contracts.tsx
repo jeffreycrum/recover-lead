@@ -49,7 +49,7 @@ export function ContractsPage() {
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [pendingGeneration, setPendingGeneration] = useState(false);
-  const pendingTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const pendingTimeoutRef = useRef<number | null>(null);
   const [showGenDialog, setShowGenDialog] = useState(false);
   const [genForm, setGenForm] = useState<GenerateFormState>({
     lead_id: "",
@@ -375,7 +375,7 @@ export function ContractsPage() {
               <Label htmlFor="contract-type">Contract Type</Label>
               <Select
                 value={genForm.contract_type}
-                onValueChange={(v: string) => setGenForm((f) => ({ ...f, contract_type: v }))}
+                onValueChange={(v: string | null) => setGenForm((f) => ({ ...f, contract_type: v ?? f.contract_type }))}
               >
                 <SelectTrigger id="contract-type">
                   <SelectValue />

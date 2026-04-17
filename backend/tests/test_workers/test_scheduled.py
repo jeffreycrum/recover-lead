@@ -33,7 +33,11 @@ class TestRefreshPipelineMetrics:
     async def test_refresh_pipeline_metrics_executes_sql(self):
         """_refresh_pipeline_metrics runs the REFRESH MATERIALIZED VIEW SQL."""
         session = AsyncMock()
-        session.execute = AsyncMock()
+        # First call: pg_matviews existence check (returns truthy so view exists)
+        exists_result = MagicMock()
+        exists_result.scalar.return_value = 1
+        refresh_result = AsyncMock()
+        session.execute = AsyncMock(side_effect=[exists_result, refresh_result])
         session.commit = AsyncMock()
 
         with patch("app.workers.scheduled.async_session_factory") as mock_factory:
@@ -41,16 +45,18 @@ class TestRefreshPipelineMetrics:
 
             await _refresh_pipeline_metrics()
 
-        session.execute.assert_called_once()
-        # Verify it's a text SQL call
-        call_args = session.execute.call_args[0][0]
-        assert "REFRESH MATERIALIZED VIEW" in str(call_args)
+        assert session.execute.call_count == 2
+        # Second call must be the REFRESH
+        refresh_sql = str(session.execute.call_args_list[1][0][0])
+        assert "REFRESH MATERIALIZED VIEW" in refresh_sql
 
     @pytest.mark.asyncio
     async def test_refresh_pipeline_metrics_returns_ok_status(self):
         """_refresh_pipeline_metrics returns {'status': 'ok'}."""
         session = AsyncMock()
-        session.execute = AsyncMock()
+        exists_result = MagicMock()
+        exists_result.scalar.return_value = 1
+        session.execute = AsyncMock(side_effect=[exists_result, AsyncMock()])
         session.commit = AsyncMock()
 
         with patch("app.workers.scheduled.async_session_factory") as mock_factory:
@@ -64,7 +70,9 @@ class TestRefreshPipelineMetrics:
     async def test_refresh_pipeline_metrics_commits(self):
         """_refresh_pipeline_metrics commits the session after refresh."""
         session = AsyncMock()
-        session.execute = AsyncMock()
+        exists_result = MagicMock()
+        exists_result.scalar.return_value = 1
+        session.execute = AsyncMock(side_effect=[exists_result, AsyncMock()])
         session.commit = AsyncMock()
 
         with patch("app.workers.scheduled.async_session_factory") as mock_factory:

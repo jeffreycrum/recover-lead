@@ -10,14 +10,14 @@ Chromium browser for each fetch. Three variants:
 
 from __future__ import annotations
 
-import httpx
 from playwright.async_api import async_playwright
 
-from app.ingestion.base_scraper import SCRAPER_HEADERS, RawLead
+from app.ingestion.base_scraper import RawLead
 from app.ingestion.factory import register_scraper
 from app.ingestion.html_scraper import HtmlTableScraper
 from app.ingestion.parent_page_pdf_scraper import ParentPagePdfScraper
 from app.ingestion.pdf_scraper import PdfScraper
+from app.ingestion.tls import scraper_client
 
 
 @register_scraper("PlaywrightHtmlScraper")
@@ -160,12 +160,7 @@ class PlaywrightParentPagePdfScraper(ParentPagePdfScraper):
         )
         self.logger.info("playwright_parent_page_pdf_resolved", pdf_url=pdf_url)
 
-        async with httpx.AsyncClient(
-            timeout=60.0,
-            headers=SCRAPER_HEADERS,
-            follow_redirects=True,
-            verify=False,
-        ) as client:
+        async with scraper_client(pdf_url) as client:
             pdf_response = await client.get(pdf_url)
             pdf_response.raise_for_status()
             return pdf_response.content

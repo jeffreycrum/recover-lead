@@ -2,11 +2,11 @@ import re
 from decimal import Decimal
 from io import BytesIO
 
-import httpx
 import openpyxl
 
-from app.ingestion.base_scraper import SCRAPER_HEADERS, BaseScraper, RawLead
+from app.ingestion.base_scraper import BaseScraper, RawLead
 from app.ingestion.factory import register_scraper
+from app.ingestion.tls import scraper_client
 
 
 @register_scraper("XlsxScraper")
@@ -29,12 +29,7 @@ class XlsxScraper(BaseScraper):
         self.config = config or {}
 
     async def fetch(self) -> bytes:
-        async with httpx.AsyncClient(
-            timeout=60.0,
-            headers=SCRAPER_HEADERS,
-            follow_redirects=True,
-            verify=False,
-        ) as client:
+        async with scraper_client(self.source_url) as client:
             response = await client.get(self.source_url)
             response.raise_for_status()
             return response.content

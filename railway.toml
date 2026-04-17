@@ -1,2 +1,13 @@
-# Per-service configuration is managed in the Railway dashboard.
-# Do not set [build] here — it overrides all services.
+# Railway deployment configuration.
+# Build settings are managed in the Railway dashboard (per-service Dockerfile paths).
+# Only runtime / deploy behaviour is set here.
+
+[deploy]
+numReplicas = 1
+sleepApplication = false
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+
+[healthcheck]
+path = "/health"
+timeout = 10

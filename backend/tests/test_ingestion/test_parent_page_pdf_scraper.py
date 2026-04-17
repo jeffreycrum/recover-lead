@@ -161,7 +161,7 @@ class TestFetch:
         )
         mock_client = _mock_client(COLLIER_HTML, FAKE_PDF)
 
-        with patch("app.ingestion.parent_page_pdf_scraper.httpx.AsyncClient", return_value=mock_client):
+        with patch("app.ingestion.tls.httpx.AsyncClient", return_value=mock_client):
             result = await scraper.fetch()
 
         assert result == FAKE_PDF
@@ -186,7 +186,7 @@ class TestFetch:
             "403", request=MagicMock(), response=MagicMock()
         ))
 
-        with patch("app.ingestion.parent_page_pdf_scraper.httpx.AsyncClient", return_value=mock_client):
+        with patch("app.ingestion.tls.httpx.AsyncClient", return_value=mock_client):
             with pytest.raises(_httpx.HTTPStatusError):
                 await scraper.fetch()
 
@@ -204,7 +204,7 @@ class TestFetch:
         )
         mock_client = _mock_client(MARION_HTML, FAKE_PDF)
 
-        with patch("app.ingestion.parent_page_pdf_scraper.httpx.AsyncClient", return_value=mock_client):
+        with patch("app.ingestion.tls.httpx.AsyncClient", return_value=mock_client):
             result = await scraper.fetch()
 
         assert result == FAKE_PDF

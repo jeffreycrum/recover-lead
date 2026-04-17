@@ -1,11 +1,11 @@
 import re
 from decimal import Decimal
 
-import httpx
 from bs4 import BeautifulSoup
 
-from app.ingestion.base_scraper import SCRAPER_HEADERS, BaseScraper, RawLead
+from app.ingestion.base_scraper import BaseScraper, RawLead
 from app.ingestion.factory import register_scraper
+from app.ingestion.tls import scraper_client
 
 
 @register_scraper("HtmlTableScraper")
@@ -21,12 +21,7 @@ class HtmlTableScraper(BaseScraper):
 
     async def fetch(self) -> bytes:
         """Download the HTML page from the county website."""
-        async with httpx.AsyncClient(
-            timeout=60.0,
-            headers=SCRAPER_HEADERS,
-            follow_redirects=True,
-            verify=False,
-        ) as client:
+        async with scraper_client(self.source_url) as client:
             response = await client.get(self.source_url)
             response.raise_for_status()
             return response.content
