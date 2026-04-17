@@ -22,8 +22,9 @@ COPY alembic/ alembic/
 COPY scripts/ scripts/
 
 ENV PYTHONPATH=/app \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    RUN_PRE_INGEST_ON_STARTUP=0
 
 EXPOSE 8000
 
-CMD sh -c "alembic upgrade head; python scripts/pre_ingest.py || echo 'pre_ingest failed, continuing...'; uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+CMD sh -c "alembic upgrade head && if [ \"${RUN_PRE_INGEST_ON_STARTUP:-0}\" = \"1\" ]; then python scripts/pre_ingest.py; fi && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"

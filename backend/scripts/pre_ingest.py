@@ -1,6 +1,6 @@
 """Pre-ingest script: scrape all active counties, store leads, generate embeddings.
 
-Run at deploy time to seed initial lead data.
+Run as a one-off seed job after deploy, not on every web container startup.
 
 Usage:
     cd backend && python -m scripts.pre_ingest
