@@ -39,6 +39,8 @@ from app.schemas.lead import (
     LeadDetailResponse,
     LeadUpdateRequest,
     MyLeadResponse,
+    SkipTracePersonResponse,
+    SkipTraceResultSummary,
     UserLeadResponse,
 )
 from app.schemas.skip_trace import BulkSkipTraceRequest
@@ -210,6 +212,8 @@ async def get_lead(
     user: User = Depends(get_current_user),
 ) -> LeadDetailResponse:
     """Get lead detail with contacts and user-specific state."""
+    from app.models.skip_trace import SkipTraceResult
+
     result = await session.execute(
         select(Lead, County.name.label("county_name"))
         .join(County, Lead.county_id == County.id)
@@ -230,6 +234,15 @@ async def get_lead(
         )
     )
     user_lead = ul_result.scalar_one_or_none()
+
+    # Load skip trace results for this lead (shared across all claimants)
+    st_result = await session.execute(
+        select(SkipTraceResult)
+        .where(SkipTraceResult.lead_id == lead_id, SkipTraceResult.status == "hit")
+        .order_by(SkipTraceResult.created_at.desc())
+        .limit(5)
+    )
+    skip_trace_rows = st_result.scalars().all()
 
     return LeadDetailResponse(
         id=lead.id,
@@ -270,6 +283,18 @@ async def get_lead(
             if user_lead
             else None
         ),
+        skip_trace_results=[
+            SkipTraceResultSummary(
+                id=st.id,
+                status=st.status,
+                hit_count=st.hit_count,
+                persons=[
+                    SkipTracePersonResponse(**p) for p in (st.persons or [])
+                ],
+                created_at=st.created_at,
+            )
+            for st in skip_trace_rows
+        ],
     )
 
 
@@ -689,6 +714,7 @@ async def skip_trace(
     user: User = Depends(get_current_user),
 ) -> dict:
     """Run real-time skip trace for a lead via Tracerfy."""
+    from datetime import timedelta
     from decimal import Decimal
 
     from app.models.skip_trace import SkipTraceResult
@@ -712,6 +738,30 @@ async def skip_trace(
     )
     if not result.scalar_one_or_none():
         raise NotFoundError("Claimed lead")
+
+    # Block re-trace if any claimant ran it within the last 7 days
+    from datetime import UTC
+    from datetime import datetime as _dt
+    week_ago = _dt.now(UTC).replace(tzinfo=None) - timedelta(days=7)
+    recent = await session.execute(
+        select(SkipTraceResult.id)
+        .where(
+            SkipTraceResult.lead_id == lead_id,
+            SkipTraceResult.created_at >= week_ago,
+        )
+        .limit(1)
+    )
+    if recent.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "SKIP_TRACE_COOLDOWN",
+                "message": (
+                    "This lead was traced in the last 7 days. "
+                    "Results are shared with all claimants."
+                ),
+            },
+        )
 
     # Reserve credit
     reservation = await reserve_usage(session, user.id, "skip_trace", count=1)

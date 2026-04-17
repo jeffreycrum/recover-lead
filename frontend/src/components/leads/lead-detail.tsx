@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLead, useClaimLead, useReleaseLead, useQualifyLead } from "@/hooks/use-leads";
+import { useTaskPoller } from "@/hooks/use-task-poller";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { LeadScoreBadge } from "./lead-score-badge";
@@ -15,11 +16,22 @@ interface LeadDetailProps {
 }
 
 export function LeadDetail({ leadId, onClose }: LeadDetailProps) {
+  const qc = useQueryClient();
   const { data: lead, isLoading } = useLead(leadId);
   const claimMutation = useClaimLead();
   const releaseMutation = useReleaseLead();
   const qualifyMutation = useQualifyLead();
   const [showDealDialog, setShowDealDialog] = useState(false);
+  const [qualifyTaskId, setQualifyTaskId] = useState<string | null>(null);
+
+  useTaskPoller({
+    taskId: qualifyTaskId,
+    invalidateKeys: [["leads", leadId]],
+    onDone: () => setQualifyTaskId(null),
+    onError: () => setQualifyTaskId(null),
+  });
+
+  const isQualifying = qualifyMutation.isPending || qualifyTaskId !== null;
 
   if (isLoading) {
     return (
@@ -117,11 +129,29 @@ export function LeadDetail({ leadId, onClose }: LeadDetailProps) {
           ) : (
             <>
               <button
-                onClick={() => qualifyMutation.mutate(leadId)}
-                disabled={qualifyMutation.isPending}
+                onClick={() =>
+                  qualifyMutation.mutate(leadId, {
+                    onSuccess: (data) => {
+                      if (data.task_id) {
+                        // Async path — poll until done
+                        setQualifyTaskId(data.task_id);
+                      } else {
+                        // Cache hit — result inline, just refetch
+                        qc.invalidateQueries({ queryKey: ["leads", leadId] });
+                      }
+                    },
+                  })
+                }
+                disabled={isQualifying}
                 className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 text-sm font-medium"
               >
-                {qualifyMutation.isPending ? "Qualifying..." : "Qualify with AI"}
+                {isQualifying ? (
+                  <span className="flex items-center justify-center gap-1">
+                    <Loader2 size={14} className="animate-spin" /> Qualifying...
+                  </span>
+                ) : (
+                  "Qualify with AI"
+                )}
               </button>
               <button
                 onClick={() => releaseMutation.mutate(leadId)}
@@ -172,21 +202,21 @@ function SkipTraceSection({
 }) {
   const qc = useQueryClient();
 
-  // Source of truth: lead detail query already loads skip_trace_results.
-  // This query just mirrors it, keyed on leadId, so we get proper
-  // cache invalidation when the lead is refetched.
+  // Seed from lead detail; update optimistically on mutation success.
   const { data: results = [] } = useQuery<any[]>({
     queryKey: ["skip-trace", leadId],
     queryFn: () => Promise.resolve(skipTraceResults || []),
     initialData: skipTraceResults || [],
+    staleTime: Infinity, // driven by setQueryData below, not polling
   });
 
   const mutation = useMutation({
     mutationFn: () => api.skipTraceLead(leadId),
-    onSuccess: () => {
-      // Invalidate the lead so it refetches with the new skip trace result
+    onSuccess: (data) => {
+      // Prepend the fresh result immediately without a round-trip
+      qc.setQueryData(["skip-trace", leadId], (old: any[] = []) => [data, ...old]);
+      // Also invalidate the lead so contacts + shared results refresh
       qc.invalidateQueries({ queryKey: ["leads", leadId] });
-      qc.invalidateQueries({ queryKey: ["skip-trace", leadId] });
     },
   });
 
@@ -194,7 +224,8 @@ function SkipTraceSection({
     ? (() => {
         const e = mutation.error as any;
         const detail = e?.detail || e?.message || "Skip trace failed";
-        return typeof detail === "string" ? detail : detail.message || "Skip trace failed";
+        if (typeof detail === "object" && detail?.message) return detail.message;
+        return typeof detail === "string" ? detail : "Skip trace failed";
       })()
     : null;
 
