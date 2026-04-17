@@ -5,10 +5,8 @@ from decimal import Decimal
 import structlog
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.config import settings
-from app.db.engine import ensure_asyncpg_url
+from app.db.engine import make_worker_session
 from app.models.county import County
 from app.models.lead import Lead, UserLead
 from app.models.user import User
@@ -23,13 +21,6 @@ _templates = Environment(
     autoescape=True,
 )
 
-
-def _get_worker_session() -> AsyncSession:
-    engine = create_async_engine(
-        ensure_asyncpg_url(settings.database_url), pool_size=2, max_overflow=0
-    )
-    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    return factory()
 
 
 @celery_app.task(
@@ -53,7 +44,7 @@ async def _send_daily_alerts() -> dict:
     errors = 0
     provider = get_email_provider()
 
-    async with _get_worker_session() as session:
+    async with make_worker_session() as session:
         # Get users with alerts enabled
         result = await session.execute(
             select(User).where(

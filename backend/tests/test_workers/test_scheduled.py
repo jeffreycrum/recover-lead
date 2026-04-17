@@ -40,7 +40,7 @@ class TestRefreshPipelineMetrics:
         session.execute = AsyncMock(side_effect=[exists_result, refresh_result])
         session.commit = AsyncMock()
 
-        with patch("app.workers.scheduled.async_session_factory") as mock_factory:
+        with patch("app.workers.scheduled.make_worker_session") as mock_factory:
             mock_factory.return_value = _mock_session_ctx(session)
 
             await _refresh_pipeline_metrics()
@@ -59,7 +59,7 @@ class TestRefreshPipelineMetrics:
         session.execute = AsyncMock(side_effect=[exists_result, AsyncMock()])
         session.commit = AsyncMock()
 
-        with patch("app.workers.scheduled.async_session_factory") as mock_factory:
+        with patch("app.workers.scheduled.make_worker_session") as mock_factory:
             mock_factory.return_value = _mock_session_ctx(session)
 
             result = await _refresh_pipeline_metrics()
@@ -75,7 +75,7 @@ class TestRefreshPipelineMetrics:
         session.execute = AsyncMock(side_effect=[exists_result, AsyncMock()])
         session.commit = AsyncMock()
 
-        with patch("app.workers.scheduled.async_session_factory") as mock_factory:
+        with patch("app.workers.scheduled.make_worker_session") as mock_factory:
             mock_factory.return_value = _mock_session_ctx(session)
 
             await _refresh_pipeline_metrics()
@@ -94,7 +94,7 @@ class TestResetMonthlyCredits:
         session.execute = AsyncMock(return_value=result)
         session.commit = AsyncMock()
 
-        with patch("app.workers.scheduled.async_session_factory") as mock_factory:
+        with patch("app.workers.scheduled.make_worker_session") as mock_factory:
             mock_factory.return_value = _mock_session_ctx(session)
 
             result_dict = await _reset_monthly_credits()
@@ -121,7 +121,7 @@ class TestResetMonthlyCredits:
         session.execute = AsyncMock(side_effect=[query_result, update_result])
         session.commit = AsyncMock()
 
-        with patch("app.workers.scheduled.async_session_factory") as mock_factory:
+        with patch("app.workers.scheduled.make_worker_session") as mock_factory:
             mock_factory.return_value = _mock_session_ctx(session)
 
             result_dict = await _reset_monthly_credits()
@@ -143,7 +143,7 @@ class TestResetMonthlyCredits:
         session.execute = AsyncMock(return_value=result)
         session.commit = AsyncMock()
 
-        with patch("app.workers.scheduled.async_session_factory") as mock_factory:
+        with patch("app.workers.scheduled.make_worker_session") as mock_factory:
             mock_factory.return_value = _mock_session_ctx(session)
 
             result_dict = await _reset_monthly_credits()
@@ -169,7 +169,7 @@ class TestCheckCountyUrls:
         mock_response.status_code = 500
 
         with (
-            patch("app.workers.scheduled.async_session_factory") as mock_factory,
+            patch("app.workers.scheduled.make_worker_session") as mock_factory,
             patch("httpx.AsyncClient") as mock_client_cls,
         ):
             mock_factory.return_value = _mock_session_ctx(session)
@@ -201,7 +201,7 @@ class TestCheckCountyUrls:
         mock_response.status_code = 200
 
         with (
-            patch("app.workers.scheduled.async_session_factory") as mock_factory,
+            patch("app.workers.scheduled.make_worker_session") as mock_factory,
             patch("httpx.AsyncClient") as mock_client_cls,
         ):
             mock_factory.return_value = _mock_session_ctx(session)
@@ -231,7 +231,7 @@ class TestCheckCountyUrls:
         session.execute = AsyncMock(return_value=result)
 
         with (
-            patch("app.workers.scheduled.async_session_factory") as mock_factory,
+            patch("app.workers.scheduled.make_worker_session") as mock_factory,
             patch("httpx.AsyncClient") as mock_client_cls,
         ):
             mock_factory.return_value = _mock_session_ctx(session)
@@ -264,7 +264,7 @@ class TestCheckCountyUrls:
         mock_response.status_code = 405
 
         with (
-            patch("app.workers.scheduled.async_session_factory") as mock_factory,
+            patch("app.workers.scheduled.make_worker_session") as mock_factory,
             patch("httpx.AsyncClient") as mock_client_cls,
         ):
             mock_factory.return_value = _mock_session_ctx(session)

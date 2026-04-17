@@ -109,7 +109,7 @@ class TestSendDailyAlerts:
         mock_provider = MagicMock()
         mock_provider.send.return_value = EmailResult(success=True)
 
-        with patch("app.workers.email_tasks._get_worker_session", return_value=session):
+        with patch("app.workers.email_tasks.make_worker_session", return_value=session):
             with patch("app.workers.email_tasks.get_email_provider", return_value=mock_provider):
                 with patch("app.workers.email_tasks._templates") as mock_templates:
                     mock_templates.get_template.return_value.render.return_value = "<p>test</p>"
@@ -137,7 +137,7 @@ class TestSendDailyAlerts:
 
         mock_provider = MagicMock()
 
-        with patch("app.workers.email_tasks._get_worker_session", return_value=session):
+        with patch("app.workers.email_tasks.make_worker_session", return_value=session):
             with patch("app.workers.email_tasks.get_email_provider", return_value=mock_provider):
                 from app.workers.email_tasks import _send_daily_alerts
                 result = await _send_daily_alerts()
@@ -168,7 +168,7 @@ class TestSendDailyAlerts:
 
         mock_provider = MagicMock()
 
-        with patch("app.workers.email_tasks._get_worker_session", return_value=session):
+        with patch("app.workers.email_tasks.make_worker_session", return_value=session):
             with patch("app.workers.email_tasks.get_email_provider", return_value=mock_provider):
                 from app.workers.email_tasks import _send_daily_alerts
                 result = await _send_daily_alerts()
@@ -201,7 +201,7 @@ class TestSendDailyAlerts:
         mock_provider = MagicMock()
         mock_provider.send.return_value = EmailResult(success=True, message_id="msg_123")
 
-        with patch("app.workers.email_tasks._get_worker_session", return_value=session):
+        with patch("app.workers.email_tasks.make_worker_session", return_value=session):
             with patch("app.workers.email_tasks.get_email_provider", return_value=mock_provider):
                 with patch("app.workers.email_tasks._templates") as mock_templates:
                     tpl = mock_templates.get_template.return_value
@@ -235,7 +235,7 @@ class TestSendDailyAlerts:
 
         mock_provider = MagicMock()
 
-        with patch("app.workers.email_tasks._get_worker_session", return_value=session):
+        with patch("app.workers.email_tasks.make_worker_session", return_value=session):
             with patch("app.workers.email_tasks.get_email_provider", return_value=mock_provider):
                 from app.workers.email_tasks import _send_daily_alerts
                 result = await _send_daily_alerts()
@@ -268,7 +268,7 @@ class TestSendDailyAlerts:
         mock_provider = MagicMock()
         mock_provider.send.return_value = EmailResult(success=True)
 
-        with patch("app.workers.email_tasks._get_worker_session", return_value=session):
+        with patch("app.workers.email_tasks.make_worker_session", return_value=session):
             with patch("app.workers.email_tasks.get_email_provider", return_value=mock_provider):
                 with patch("app.workers.email_tasks._templates") as mock_templates:
                     mock_templates.get_template.return_value.render.return_value = "text"
@@ -302,7 +302,7 @@ class TestSendDailyAlerts:
         mock_provider = MagicMock()
         mock_provider.send.return_value = EmailResult(success=False, error="SMTP timeout")
 
-        with patch("app.workers.email_tasks._get_worker_session", return_value=session):
+        with patch("app.workers.email_tasks.make_worker_session", return_value=session):
             with patch("app.workers.email_tasks.get_email_provider", return_value=mock_provider):
                 with patch("app.workers.email_tasks._templates") as mock_templates:
                     mock_templates.get_template.return_value.render.return_value = "html"
@@ -322,7 +322,7 @@ class TestSendDailyAlerts:
         users_result.scalars.return_value.all.return_value = []  # No users
         session.execute = AsyncMock(return_value=users_result)
 
-        with patch("app.workers.email_tasks._get_worker_session", return_value=session):
+        with patch("app.workers.email_tasks.make_worker_session", return_value=session):
             with patch("app.workers.email_tasks.get_email_provider"):
                 from app.workers.email_tasks import _send_daily_alerts
                 result = await _send_daily_alerts()

@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import structlog
 from sqlalchemy import select
 
-from app.db.engine import async_session_factory
+from app.db.engine import make_worker_session
 from app.ingestion.factory import _ensure_scrapers_imported, get_scraper
 from app.ingestion.normalizer import normalize_and_store
 from app.models.county import County
@@ -37,7 +37,7 @@ def scrape_county(self, county_id: str) -> dict:
 
 
 async def _scrape_county(county_id: str, task) -> dict:
-    async with async_session_factory() as session:
+    async with make_worker_session() as session:
         # Get county config
         result = await session.execute(select(County).where(County.id == uuid.UUID(county_id)))
         county = result.scalar_one_or_none()
@@ -119,7 +119,7 @@ def scrape_all_active_counties() -> dict:
 
 
 async def _scrape_all() -> dict:
-    async with async_session_factory() as session:
+    async with make_worker_session() as session:
         result = await session.execute(select(County.id).where(County.is_active.is_(True)))
         county_ids = [str(row[0]) for row in result.all()]
 
