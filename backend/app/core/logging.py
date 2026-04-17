@@ -8,6 +8,15 @@ import structlog
 PII_PATTERNS = [
     (re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"), "[EMAIL_REDACTED]"),
     (re.compile(r"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b"), "[PHONE_REDACTED]"),
+    (re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), "[SSN_REDACTED]"),
+    (
+        re.compile(
+            r"\b\d{1,5}\s+[A-Za-z0-9 .,'#-]{3,40}"
+            r"(?:Ave|St|Rd|Blvd|Dr|Ln|Ct|Way|Pl|Ter|Cir|Hwy)\b",
+            re.IGNORECASE,
+        ),
+        "[ADDRESS_REDACTED]",
+    ),
 ]
 
 

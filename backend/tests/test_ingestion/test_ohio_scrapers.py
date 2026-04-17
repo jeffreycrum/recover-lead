@@ -22,7 +22,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -166,7 +165,7 @@ class TestParentPageXlsxScraper:
         mock_client.get = AsyncMock(side_effect=[landing_resp, xlsx_resp])
 
         with patch(
-            "app.ingestion.parent_page_xlsx_scraper.httpx.AsyncClient",
+            "app.ingestion.tls.httpx.AsyncClient",
             return_value=mock_client,
         ):
             result = await scraper.fetch()
@@ -192,7 +191,7 @@ class TestParentPageXlsxScraper:
         mock_client.get = AsyncMock(return_value=landing_resp)
 
         with patch(
-            "app.ingestion.parent_page_xlsx_scraper.httpx.AsyncClient",
+            "app.ingestion.tls.httpx.AsyncClient",
             return_value=mock_client,
         ):
             with pytest.raises(Exception, match="404"):
@@ -276,9 +275,9 @@ class TestCuyahogaExcessFundsScraper:
     def test_cuyahoga_column_mapping_extracts_correct_fields(self):
         """XlsxScraper simple_table_mode must map Cuyahoga columns correctly."""
         xlsx_data = _make_xlsx_bytes([
-            ["Case Number", "Parcel ID", "Property Address", "Defendant Name", "Sale Date", "Excess Amount"],
-            ["CV-2024-000001", "123-45-678", "100 PUBLIC SQUARE CLEVELAND OH", "SMITH JOHN A", "2024-03-15", 12345.00],
-            ["CV-2024-000002", "987-65-432", "456 EUCLID AVE CLEVELAND OH", "DOE JANE B", "2024-04-20", 8900.50],
+            ["Case Number", "Parcel ID", "Property Address", "Defendant Name", "Sale Date", "Excess Amount"],  # noqa: E501
+            ["CV-2024-000001", "123-45-678", "100 PUBLIC SQUARE CLEVELAND OH", "SMITH JOHN A", "2024-03-15", 12345.00],  # noqa: E501
+            ["CV-2024-000002", "987-65-432", "456 EUCLID AVE CLEVELAND OH", "DOE JANE B", "2024-04-20", 8900.50],  # noqa: E501
         ])
         scraper = self._make_cuyahoga_scraper()
         leads = scraper.parse(xlsx_data)
@@ -294,7 +293,7 @@ class TestCuyahogaExcessFundsScraper:
     def test_cuyahoga_header_row_skipped(self):
         """Header row must be skipped by skip_rows_containing."""
         xlsx_data = _make_xlsx_bytes([
-            ["Case Number", "Parcel ID", "Property Address", "Defendant Name", "Sale Date", "Excess Amount"],
+            ["Case Number", "Parcel ID", "Property Address", "Defendant Name", "Sale Date", "Excess Amount"],  # noqa: E501
         ])
         scraper = self._make_cuyahoga_scraper()
         leads = scraper.parse(xlsx_data)
@@ -314,8 +313,8 @@ class TestCuyahogaExcessFundsScraper:
         """Second data row must parse independently with correct fields."""
         xlsx_data = _make_xlsx_bytes([
             ["Case Number", "Parcel ID", "Address", "Owner", "Date", "Excess"],
-            ["CV-2024-000001", "111-11-111", "100 MAIN ST CLEVELAND", "ALPHA CORP", "2024-01-15", 5000.00],
-            ["CV-2024-000002", "222-22-222", "200 OAK AVE PARMA", "BETA LLC", "2024-02-20", 3750.25],
+            ["CV-2024-000001", "111-11-111", "100 MAIN ST CLEVELAND", "ALPHA CORP", "2024-01-15", 5000.00],  # noqa: E501
+            ["CV-2024-000002", "222-22-222", "200 OAK AVE PARMA", "BETA LLC", "2024-02-20", 3750.25],  # noqa: E501
         ])
         scraper = self._make_cuyahoga_scraper()
         leads = scraper.parse(xlsx_data)
@@ -642,9 +641,9 @@ class TestFairfieldExcessFundsScraper:
     def test_fairfield_second_row(self):
         """Second data row must parse with correct fields."""
         mock_table = [
-            ["CASE #", "PARTIES' NAME", "LAST KNOWN ADDRESS", "PROPERTY ADDRESS", "DATE OF SALE", "DATE PAID IN", "AMOUNT"],
-            ["21CV000234", "HOFFMAN PATRICIA A", "890 MILL ST", "890 MILL ST", "05/12/2021", "05/20/2021", "$31,500.00"],
-            ["23CV000678", "NGUYEN THANH V", "456 BROAD ST", "456 BROAD ST", "09/18/2023", "09/25/2023", "$11,250.75"],
+            ["CASE #", "PARTIES' NAME", "LAST KNOWN ADDRESS", "PROPERTY ADDRESS", "DATE OF SALE", "DATE PAID IN", "AMOUNT"],  # noqa: E501
+            ["21CV000234", "HOFFMAN PATRICIA A", "890 MILL ST", "890 MILL ST", "05/12/2021", "05/20/2021", "$31,500.00"],  # noqa: E501
+            ["23CV000678", "NGUYEN THANH V", "456 BROAD ST", "456 BROAD ST", "09/18/2023", "09/25/2023", "$11,250.75"],  # noqa: E501
         ]
         mock_pdf = _make_mock_pdf_tables(mock_table)
 
@@ -710,7 +709,7 @@ class TestMontgomeryExcessFundsScraper:
         """If PDF is text-based, PdfScraper must extract correct fields."""
         mock_table = [
             ["Case Number", "Defendant", "Property Address", "Sale Date", "Excess Amount"],
-            ["2024 CV 01234", "JOHNSON ALICE T", "789 BROWN ST DAYTON OH 45402", "03/10/2024", "$22,100.00"],
+            ["2024 CV 01234", "JOHNSON ALICE T", "789 BROWN ST DAYTON OH 45402", "03/10/2024", "$22,100.00"],  # noqa: E501
         ]
         mock_pdf = _make_mock_pdf_tables(mock_table)
 

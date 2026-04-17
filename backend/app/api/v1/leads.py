@@ -20,7 +20,7 @@ from app.core.idempotency import (
     release_idempotency_key,
 )
 from app.db.session import get_async_session
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_rate_limit
 from app.models.county import County
 from app.models.lead import Lead, LeadActivity, LeadContact, UserLead
 from app.models.user import User
@@ -446,7 +446,7 @@ async def close_lead(
     )
 
 
-@router.post("/{lead_id}/qualify")
+@router.post("/{lead_id}/qualify", dependencies=[Depends(require_rate_limit)])
 async def qualify_lead_endpoint(
     lead_id: uuid.UUID,
     request: Request,
@@ -546,7 +546,11 @@ async def qualify_lead_endpoint(
 MAX_BULK_QUALIFY_SIZE = 100
 
 
-@router.post("/bulk-qualify", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/bulk-qualify",
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_rate_limit)],
+)
 async def bulk_qualify(
     req: BulkQualifyRequest,
     request: Request,
@@ -678,7 +682,7 @@ def _is_cache_hit(row) -> bool:
     )
 
 
-@router.post("/{lead_id}/skip-trace")
+@router.post("/{lead_id}/skip-trace", dependencies=[Depends(require_rate_limit)])
 async def skip_trace(
     lead_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
@@ -1169,7 +1173,11 @@ async def pipeline_stats(
 MAX_BULK_SKIP_TRACE_SIZE = 100
 
 
-@router.post("/bulk-skip-trace", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/bulk-skip-trace",
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_rate_limit)],
+)
 async def bulk_skip_trace(
     req: BulkSkipTraceRequest,
     session: AsyncSession = Depends(get_async_session),

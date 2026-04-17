@@ -1,0 +1,123 @@
+name: Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - run: pip install ".[dev]"
+      - run: ruff check .
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - run: pip install ".[dev]"
+      - run: mypy app/
+        continue-on-error: true  # strict mode — fix incrementally; remove once clean
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: recoverlead
+          POSTGRES_PASSWORD: recoverlead_dev
+          POSTGRES_DB: recoverlead
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U recoverlead"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      ENVIRONMENT: test
+      DATABASE_URL: postgresql+asyncpg://recoverlead:recoverlead_dev@localhost:5432/recoverlead
+      REDIS_URL: redis://localhost:6379/0
+      ANTHROPIC_API_KEY: "test-key"
+      CLERK_SECRET_KEY: "test-key"
+      CLERK_WEBHOOK_SECRET: "test-secret"
+      STRIPE_SECRET_KEY: "test-key"
+      STRIPE_WEBHOOK_SECRET: "test-secret"
+      SENDGRID_API_KEY: "test-key"
+      LOB_API_KEY: "test-key"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate throwaway encryption key
+        run: |
+          echo "ENCRYPTION_KEY=$(python3 -c 'import secrets,base64; print(base64.b64encode(secrets.token_bytes(32)).decode())')" >> $GITHUB_ENV
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - run: pip install ".[dev]"
+
+      - name: Run migrations
+        run: alembic upgrade head
+
+      - name: Run tests
+        run: pytest --cov=app --cov-report=term-missing --cov-fail-under=60 -x
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: backend/htmlcov/

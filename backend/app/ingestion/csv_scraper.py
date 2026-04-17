@@ -3,10 +3,9 @@ import io
 import re
 from decimal import Decimal
 
-import httpx
-
 from app.ingestion.base_scraper import BaseScraper, RawLead
 from app.ingestion.factory import register_scraper
+from app.ingestion.tls import scraper_client
 
 
 @register_scraper("CsvScraper")
@@ -21,7 +20,7 @@ class CsvScraper(BaseScraper):
         self.config = config or {}
 
     async def fetch(self) -> bytes:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with scraper_client(self.source_url) as client:
             response = await client.get(self.source_url)
             response.raise_for_status()
             return response.content

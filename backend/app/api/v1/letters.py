@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import InsufficientCreditsError, NotFoundError
 from app.db.session import get_async_session
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_rate_limit
 from app.models.county import County
 from app.models.lead import Lead, UserLead
 from app.models.letter import Letter
@@ -53,7 +53,11 @@ LETTER_STATUS_TRANSITIONS: dict[str, set[str]] = {
 }
 
 
-@router.post("/generate", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/generate",
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_rate_limit)],
+)
 async def generate_letter(
     req: LetterGenerateRequest,
     session: AsyncSession = Depends(get_async_session),
@@ -99,7 +103,11 @@ async def generate_letter(
 MAX_BATCH_SIZE = 100
 
 
-@router.post("/generate-batch", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/generate-batch",
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_rate_limit)],
+)
 async def generate_batch(
     req: LetterBatchRequest,
     session: AsyncSession = Depends(get_async_session),
