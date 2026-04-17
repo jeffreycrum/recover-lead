@@ -1,2 +1,5 @@
 # Per-service configuration is managed in the Railway dashboard.
 # Do not set [build] here — it overrides all services.
+
+[deploy]
+releaseCommand = "alembic upgrade head"

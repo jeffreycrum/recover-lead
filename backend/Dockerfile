@@ -27,4 +27,4 @@ ENV PYTHONPATH=/app \
 
 EXPOSE 8000
 
-CMD sh -c "alembic upgrade head && if [ \"${RUN_PRE_INGEST_ON_STARTUP:-0}\" = \"1\" ]; then python scripts/pre_ingest.py; fi && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+CMD sh -c "if [ \"${RUN_PRE_INGEST_ON_STARTUP:-0}\" = \"1\" ]; then python scripts/pre_ingest.py; fi && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
