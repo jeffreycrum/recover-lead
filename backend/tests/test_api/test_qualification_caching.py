@@ -8,6 +8,22 @@ from httpx import ASGITransport, AsyncClient
 
 from app.main import app
 
+_RATE_LIMIT_HEADERS = {
+    "X-RateLimit-Limit": 5,
+    "X-RateLimit-Remaining": 4,
+    "X-RateLimit-Reset": 9_999_999_999,
+}
+
+
+@pytest.fixture(autouse=True)
+def mock_rate_limit():
+    """Prevent all tests in this module from hitting Redis."""
+    with patch(
+        "app.dependencies.check_rate_limit",
+        new=AsyncMock(return_value=_RATE_LIMIT_HEADERS),
+    ):
+        yield
+
 
 def _make_user(user_id: uuid.UUID | None = None) -> MagicMock:
     user = MagicMock()
@@ -30,6 +46,18 @@ def _make_user_lead(
     return ul
 
 
+def _make_session(*execute_results: MagicMock) -> AsyncMock:
+    """Return a mocked AsyncSession whose execute() yields results in order."""
+    session = AsyncMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=False)
+    # get_current_subscription_plan always fires first; prepend a "free" result.
+    sub_result = MagicMock()
+    sub_result.scalar_one_or_none.return_value = "free"
+    session.execute = AsyncMock(side_effect=[sub_result, *execute_results])
+    return session
+
+
 class TestQualificationCacheHit:
     @pytest.mark.asyncio
     async def test_returns_cached_result_when_source_hash_unchanged(self):
@@ -40,21 +68,16 @@ class TestQualificationCacheHit:
 
         user_lead = _make_user_lead(quality_score=8, qualified_source_hash=source_hash)
 
-        from app.db.session import get_async_session
-        from app.dependencies import get_current_user
-
-        session = AsyncMock()
-
-        sub_result = MagicMock()
-        sub_result.scalar_one_or_none.return_value = "free"
-
         ul_result = MagicMock()
         ul_result.scalar_one_or_none.return_value = user_lead
 
         hash_result = MagicMock()
         hash_result.scalar_one_or_none.return_value = source_hash
 
-        session.execute = AsyncMock(side_effect=[sub_result, ul_result, hash_result])
+        session = _make_session(ul_result, hash_result)
+
+        from app.db.session import get_async_session
+        from app.dependencies import get_current_user
 
         async def override_session():
             yield session
@@ -87,23 +110,16 @@ class TestQualificationCacheHit:
             qualified_source_hash="oldhash" * 8,
         )
 
-        from app.db.session import get_async_session
-        from app.dependencies import get_current_user
-
-        session = AsyncMock()
-        session.__aenter__ = AsyncMock(return_value=session)
-        session.__aexit__ = AsyncMock(return_value=False)
-
-        sub_result = MagicMock()
-        sub_result.scalar_one_or_none.return_value = "free"
-
         ul_result = MagicMock()
         ul_result.scalar_one_or_none.return_value = user_lead
 
         hash_result = MagicMock()
         hash_result.scalar_one_or_none.return_value = "newhash" * 8
 
-        session.execute = AsyncMock(side_effect=[sub_result, ul_result, hash_result])
+        session = _make_session(ul_result, hash_result)
+
+        from app.db.session import get_async_session
+        from app.dependencies import get_current_user
 
         reservation = MagicMock()
         reservation.allowed = True
@@ -150,21 +166,16 @@ class TestQualificationCacheHit:
 
         user_lead = _make_user_lead(quality_score=None, qualified_source_hash=None)
 
-        from app.db.session import get_async_session
-        from app.dependencies import get_current_user
-
-        session = AsyncMock()
-
-        sub_result = MagicMock()
-        sub_result.scalar_one_or_none.return_value = "free"
-
         ul_result = MagicMock()
         ul_result.scalar_one_or_none.return_value = user_lead
 
         hash_result = MagicMock()
         hash_result.scalar_one_or_none.return_value = "somehash" * 8
 
-        session.execute = AsyncMock(side_effect=[sub_result, ul_result, hash_result])
+        session = _make_session(ul_result, hash_result)
+
+        from app.db.session import get_async_session
+        from app.dependencies import get_current_user
 
         reservation = MagicMock()
         reservation.allowed = True
@@ -205,13 +216,13 @@ class TestQualificationCacheHit:
         user = _make_user()
         lead_id = uuid.uuid4()
 
-        from app.db.session import get_async_session
-        from app.dependencies import get_current_user
-
-        session = AsyncMock()
         ul_result = MagicMock()
         ul_result.scalar_one_or_none.return_value = None
-        session.execute = AsyncMock(return_value=ul_result)
+
+        session = _make_session(ul_result)
+
+        from app.db.session import get_async_session
+        from app.dependencies import get_current_user
 
         async def override_session():
             yield session
@@ -241,10 +252,6 @@ class TestBulkQualifyCacheFiltering:
         from app.db.session import get_async_session
         from app.dependencies import get_current_user
 
-        session = AsyncMock()
-        rows_result = MagicMock()
-
-        # Both leads have matching hashes and quality scores
         rows = []
         for lid in lead_ids:
             r = MagicMock()
@@ -253,8 +260,11 @@ class TestBulkQualifyCacheFiltering:
             r.quality_score = 7
             r.source_hash = hash_val
             rows.append(r)
+
+        rows_result = MagicMock()
         rows_result.all.return_value = rows
-        session.execute = AsyncMock(return_value=rows_result)
+
+        session = _make_session(rows_result)
 
         async def override_session():
             yield session
