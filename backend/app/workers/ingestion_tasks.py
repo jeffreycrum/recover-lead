@@ -9,8 +9,6 @@ from app.db.engine import make_worker_session
 from app.ingestion.factory import _ensure_scrapers_imported, get_scraper
 from app.ingestion.normalizer import normalize_and_store
 from app.models.county import County
-from app.models.lead import Lead
-from app.rag.embeddings import build_lead_text, generate_lead_embedding
 from app.workers.celery_app import celery_app
 
 # Ensure all scrapers register themselves with the factory on module import
@@ -63,46 +61,14 @@ async def _scrape_county(county_id: str, task) -> dict:
         county.last_lead_count = result["inserted"] + result["skipped"]
         await session.commit()
 
-        # Generate embeddings for new leads (without embeddings)
-        await _generate_embeddings_for_county(session, county.id, county.name)
+        # Dispatch embedding generation to rag queue (model not loaded in ingestion workers)
+        from app.workers.rag_tasks import generate_county_embeddings
+        generate_county_embeddings.delay(str(county.id))
 
         return {
             "county": county.name,
             **result,
         }
-
-
-async def _generate_embeddings_for_county(session, county_id: uuid.UUID, county_name: str) -> int:
-    """Generate embeddings for leads that don't have them yet."""
-    result = await session.execute(
-        select(Lead)
-        .where(
-            Lead.county_id == county_id,
-            Lead.embedding.is_(None),
-        )
-        .limit(500)
-    )
-    leads = result.scalars().all()
-
-    count = 0
-    for lead in leads:
-        text = build_lead_text(
-            case_number=lead.case_number,
-            owner_name=lead.owner_name,
-            property_address=lead.property_address,
-            property_city=lead.property_city,
-            surplus_amount=float(lead.surplus_amount),
-            sale_type=lead.sale_type,
-            county_name=county_name,
-        )
-        lead.embedding = generate_lead_embedding(text)
-        count += 1
-
-    if count > 0:
-        await session.commit()
-        logger.info("embeddings_generated", county=county_name, count=count)
-
-    return count
 
 
 @celery_app.task(
