@@ -1,16 +1,19 @@
 import uuid
 
 import structlog
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
+from app.core.rate_limiter import get_rate_limit_redis
 from app.db.session import get_async_session
 from app.dependencies import get_current_user
 from app.models.county import County
 from app.models.lead import Lead
 from app.models.user import User
+
+_INGEST_ALL_COOLDOWN_SECONDS = 300  # 5 minutes
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/counties", tags=["counties"])
@@ -104,11 +107,21 @@ async def get_county(
 async def trigger_ingest_all(
     user: User = Depends(get_current_user),
 ) -> dict:
-    """Trigger scrape for all active counties. Admin only."""
+    """Trigger scrape for all active counties. Admin only. 5-minute cooldown."""
     if user.role != "admin":
         from app.core.exceptions import ForbiddenError
 
         raise ForbiddenError()
+
+    r = get_rate_limit_redis()
+    cooldown_key = "admin:ingest_all:cooldown"
+    if await r.exists(cooldown_key):
+        ttl = await r.ttl(cooldown_key)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Scrape already queued. Try again in {ttl}s.",
+        )
+    await r.set(cooldown_key, "1", ex=_INGEST_ALL_COOLDOWN_SECONDS)
 
     from app.workers.ingestion_tasks import scrape_all_active_counties
 
