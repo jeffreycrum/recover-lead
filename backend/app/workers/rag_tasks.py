@@ -20,6 +20,8 @@ logger = structlog.get_logger()
     retry_backoff=True,
     max_retries=3,
     queue="rag",
+    task_time_limit=600,
+    task_soft_time_limit=540,
 )
 def generate_county_embeddings(self, county_id: str) -> dict:
     """Generate embeddings for leads in a county that don't have them yet.
