@@ -6,7 +6,7 @@ Usage:
     cd backend && python -m scripts.pre_ingest
 
 Or from project root:
-    cd backend && python ../scripts/pre_ingest.py
+    python backend/scripts/pre_ingest.py
 """
 
 import asyncio

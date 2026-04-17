@@ -37,3 +37,11 @@ htmlcov/
 
 # Docker
 *.log
+
+# Local generated artifacts
+surplusengine-financials.html
+.claude/ironrace/
+frontend/.claude/ironrace/
+utils/
+backend/celerybeat-schedule
+entities.json
