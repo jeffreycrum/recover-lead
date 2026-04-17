@@ -16,6 +16,7 @@ celery_app.conf.update(
     # Task routing
     task_routes={
         "app.workers.ingestion_tasks.*": {"queue": "ingestion"},
+        "app.workers.rag_tasks.*": {"queue": "rag"},
         "app.workers.qualification_tasks.*": {"queue": "rag"},
         "app.workers.letter_tasks.*": {"queue": "rag"},
         "app.workers.skip_trace_tasks.*": {"queue": "default"},
@@ -46,5 +47,6 @@ import app.workers.ingestion_tasks  # noqa: F401, E402
 import app.workers.letter_tasks  # noqa: F401, E402
 import app.workers.mailing_tasks  # noqa: F401, E402
 import app.workers.qualification_tasks  # noqa: F401, E402
+import app.workers.rag_tasks  # noqa: F401, E402
 import app.workers.scheduled  # noqa: F401, E402
 import app.workers.skip_trace_tasks  # noqa: F401, E402
