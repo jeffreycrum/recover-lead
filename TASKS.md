@@ -131,7 +131,7 @@ Ordered by phase and severity. Check off tasks as completed.
 
 ### P2 — Pre-Launch
 
-- [x] Create pre_ingest.py script for active counties (run at deploy time)
+- [x] Create pre_ingest.py script for active counties (run as a one-off seed job)
 - [ ] Verify staging environment with real Stripe test webhooks
 - [ ] Verify staging environment with real Clerk webhooks
 - [ ] Run full launch checklist (see Security P0 above)
