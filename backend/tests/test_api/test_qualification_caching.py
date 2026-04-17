@@ -45,13 +45,16 @@ class TestQualificationCacheHit:
 
         session = AsyncMock()
 
+        sub_result = MagicMock()
+        sub_result.scalar_one_or_none.return_value = "free"
+
         ul_result = MagicMock()
         ul_result.scalar_one_or_none.return_value = user_lead
 
         hash_result = MagicMock()
         hash_result.scalar_one_or_none.return_value = source_hash
 
-        session.execute = AsyncMock(side_effect=[ul_result, hash_result])
+        session.execute = AsyncMock(side_effect=[sub_result, ul_result, hash_result])
 
         async def override_session():
             yield session
@@ -91,13 +94,16 @@ class TestQualificationCacheHit:
         session.__aenter__ = AsyncMock(return_value=session)
         session.__aexit__ = AsyncMock(return_value=False)
 
+        sub_result = MagicMock()
+        sub_result.scalar_one_or_none.return_value = "free"
+
         ul_result = MagicMock()
         ul_result.scalar_one_or_none.return_value = user_lead
 
         hash_result = MagicMock()
         hash_result.scalar_one_or_none.return_value = "newhash" * 8
 
-        session.execute = AsyncMock(side_effect=[ul_result, hash_result])
+        session.execute = AsyncMock(side_effect=[sub_result, ul_result, hash_result])
 
         reservation = MagicMock()
         reservation.allowed = True
@@ -149,13 +155,16 @@ class TestQualificationCacheHit:
 
         session = AsyncMock()
 
+        sub_result = MagicMock()
+        sub_result.scalar_one_or_none.return_value = "free"
+
         ul_result = MagicMock()
         ul_result.scalar_one_or_none.return_value = user_lead
 
         hash_result = MagicMock()
         hash_result.scalar_one_or_none.return_value = "somehash" * 8
 
-        session.execute = AsyncMock(side_effect=[ul_result, hash_result])
+        session.execute = AsyncMock(side_effect=[sub_result, ul_result, hash_result])
 
         reservation = MagicMock()
         reservation.allowed = True
