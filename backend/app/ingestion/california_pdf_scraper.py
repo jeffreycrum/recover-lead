@@ -389,3 +389,97 @@ class SanDiegoFinalReportScraper(ParentPagePdfScraper):
     @staticmethod
     def _parse_amount(value: str):
         return PdfScraper._parse_amount(value)
+
+
+@register_scraper("KernReportOfSaleScraper")
+class KernReportOfSaleScraper(PdfScraper):
+    """Parse Kern County's multi-line "Report of Sale" PDF.
+
+    Each parcel record spans 3-4 lines in the text extract. The "amount line"
+    contains the Last Assessee name followed by twelve $-amounts:
+
+        <assessee> $SalePrice $Redemption $CurrentTaxes $StateTax $Advertising
+        $TaxFee $Cost $Deed $Reimbursement $PersonalContact $ReturnedCheck
+        $ExcessProceeds[MM/DD/YYYY]
+
+    The recording date is often concatenated onto the excess-proceeds amount
+    with no whitespace (e.g. ``$8,947.2704/12/2023``). The 11-digit ATN
+    (Assessor Tax Number = parcel id) appears at the start of one of the
+    preceding 4 lines. Records with $0.00 excess proceeds are skipped.
+
+    The stock ``CaliforniaExcessProceedsScraper`` can't handle this layout
+    because the APN is on a different line from the amounts and the trailing
+    date is glued to the last amount without a separator.
+    """
+
+    # Owner text + >=3 intermediate amounts (Sale Price + partial deductions) +
+    # final amount (Excess Proceeds), with optional MM/DD/YYYY glued to the
+    # final amount. Column count varies: typical rows have 12 amounts but some
+    # collapse zero-value columns down to 10. ``(?!Totals\b)`` blocks the
+    # report's grand-total row which also carries 13 $-amounts.
+    _AMOUNT_LINE = re.compile(
+        r"^(?!Totals\b)"
+        r"(?P<owner>.+?)"
+        r"(?:\s+\$[\d,]+\.\d{2}){3,}"
+        r"\s+\$(?P<excess>[\d,]+\.\d{2})"
+        r"(?P<date>\d{2}/\d{2}/\d{4})?\s*$"
+    )
+    _ATN_LINE = re.compile(r"^(?P<atn>\d{11})\b")
+    # Strip trailing "21710-3810"-style default-number artifacts from owner
+    _OWNER_TRAILING_DEFNUM = re.compile(r"\s+\d{4,5}[\-\u2010]\d{3,4}\s*$")
+
+    def parse(self, raw_data: bytes) -> list[RawLead]:
+        leads: list[RawLead] = []
+        pdf = pdfplumber.open(BytesIO(raw_data))
+        try:
+            for page in pdf.pages:
+                text = page.extract_text() or ""
+                lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
+                for i, line in enumerate(lines):
+                    match = self._AMOUNT_LINE.match(line)
+                    if not match:
+                        continue
+                    excess = PdfScraper._parse_amount(match.group("excess"))
+                    if excess <= 0:
+                        continue
+
+                    atn = self._find_preceding_atn(lines, i)
+                    if not atn:
+                        continue
+
+                    owner = self._OWNER_TRAILING_DEFNUM.sub(
+                        "", match.group("owner").strip()
+                    ).strip()
+                    sale_date = match.group("date")
+                    if sale_date:
+                        try:
+                            sale_date = datetime.strptime(
+                                sale_date, "%m/%d/%Y"
+                            ).date().isoformat()
+                        except ValueError:
+                            sale_date = None
+
+                    leads.append(
+                        RawLead(
+                            case_number=atn,
+                            parcel_id=atn,
+                            owner_name=owner or None,
+                            surplus_amount=excess,
+                            sale_date=sale_date,
+                            property_state=self.state,
+                            sale_type="tax_deed",
+                            raw_data={"line": line, "excess": match.group("excess")},
+                        )
+                    )
+        finally:
+            pdf.close()
+        return leads
+
+    @classmethod
+    def _find_preceding_atn(cls, lines: list[str], idx: int) -> str | None:
+        """Walk backward up to 5 lines to find the 11-digit ATN for this record."""
+        for j in range(idx - 1, max(-1, idx - 6), -1):
+            m = cls._ATN_LINE.match(lines[j])
+            if m:
+                return m.group("atn")
+        return None
