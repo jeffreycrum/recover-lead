@@ -40,6 +40,7 @@ htmlcov/
 
 # Local generated artifacts
 surplusengine-financials.html
+recoverlead-financials.html
 .claude/ironrace/
 frontend/.claude/ironrace/
 utils/
