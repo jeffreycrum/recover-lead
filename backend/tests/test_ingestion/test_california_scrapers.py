@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 from app.ingestion.california_pdf_scraper import (
     CaliforniaExcessProceedsScraper,
+    KernReportOfSaleScraper,
     SanDiegoFinalReportScraper,
 )
 from app.ingestion.factory import SCRAPER_REGISTRY, _ensure_scrapers_imported
@@ -71,6 +72,26 @@ FRESNO_CONFIG = {
     "line_pattern": (
         r"^(?P<case>\d+)\s+(?P<parcel>[0-9A-Z-]+)\s+"
         r"(?P<sale>[\d,]+\.\d{2})\s+(?P<amt>[\d,]+\.\d{2})$"
+    ),
+    "fields": {
+        "case": "case_number",
+        "parcel": "parcel_id",
+        "amt": "surplus_amount",
+    },
+}
+
+CONTRA_COSTA_CONFIG = {
+    "line_pattern": (
+        r"^(?!TOTALS)"
+        r"(?P<case>\d+)\s+"
+        r"(?P<parcel>\d{3}-\d{3}-\d{3}-\d)\s+"
+        r"\$\s*[\d,\s]+\.\d{2}\s+"
+        r"[\d,\s]+\.\d{2}\s+"
+        r"(?:-|[\d,\s]+\.\d{2})\s+"
+        r"[\d,\s]+\.\d{2}\s+"
+        r"\([\d,\s]+\.\d{2}\)\s+"
+        r"\([\d,\s]+\.\d{2}\)\s+"
+        r"\$\s*(?P<amt>[\d,\s]+\.\d{2})$"
     ),
     "fields": {
         "case": "case_number",
@@ -180,12 +201,97 @@ class TestCaliforniaExcessProceedsScraper:
         assert leads[0].surplus_amount == Decimal("253253.00")
         assert leads[1].case_number == "171"
 
+    def test_contra_costa_parses_spaced_amounts_and_skips_totals(self):
+        scraper = CaliforniaExcessProceedsScraper(
+            county_name="Contra Costa",
+            state="CA",
+            source_url="https://www.contracosta.ca.gov/Archive.aspx?AMID=265",
+            config=CONTRA_COSTA_CONFIG,
+        )
+        # pdfplumber splits right-aligned 6-figure amounts so "$104,100.00"
+        # extracts as "$ 1 04,100.00". The Feb 2025 report also has split
+        # doc-tax values like "6 .60". Both should parse correctly.
+        page_text = (
+            "CONTRA COSTA COUNTY\n"
+            "PROPERTY TAX AUCTION RESULTS\n"
+            "February 25, 2026\n"
+            "Item No. APN Winning Bid Add: Doc Tax Add: City Tax "
+            "Total Due from Winning Bidder Taxes Applied Recording Fees Excess Proceeds\n"
+            "19 074-351-044-8 $ 1 04,100.00 114.95 - 104,214.95 "
+            "(4,052.79) (118.45) $ 1 00,043.71\n"
+            "54 538-050-008-1 $ 1 86,800.00 205.70 1,309.00 188,314.70 "
+            "(27,419.86) (1,518.20) $ 1 59,376.64\n"
+            "76 074-020-003-5 $ 5,800.00 6 .60 - 5,806.60 "
+            "(2,164.90) (10.10) $ 3 ,631.60\n"
+            "98 273-200-042-3 $ 68,900.00 75.90 - 68,975.90 "
+            "(68,505.30) (79.40) $ 391.20\n"
+            "TOTALS: $ 3 ,65,600.00 402.15 1,309.00 367,311.15 "
+            "(102,142.85) (1,726.15) $ 2 63,443.15\n"
+        )
+
+        with patch("pdfplumber.open", return_value=_build_fake_pdf_mock(page_text)):
+            leads = scraper.parse(b"fake-pdf")
+
+        assert len(leads) == 4
+        assert leads[0].case_number == "19"
+        assert leads[0].parcel_id == "074-351-044-8"
+        assert leads[0].surplus_amount == Decimal("100043.71")
+        assert leads[0].property_state == "CA"
+
+        assert leads[1].surplus_amount == Decimal("159376.64")
+        assert leads[2].case_number == "76"
+        assert leads[2].surplus_amount == Decimal("3631.60")
+        assert leads[3].surplus_amount == Decimal("391.20")
+
     def test_registered_in_factory(self):
         _ensure_scrapers_imported()
         assert "CaliforniaExcessProceedsScraper" in SCRAPER_REGISTRY
 
 
 class TestSanDiegoFinalReportScraper:
+    def test_parses_post_2025_single_line_format(self):
+        scraper = SanDiegoFinalReportScraper(
+            county_name="San Diego",
+            state="CA",
+            source_url=(
+                "https://www.sdttc.com/content/ttc/en/tax-collection/"
+                "property-tax-sales/prior-sales-results.html"
+            ),
+            config={},
+        )
+        # New post-2025 layout: item, TRA/APN, amounts, and status all on
+        # one line. The last $ before SOLD-* is the excess proceeds.
+        page_text = (
+            "FINAL REPORT OF SALE\n"
+            "0073 58019/141-381-43-00 $15,100.00 $17.05 $14.99 $17.00 $1.50 "
+            "$336.00 $506.00 $0.00 $3,420.31 $393.72 $0.00 $117.00 $421.00 "
+            "$9,872.48 SOLD-7095B ONLINE AUCTION\n"
+            "58019/141-381-43-00 2019 GARY M HEWITT; CELESTE S\n"
+            "JENSEN NANCY G 2024-0285622 HEWITT\n"
+            "$2,400.00 10/22/2024 6/11/2025\n"
+            "2025-0154995\n"
+            # Zero excess sold row — filtered
+            "0137 58020/198-391-04-00 $27,700.00 $30.80 $14.99 $17.00 $1.50 "
+            "$336.00 $506.00 $0.00 $26,877.34 $292.34 $-345.17 $0.00 $0.00 "
+            "$0.00 SOLD-7095B ONLINE AUCTION\n"
+            "58020/198-391-04-00 2018 THE 4S\n"
+            # REDEEMED — skipped
+            "0126 94075/188-231-37-00 NO BIDS\n"
+            "94075/188-231-37-00 2017\n"
+        )
+
+        with patch("pdfplumber.open", return_value=_build_fake_pdf_mock(page_text)):
+            leads = scraper.parse(b"fake-pdf")
+
+        assert len(leads) == 1
+        lead = leads[0]
+        assert lead.case_number == "0073"
+        assert lead.parcel_id == "141-381-43-00"
+        assert lead.surplus_amount == Decimal("9872.48")
+        assert lead.sale_date == "2025-06-11"
+        assert lead.property_state == "CA"
+        assert lead.owner_name and "GARY M HEWITT" in lead.owner_name
+
     def test_extracts_only_sold_rows_with_positive_excess(self):
         scraper = SanDiegoFinalReportScraper(
             county_name="San Diego",
@@ -245,3 +351,83 @@ class TestSanDiegoFinalReportScraper:
     def test_registered_in_factory(self):
         _ensure_scrapers_imported()
         assert "SanDiegoFinalReportScraper" in SCRAPER_REGISTRY
+
+
+class TestKernReportOfSaleScraper:
+    def test_parses_multiline_records_and_handles_date_glued_to_amount(self):
+        scraper = KernReportOfSaleScraper(
+            county_name="Kern",
+            state="CA",
+            source_url="https://www.kcttc.co.kern.ca.us/forms/taxsalereportofsale.pdf",
+            config={},
+        )
+        # Three records in the Kern "Report of Sale" layout:
+        #   - Zero excess (sold but no surplus) -> filtered
+        #   - Non-zero excess with 12 amounts + date glued to last amount
+        #   - Non-zero excess with only 10 amounts (zero columns collapsed)
+        #     and no trailing date
+        page_text = (
+            "Kern County Treasurer-Tax Collector\n"
+            "Report of sale March 13, 2023 - March 15, 2023\n"
+            "ATN/TRA Default Number Sale Price LESS Excess Deeded to\n"
+            "juana r soto\n"
+            "04202203005 11-1035058-00-0 As Joint Tenants\n"
+            "003-000 06/29/2012 223042502\n"
+            "SMITH MARK 21710-3810 $15,016.50 $13,977.64 $0.00 $16.50 $13.00 "
+            "$1.50 $122.86 $35.00 $650.00 $200.00 $0.00 $0.0004/12/2023\n"
+            "04315004009 RRSM LLC\n"
+            "088-000 10-1036070-00-8 A Limited Liability Corporation\n"
+            "DOREY GEORGE D & BEULAH B FMLY TR 06/30/2011 223042503\n"
+            "BETTYE L ET AL 21610-9274 $10,612.10 $1,110.83 $44.54 $12.10 "
+            "$13.00 $1.50 $122.86 $35.00 $325.00 $0.00 $0.00 $8,947.2704/12/2023\n"
+            "50610206008\n"
+            "088-012\n"
+            "BUTLER JUDY 21909-4856 $260,386.55 $28,967.13 $2,209.96 $286.55 "
+            "$13.00 $1.50 $122.86 $0.00 $0.00 $228,785.55\n"
+            "Totals $5,082,752.50 $2,528,493.21 $41,960.48 $5,802.50 "
+            "$13,435.00 $1,551.00 $127,037.24 $36,155.00 $381,294.08 "
+            "$4,000.00 $268.64 $0.00 $1,942,755.35\n"
+        )
+
+        with patch("pdfplumber.open", return_value=_build_fake_pdf_mock(page_text)):
+            leads = scraper.parse(b"fake-pdf")
+
+        assert len(leads) == 2
+        by_atn = {lead.parcel_id: lead for lead in leads}
+
+        dorey = by_atn["04315004009"]
+        assert dorey.case_number == "04315004009"
+        assert dorey.surplus_amount == Decimal("8947.27")
+        assert dorey.sale_date == "2023-04-12"
+        assert dorey.owner_name == "BETTYE L ET AL"
+        assert dorey.property_state == "CA"
+        assert dorey.sale_type == "tax_deed"
+
+        butler = by_atn["50610206008"]
+        assert butler.surplus_amount == Decimal("228785.55")
+        assert butler.sale_date is None
+        assert butler.owner_name == "BUTLER JUDY"
+
+    def test_skips_unsold_three_amount_rows_and_totals_row(self):
+        scraper = KernReportOfSaleScraper(
+            county_name="Kern",
+            state="CA",
+            source_url="x",
+            config={},
+        )
+        page_text = (
+            "08119117004\n"
+            "010-002\n"
+            "$0.00 $0.00 $0.00\n"
+            "Totals $1.00 $2.00 $3.00 $4.00 $5.00 $6.00 $7.00 $8.00 "
+            "$9.00 $10.00 $11.00 $12.00 $13.00\n"
+        )
+
+        with patch("pdfplumber.open", return_value=_build_fake_pdf_mock(page_text)):
+            leads = scraper.parse(b"fake-pdf")
+
+        assert leads == []
+
+    def test_registered_in_factory(self):
+        _ensure_scrapers_imported()
+        assert "KernReportOfSaleScraper" in SCRAPER_REGISTRY
