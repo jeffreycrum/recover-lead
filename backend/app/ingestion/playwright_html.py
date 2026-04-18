@@ -13,6 +13,7 @@ from __future__ import annotations
 from playwright.async_api import async_playwright
 
 from app.ingestion.base_scraper import RawLead
+from app.ingestion.california_pdf_scraper import CaliforniaExcessProceedsScraper
 from app.ingestion.factory import register_scraper
 from app.ingestion.html_scraper import HtmlTableScraper
 from app.ingestion.parent_page_pdf_scraper import ParentPagePdfScraper
@@ -124,12 +125,18 @@ class PlaywrightParentPagePdfScraper(ParentPagePdfScraper):
     Used when the county's landing page is bot-protected or JS-rendered so
     that ParentPagePdfScraper's httpx fetch returns empty or redirect content.
     Playwright renders the full page; the PDF link is extracted from the
-    rendered HTML and the PDF itself is then downloaded via regular httpx.
+    rendered HTML and the PDF itself is then downloaded via regular httpx —
+    or via the browser session when ``fetch_pdf_via_browser`` is set (required
+    for Akamai-protected hosts like Fresno where even the direct PDF URL 403s
+    without a real browser fingerprint).
 
     Config keys: same as ParentPagePdfScraper, plus:
-        wait_ms       : milliseconds to wait after page load (default: 3000)
-        wait_until    : Playwright wait_until argument (default: "networkidle")
-        wait_selector : optional CSS selector to wait for before grabbing HTML
+        wait_ms                : milliseconds to wait after page load (default: 3000)
+        wait_until             : Playwright wait_until argument (default: "networkidle")
+        wait_selector          : optional CSS selector to wait for before grabbing HTML
+        fetch_pdf_via_browser  : if true, download the PDF via the same browser
+                                 session using page.evaluate(fetch(...)). Needed
+                                 for Akamai / advanced bot protection.
     """
 
     async def fetch(self) -> bytes:
@@ -141,6 +148,7 @@ class PlaywrightParentPagePdfScraper(ParentPagePdfScraper):
         wait_ms = self.config.get("wait_ms", 3000)
         wait_until = self.config.get("wait_until", "networkidle")
         wait_selector = self.config.get("wait_selector")
+        fetch_pdf_via_browser = bool(self.config.get("fetch_pdf_via_browser"))
 
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
@@ -152,14 +160,38 @@ class PlaywrightParentPagePdfScraper(ParentPagePdfScraper):
                 if wait_ms:
                     await page.wait_for_timeout(wait_ms)
                 html_content = await page.content()
+
+                pdf_url = self._extract_pdf_url(
+                    html_content.encode("utf-8"),
+                    selector,
+                    pattern_str,
+                    base_url,
+                    exclude_str,
+                )
+                self.logger.info("playwright_parent_page_pdf_resolved", pdf_url=pdf_url)
+
+                if fetch_pdf_via_browser:
+                    data = await page.evaluate(
+                        """async (url) => {
+                            const r = await fetch(url, { credentials: 'include' });
+                            const buf = await r.arrayBuffer();
+                            return { status: r.status, bytes: Array.from(new Uint8Array(buf)) };
+                        }""",
+                        pdf_url,
+                    )
+                    if data["status"] != 200:
+                        msg = (
+                            f"{self.county_name}: browser PDF fetch returned "
+                            f"{data['status']} for {pdf_url}"
+                        )
+                        raise RuntimeError(msg)
+                    return bytes(data["bytes"])
             finally:
                 await browser.close()
 
-        pdf_url = self._extract_pdf_url(
-            html_content.encode("utf-8"), selector, pattern_str, base_url, exclude_str
-        )
-        self.logger.info("playwright_parent_page_pdf_resolved", pdf_url=pdf_url)
-
+        # Fallback path: landing page was rendered via Playwright but the PDF
+        # itself is fetched over plain httpx. Reached only when
+        # fetch_pdf_via_browser is False (the Akamai path returns early above).
         async with scraper_client(pdf_url) as client:
             pdf_response = await client.get(pdf_url)
             pdf_response.raise_for_status()
@@ -168,6 +200,25 @@ class PlaywrightParentPagePdfScraper(ParentPagePdfScraper):
     def parse(self, raw_data: bytes) -> list[RawLead]:
         """Delegate to PdfScraper.parse()."""
         return PdfScraper.parse(self, raw_data)
+
+
+@register_scraper("PlaywrightCaliforniaExcessProceedsScraper")
+class PlaywrightCaliforniaExcessProceedsScraper(
+    PlaywrightParentPagePdfScraper, CaliforniaExcessProceedsScraper
+):
+    """Playwright landing-page fetch + CaliforniaExcessProceedsScraper parsing.
+
+    Used for CA counties with Akamai / advanced bot protection (e.g. Fresno)
+    that still publish an excess-proceeds PDF matching the standard
+    CaliforniaExcessProceedsScraper line-pattern config.
+
+    Inherits fetch() from PlaywrightParentPagePdfScraper (with optional
+    fetch_pdf_via_browser for Akamai) and parse() from
+    CaliforniaExcessProceedsScraper (regex line matching with field map).
+    """
+
+    def parse(self, raw_data: bytes) -> list[RawLead]:
+        return CaliforniaExcessProceedsScraper.parse(self, raw_data)
 
 
 @register_scraper("RealTdmScraper")

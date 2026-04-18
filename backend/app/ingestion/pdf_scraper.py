@@ -229,15 +229,32 @@ class PdfScraper(BaseScraper):
         Matches patterns like $1,234.56 / 1234.56 / $98,991 — pulls a single
         token, not all digits. Returns 0 if no match or the value overflows
         the DB's Numeric(12, 2) range (max ~99 million).
+
+        Tolerates a single pdfplumber artifact where a leading digit is split
+        from the rest of a right-aligned amount by whitespace — e.g. Contra
+        Costa's ``$ 1 04,100.00`` which should parse as ``104100.00``. Only
+        accepts the pattern ``<1-3 digits> <space> <1-3 digits>`` at the
+        start; rejects arbitrary multi-space runs so two adjacent numbers
+        don't silently merge into one.
         """
         if not amount_str:
             return Decimal("0.00")
-        # Match: optional $, required digits with commas, optional decimal
-        pattern = r"\$?\s*(\d[\d,]*(?:\.\d{1,2})?)"
+        # Two shapes, most-specific first:
+        #   1) comma-grouped with an optional pdfplumber split-digit artifact:
+        #      <1-3 digits>(<space><1-3 digits>)?( *, *<3 digits>)+(.<1-2 digits>)?
+        #   2) plain digits: <digits>(.<1-2 digits>)?
+        # The comma branch is required to contain at least one thousand-group
+        # separator so we don't greedily consume ``1234 56`` as one number.
+        pattern = (
+            r"\$?\s*("
+            r"\d{1,3}(?:\s\d{1,3})?(?:\s*,\s*\d{3})+(?:\.\d{1,2})?"
+            r"|\d+(?:\.\d{1,2})?"
+            r")"
+        )
         match = re.search(pattern, amount_str)
         if not match:
             return Decimal("0.00")
-        cleaned = match.group(1).replace(",", "")
+        cleaned = re.sub(r"[,\s]", "", match.group(1))
         try:
             value = Decimal(cleaned)
         except Exception:
