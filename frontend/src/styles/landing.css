@@ -404,7 +404,8 @@
   border-radius: 7px;
   transition: all 150ms;
 }
-.landing-theme .aud-tabs button.active {
+.landing-theme .aud-tabs button.active,
+.landing-theme .aud-tabs button[data-state="active"] {
   background: var(--lt-surface-2);
   color: var(--lt-text);
   box-shadow: inset 0 0 0 1px var(--lt-line-2);

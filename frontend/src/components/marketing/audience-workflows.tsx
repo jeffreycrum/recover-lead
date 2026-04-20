@@ -1,13 +1,17 @@
-import { useState } from "react";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import { siteCopy } from "@/lib/marketing-copy";
 import { CheckIcon } from "./icons";
 
 export function AudienceWorkflows() {
   const { eyebrow, headline, tabsAriaLabel, tabs } = siteCopy.audience;
-  const [active, setActive] = useState<string>(tabs[0]?.id ?? "");
-  const current = tabs.find((t) => t.id === active) ?? tabs[0];
+  const defaultTabId = tabs[0]?.id;
 
-  if (!current) {
+  if (!defaultTabId) {
     return null;
   }
 
@@ -18,63 +22,64 @@ export function AudienceWorkflows() {
           <span className="eyebrow">{eyebrow}</span>
           <h2 className="section-title">{headline}</h2>
         </div>
-        <div style={{ display: "flex", justifyContent: "center" }}>
-          <div
-            className="aud-tabs"
-            role="tablist"
-            aria-label={tabsAriaLabel}
-          >
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={active === tab.id}
-                className={active === tab.id ? "active" : ""}
-                onClick={() => setActive(tab.id)}
-                data-testid="audience-tab"
-              >
-                {tab.label}
-              </button>
-            ))}
+        <Tabs defaultValue={defaultTabId} className="contents">
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <TabsList
+              className="aud-tabs"
+              aria-label={tabsAriaLabel}
+            >
+              {tabs.map((tab) => (
+                <TabsTrigger
+                  key={tab.id}
+                  value={tab.id}
+                  data-testid="audience-tab"
+                >
+                  {tab.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
           </div>
-        </div>
-        <div className="aud-grid">
-          <div className="aud-bullets">
-            {current.bullets.map((b) => (
-              <div className="aud-bullet" key={b.t}>
-                <div className="ico">
-                  <CheckIcon />
+          {tabs.map((tab) => (
+            <TabsContent key={tab.id} value={tab.id} className="mt-0">
+              <div className="aud-grid">
+                <div className="aud-bullets">
+                  {tab.bullets.map((bullet) => (
+                    <div className="aud-bullet" key={bullet.t}>
+                      <div className="ico">
+                        <CheckIcon />
+                      </div>
+                      <div>
+                        <div className="t">{bullet.t}</div>
+                        <div className="d">{bullet.d}</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div>
-                  <div className="t">{b.t}</div>
-                  <div className="d">{b.d}</div>
+                <div className="product-card" style={{ transform: "none" }}>
+                  <div className="pc-head">
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 12 }}
+                    >
+                      <div className="pc-dots">
+                        <span />
+                        <span />
+                        <span />
+                      </div>
+                      <span className="title">{tab.previewTitle}</span>
+                    </div>
+                  </div>
+                  <div className="pc-body" style={{ minHeight: 280 }}>
+                    <div className="step-visual" style={{ height: 260 }}>
+                      <span className="placeholder">
+                        [ {tab.id} workflow screenshot ]
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
-          <div className="product-card" style={{ transform: "none" }}>
-            <div className="pc-head">
-              <div
-                style={{ display: "flex", alignItems: "center", gap: 12 }}
-              >
-                <div className="pc-dots">
-                  <span />
-                  <span />
-                  <span />
-                </div>
-                <span className="title">{current.previewTitle}</span>
-              </div>
-            </div>
-            <div className="pc-body" style={{ minHeight: 280 }}>
-              <div className="step-visual" style={{ height: 260 }}>
-                <span className="placeholder">
-                  [ {current.id} workflow screenshot ]
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
+            </TabsContent>
+          ))}
+        </Tabs>
       </div>
     </section>
   );
