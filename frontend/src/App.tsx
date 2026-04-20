@@ -16,11 +16,14 @@ import { ContractsPage } from "@/pages/contracts";
 import { CountiesPage } from "@/pages/counties";
 import { SettingsPage } from "@/pages/settings";
 import { MarketingLandingPage } from "@/pages/marketing/landing";
+import { PrivacyPage } from "@/pages/marketing/privacy";
+import { TermsPage } from "@/pages/marketing/terms";
+import { SecurityPage } from "@/pages/marketing/security";
 import { CheckoutHandoffPage } from "@/pages/checkout";
 
 function CheckoutRedirect() {
-  const { pathname, search } = useLocation();
-  const target = `${pathname}${search}`;
+  const { pathname, search, hash } = useLocation();
+  const target = `${pathname}${search}${hash}`;
   return <RedirectToSignIn redirectUrl={target} />;
 }
 
@@ -46,6 +49,9 @@ export default function App() {
               </div>
             }
           />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/security" element={<SecurityPage />} />
           <Route path="/checkout" element={<CheckoutRedirect />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -18,7 +18,7 @@ export const siteCopy = {
   hero: {
     badge: {
       chip: "New",
-      label: "Now covering 33 Florida counties with daily updates",
+      label: "Now covering 50 counties across FL, CA, GA, TX, OH with daily updates",
     },
     headlineLead: "Find the surplus funds",
     headlineGradient: "others overlook.",
@@ -28,7 +28,7 @@ export const siteCopy = {
     secondaryCta: "See how it works",
     proof: [
       { num: "$127.4M", label: "Surplus indexed" },
-      { num: "33", label: "FL counties live" },
+      { num: "50", label: "Counties across 5 states" },
       { num: "< 4 min", label: "Lead → letter" },
     ],
     productCard: {
@@ -117,8 +117,8 @@ export const siteCopy = {
             d: "Claude scores every surplus in minutes, not hours. Batch-qualify a whole county with one click.",
           },
           {
-            t: "Auto-drafted FL-compliant letters",
-            d: "Tax-deed, foreclosure, and excess-proceeds templates — all state-specific, all reviewed by counsel.",
+            t: "Auto-drafted state-compliant letters",
+            d: "Tax-deed, foreclosure, and excess-proceeds templates for FL, CA, GA, TX, and OH — all state-specific, all reviewed by counsel.",
           },
           {
             t: "One-click Lob mailing",
@@ -175,7 +175,7 @@ export const siteCopy = {
       {
         num: "STEP 01",
         title: "Ingest every county",
-        desc: "Nightly scrapers pull tax-deed, foreclosure, and excess-proceeds filings from 33 FL county clerks. Dedup, normalize, embed.",
+        desc: "Nightly scrapers pull tax-deed, foreclosure, and excess-proceeds filings from 50 county clerks across FL, CA, GA, TX, and OH. Dedup, normalize, embed.",
         placeholder: "county scraper dashboard",
       },
       {
@@ -212,27 +212,58 @@ export const siteCopy = {
   },
   counties: {
     eyebrow: "Coverage",
-    headline: "33 Florida counties active. More added monthly.",
+    headline: "50 counties across 5 states. More added monthly.",
     subheadline:
-      "We run nightly ingestion against every scrapable FL county clerk, plus active parsers for California, Georgia, Texas, and Ohio. If a county changes its website, we fix the scraper — not you.",
+      "We run nightly ingestion against every scrapable county clerk in Florida, California, Georgia, Texas, and Ohio. If a county changes its website, we fix the scraper — not you.",
     cta: "View full county map",
     proof: [
-      { num: "33", label: "Live in FL" },
-      { num: "4", label: "Pending outreach" },
+      { num: "50", label: "Live counties" },
+      { num: "5", label: "States covered" },
       { num: "Daily", label: "Refresh cadence" },
     ],
-    vizTitle: "Florida coverage",
+    vizTitle: "Multi-state coverage",
     legend: [
       { label: "Active", color: "emerald" as const },
       { label: "Pending", color: "amber" as const },
     ],
-    active: [
-      "Volusia","Hillsborough","Pinellas","Broward","Polk","Lee","Collier","Columbia",
-      "Marion","Martin","Leon","Miami-Dade","Orange","Duval","Palm Beach","Alachua",
-      "Charlotte","Citrus","Clay","Escambia","Flagler","Hernando","Lake","Monroe",
-      "Nassau","St. Johns","Sarasota","Seminole","St. Lucie","Brevard","Manatee","Osceola","Pasco",
+    groups: [
+      {
+        state: "FL",
+        stateLabel: "Florida",
+        counties: [
+          "Volusia","Hillsborough","Broward","Martin","Collier","Okaloosa","Polk",
+          "Seminole","Sarasota","Lake","Duval","Osceola","Indian River","Marion",
+          "Leon","Lee","Baker","DeSoto","Santa Rosa","Sumter","Gulf","Manatee",
+          "Pasco","Taylor","Madison","Walton","Pinellas",
+        ],
+      },
+      {
+        state: "CA",
+        stateLabel: "California",
+        counties: ["Los Angeles", "San Diego", "Orange", "Sacramento", "Fresno", "Contra Costa", "Kern"],
+      },
+      {
+        state: "GA",
+        stateLabel: "Georgia",
+        counties: ["Gwinnett", "DeKalb", "Clayton", "Henry", "Hall"],
+      },
+      {
+        state: "TX",
+        stateLabel: "Texas",
+        counties: ["Dallas", "Fort Bend", "Denton", "Galveston", "Young", "Houston"],
+      },
+      {
+        state: "OH",
+        stateLabel: "Ohio",
+        counties: ["Cuyahoga", "Lake", "Medina", "Fairfield", "Montgomery"],
+      },
     ],
-    pending: ["Bay", "Okaloosa", "Santa Rosa", "Walton"],
+    pending: [
+      { name: "Bay", state: "FL" },
+      { name: "Miami-Dade", state: "FL" },
+      { name: "Riverside", state: "CA" },
+      { name: "Fulton", state: "GA" },
+    ],
   },
   pricing: {
     eyebrow: "Pricing",
@@ -249,7 +280,7 @@ export const siteCopy = {
           { a: "200", b: " qualifications / mo" },
           { a: "100", b: " letters / mo" },
           { a: "25", b: " skip traces / mo" },
-          { a: "All", b: " FL counties" },
+          { a: "All", b: " 50 counties" },
           { a: "Lob mail", b: " integration" },
         ],
       },
@@ -291,7 +322,7 @@ export const siteCopy = {
     items: [
       {
         q: "Is the outreach compliant?",
-        a: "All letter templates are written against Florida statutes (§197.582 for tax deeds, §45.032 for foreclosure surplus) and reviewed by counsel. State-specific templates exist for CA, GA, TX, and OH.",
+        a: "All letter templates are written against state-specific surplus-funds statutes and reviewed by counsel — including Florida (§197.582, §45.032), California, Georgia, Texas, and Ohio. Each letter is rendered against the lead's state so compliance stays automatic.",
       },
       {
         q: "How fresh is the data?",
@@ -307,7 +338,7 @@ export const siteCopy = {
       },
       {
         q: "Is there a free tier?",
-        a: "Yes — 15 qualifications and 10 letters per month, any single FL county. Good for evaluating the platform end-to-end.",
+        a: "Yes — 15 qualifications and 10 letters per month, any single county. Good for evaluating the platform end-to-end.",
       },
       {
         q: "What about refunds?",
@@ -327,7 +358,6 @@ export const siteCopy = {
       { label: "Privacy", href: "/privacy" },
       { label: "Terms", href: "/terms" },
       { label: "Security", href: "/security" },
-      { label: "Status", href: "/status" },
       { label: "Contact", href: "mailto:hello@recoverlead.com" },
     ],
   },

@@ -2,7 +2,7 @@ import { siteCopy } from "@/lib/marketing-copy";
 import { ArrowRightIcon } from "./icons";
 
 export function CountiesCoverage() {
-  const { eyebrow, headline, subheadline, cta, proof, vizTitle, active, pending } =
+  const { eyebrow, headline, subheadline, cta, proof, vizTitle, groups, pending } =
     siteCopy.counties;
   return (
     <section
@@ -95,19 +95,42 @@ export function CountiesCoverage() {
               </span>
             </div>
           </div>
-          <div className="county-chips">
-            {active.map((c) => (
-              <span key={c} className="county-chip">
-                <span className="dot" />
-                {c}
-              </span>
+          <div className="county-state-groups">
+            {groups.map((g) => (
+              <div key={g.state} className="county-state-group">
+                <div className="county-state-label">
+                  {g.stateLabel}
+                  <span className="county-state-count">{g.counties.length}</span>
+                </div>
+                <div className="county-chips">
+                  {g.counties.map((c) => (
+                    <span key={`${g.state}-${c}`} className="county-chip">
+                      <span className="dot" />
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              </div>
             ))}
-            {pending.map((c) => (
-              <span key={c} className="county-chip pending">
-                <span className="dot" />
-                {c}
-              </span>
-            ))}
+            {pending.length > 0 && (
+              <div className="county-state-group">
+                <div className="county-state-label">
+                  Pending outreach
+                  <span className="county-state-count">{pending.length}</span>
+                </div>
+                <div className="county-chips">
+                  {pending.map((p) => (
+                    <span
+                      key={`${p.state}-${p.name}`}
+                      className="county-chip pending"
+                    >
+                      <span className="dot" />
+                      {p.name}, {p.state}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
