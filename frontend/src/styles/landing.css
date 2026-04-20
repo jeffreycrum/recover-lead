@@ -286,6 +286,14 @@
 }
 .landing-theme .ticker-item .loc { color: var(--lt-text-dim); }
 
+@media (prefers-reduced-motion: reduce) {
+  .landing-theme .nav-pill .dot,
+  .landing-theme .callout,
+  .landing-theme .ticker-inner {
+    animation: none !important;
+  }
+}
+
 .landing-theme .section { padding: 120px 0; }
 .landing-theme .section-head { max-width: 720px; margin: 0 auto 64px; text-align: center; }
 .landing-theme .eyebrow {
@@ -495,6 +503,15 @@
 .landing-theme .legal-wrap {
   max-width: 780px;
   margin: 0 auto;
+}
+.landing-theme .section-title.legal-title {
+  text-align: left;
+}
+.landing-theme .legal-updated {
+  text-align: left;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--lt-text-dim);
 }
 .landing-theme .legal-body {
   margin-top: 32px;

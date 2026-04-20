@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 import { siteCopy } from "@/lib/marketing-copy";
 import { useTrackEvent } from "@/hooks/use-track-event";
 import { ArrowRightIcon, BrandLogo } from "./icons";
@@ -49,6 +50,7 @@ export function SiteNav() {
             <a
               key={item.id}
               href={`#${item.id}`}
+              aria-current={active === item.id ? "true" : undefined}
               className={active === item.id ? "active" : ""}
             >
               {"liveDot" in item && item.liveDot && (
@@ -59,21 +61,22 @@ export function SiteNav() {
           ))}
         </nav>
         <div className="nav-right">
-          <Link
-            to="/sign-in"
+          <Button
+            nativeButton={false}
+            render={<Link to="/sign-in" onClick={handleSignInClick} />}
+            variant="ghost"
             className="btn btn-ghost"
-            onClick={handleSignInClick}
           >
             {siteCopy.nav.signIn}
-          </Link>
-          <Link
-            to="/sign-up"
+          </Button>
+          <Button
+            nativeButton={false}
+            render={<Link to="/sign-up" onClick={handlePrimaryClick} />}
             className="btn btn-primary"
-            onClick={handlePrimaryClick}
           >
             {siteCopy.nav.primaryCta}
             <ArrowRightIcon />
-          </Link>
+          </Button>
         </div>
       </div>
     </header>

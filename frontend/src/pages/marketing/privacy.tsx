@@ -59,11 +59,13 @@ export function PrivacyPage() {
 
       <h2>Your rights</h2>
       <p>
-        Depending on where you live, you may have rights to access, correct,
-        export, or delete your data under laws like the CCPA, CPRA, or GDPR.
-        Email{" "}
+        Depending on where you live, you may have rights to request access to or
+        deletion of your account data under laws like the CCPA, CPRA, or GDPR.
+        We handle those requests manually, may ask you to verify your identity
+        before acting, and will respond within the timelines required by
+        applicable law. Email{" "}
         <a href="mailto:privacy@recoverlead.com">privacy@recoverlead.com</a>{" "}
-        and we'll respond within 30 days.
+        for privacy requests.
       </p>
 
       <h2>Contact</h2>

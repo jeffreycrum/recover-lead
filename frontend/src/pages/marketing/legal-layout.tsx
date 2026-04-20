@@ -14,18 +14,10 @@ export function LegalPage({ eyebrow, title, updated, children }: LegalPageProps)
       <section className="section">
         <div className="wrap legal-wrap">
           <span className="eyebrow">{eyebrow}</span>
-          <h1 className="section-title" style={{ textAlign: "left" }}>
+          <h1 className="section-title legal-title">
             {title}
           </h1>
-          <p
-            className="section-sub"
-            style={{
-              textAlign: "left",
-              marginTop: 4,
-              fontSize: 13,
-              color: "var(--lt-text-dim)",
-            }}
-          >
+          <p className="section-sub legal-updated">
             Last updated {updated}
           </p>
           <div className="legal-body">{children}</div>

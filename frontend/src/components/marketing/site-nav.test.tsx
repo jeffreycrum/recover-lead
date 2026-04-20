@@ -25,7 +25,7 @@ describe("SiteNav", () => {
         <SiteNav />
       </MemoryRouter>,
     );
-    const signInLink = screen.getByRole("link", { name: /^sign in$/i });
+    const signInLink = screen.getByRole("button", { name: /^sign in$/i });
     expect(signInLink.getAttribute("href")).toBe("/sign-in");
     await user.click(signInLink);
     expect(trackMock).toHaveBeenCalledWith("marketing.nav_cta.click", {
@@ -44,7 +44,7 @@ describe("SiteNav", () => {
         <SiteNav />
       </MemoryRouter>,
     );
-    const cta = screen.getByRole("link", { name: /start recovering/i });
+    const cta = screen.getByRole("button", { name: /start recovering/i });
     expect(cta.getAttribute("href")).toBe("/sign-up");
     await user.click(cta);
     expect(trackMock).toHaveBeenCalledWith("marketing.nav_cta.click", {

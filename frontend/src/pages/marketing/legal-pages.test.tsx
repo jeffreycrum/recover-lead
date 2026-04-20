@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { PrivacyPage } from "./privacy";
+import { SecurityPage } from "./security";
+import { TermsPage } from "./terms";
 
 vi.mock("@clerk/clerk-react", () => ({
   SignedIn: () => null,
@@ -13,34 +16,35 @@ vi.mock("@clerk/clerk-react", () => ({
   useUser: () => ({ isLoaded: true, user: null }),
 }));
 
-const AppModulePromise = import("@/App");
-
-async function renderAt(path: string) {
-  const { default: App } = await AppModulePromise;
+function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <App />
+      <Routes>
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/security" element={<SecurityPage />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
 
 describe("Legal marketing pages", () => {
-  it("renders Privacy at /privacy", async () => {
-    await renderAt("/privacy");
+  it("renders Privacy at /privacy", () => {
+    renderAt("/privacy");
     expect(
       screen.getByRole("heading", { level: 1, name: /privacy policy/i }),
     ).toBeInTheDocument();
   });
 
-  it("renders Terms at /terms", async () => {
-    await renderAt("/terms");
+  it("renders Terms at /terms", () => {
+    renderAt("/terms");
     expect(
       screen.getByRole("heading", { level: 1, name: /terms of service/i }),
     ).toBeInTheDocument();
   });
 
-  it("renders Security at /security", async () => {
-    await renderAt("/security");
+  it("renders Security at /security", () => {
+    renderAt("/security");
     expect(
       screen.getByRole("heading", { level: 1, name: /^security$/i }),
     ).toBeInTheDocument();

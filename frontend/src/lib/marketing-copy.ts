@@ -36,8 +36,8 @@ export const siteCopy = {
       meta: "12 new",
       rows: [
         {
-          name: "Marguerite Alvarez",
-          meta: "2018 tax deed · 4132 Bayshore Blvd · Parcel 084623",
+          name: "Sample Lead A",
+          meta: "2018 tax deed · Demo County · Parcel ######",
           amount: "$84,217",
           score: "9.4",
           scoreHi: true,
@@ -46,8 +46,8 @@ export const siteCopy = {
           highlight: true,
         },
         {
-          name: "Estate of W. Harrington",
-          meta: "2021 foreclosure · 717 Platt St · Case 21-CA-004218",
+          name: "Sample Lead B",
+          meta: "2021 foreclosure · Demo County · Case ######",
           amount: "$62,850",
           score: "8.7",
           scoreHi: true,
@@ -55,8 +55,8 @@ export const siteCopy = {
           qualified: true,
         },
         {
-          name: "Daniel & Rosa Kline",
-          meta: "2019 tax deed · 609 Rome Ave · Parcel 148992",
+          name: "Sample Lead C",
+          meta: "2019 tax deed · Demo County · Parcel ######",
           amount: "$48,400",
           score: "7.2",
           scoreHi: false,
@@ -64,8 +64,8 @@ export const siteCopy = {
           qualified: false,
         },
         {
-          name: "JTL Holdings, LLC",
-          meta: "2020 foreclosure · 3301 N Armenia Ave · Case 20-CA-009012",
+          name: "Sample Lead D",
+          meta: "2020 foreclosure · Demo County · Case ######",
           amount: "$31,120",
           score: "6.8",
           scoreHi: false,
@@ -73,8 +73,8 @@ export const siteCopy = {
           qualified: false,
         },
         {
-          name: "Consuela Whitfield",
-          meta: "2022 tax deed · 1419 E 24th Ave · Parcel 057731",
+          name: "Sample Lead E",
+          meta: "2022 tax deed · Demo County · Parcel ######",
           amount: "$22,605",
           score: "6.1",
           scoreHi: false,
