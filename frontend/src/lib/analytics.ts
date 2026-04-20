@@ -1,4 +1,7 @@
-export type AnalyticsEvent = string;
+export type AnalyticsEvent =
+  | "marketing.nav_cta.click"
+  | "marketing.signin_intent"
+  | "marketing.hero_cta.click";
 export type AnalyticsProps = Record<string, unknown>;
 
 let initialized = false;
