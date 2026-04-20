@@ -65,4 +65,34 @@ describe("MarketingLandingPage (signed-out routing)", () => {
       "/checkout?plan=pro&interval=annual",
     );
   });
+
+  it("renders 4 how-it-works steps on /", async () => {
+    const { default: App } = await AppModulePromise;
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>,
+    );
+    expect(screen.getAllByTestId("how-it-works-step")).toHaveLength(4);
+  });
+
+  it("renders 6 feature-grid cards on /", async () => {
+    const { default: App } = await AppModulePromise;
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>,
+    );
+    expect(screen.getAllByTestId("feature-grid-card")).toHaveLength(6);
+  });
+
+  it("renders 3 audience tabs on /", async () => {
+    const { default: App } = await AppModulePromise;
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>,
+    );
+    expect(screen.getAllByTestId("audience-tab")).toHaveLength(3);
+  });
 });

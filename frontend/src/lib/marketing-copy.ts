@@ -63,6 +63,7 @@ export const siteCopy = {
   audienceWorkflows: {
     eyebrow: "Built for your workflow",
     headline: "One platform, three audiences.",
+    tabsAriaLabel: "Audience workflows",
     audiences: [
       {
         id: "agents",
@@ -132,6 +133,7 @@ export const siteCopy = {
   socialProof: {
     eyebrow: "Trusted by recovery professionals",
     headline: "Join firms closing more claims with less overhead.",
+    logosAriaLabel: "Customer logos",
     logos: [
       { name: "Logo placeholder 1" },
       { name: "Logo placeholder 2" },
@@ -139,24 +141,15 @@ export const siteCopy = {
       { name: "Logo placeholder 4" },
       { name: "Logo placeholder 5" },
     ],
-    testimonials: [
-      {
-        quote:
-          "Testimonial placeholder — customer story coming soon. We're collecting firm results from the pilot cohort.",
-        author: "Pilot customer",
-        role: "Surplus recovery firm",
-      },
-      {
-        quote:
-          "Testimonial placeholder — attorney perspective on deadline tracking and document integrity.",
-        author: "Pilot customer",
-        role: "Attorney, estate & surplus practice",
-      },
-    ],
+    testimonialsAriaLabel: "Customer testimonials",
+    testimonialSkeletonLabel: "Testimonial coming soon",
+    testimonialSkeletonCount: 2,
   },
   footer: {
     copyright: "© 2026 RecoverLead. All rights reserved.",
     links: [
+      { label: "Terms", href: "/terms" },
+      { label: "Privacy", href: "/privacy" },
       { label: "Contact", href: "mailto:hello@recoverlead.com" },
     ],
   },

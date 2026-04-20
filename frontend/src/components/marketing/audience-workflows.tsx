@@ -2,7 +2,8 @@ import * as Tabs from "@radix-ui/react-tabs";
 import { siteCopy } from "@/lib/marketing-copy";
 
 export function AudienceWorkflows() {
-  const { eyebrow, headline, audiences } = siteCopy.audienceWorkflows;
+  const { eyebrow, headline, tabsAriaLabel, audiences } =
+    siteCopy.audienceWorkflows;
   return (
     <section className="border-t border-border/40 bg-background">
       <div className="mx-auto max-w-6xl px-6 py-20 sm:py-24">
@@ -19,13 +20,14 @@ export function AudienceWorkflows() {
           className="mt-12 flex flex-col items-center"
         >
           <Tabs.List
-            aria-label="Audience workflows"
+            aria-label={tabsAriaLabel}
             className="inline-flex rounded-md border border-border/60 bg-muted/40 p-1"
           >
             {audiences.map((aud) => (
               <Tabs.Trigger
                 key={aud.id}
                 value={aud.id}
+                data-testid="audience-tab"
                 className="rounded px-4 py-2 text-sm font-medium text-muted-foreground transition-colors data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
               >
                 {aud.label}

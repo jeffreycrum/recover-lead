@@ -13,10 +13,14 @@ export function HowItWorks() {
             {headline}
           </h2>
         </div>
-        <ol className="mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+        <ol
+          data-testid="how-it-works-steps"
+          className="mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-4"
+        >
           {steps.map((step) => (
             <li
               key={step.number}
+              data-testid="how-it-works-step"
               className="relative rounded-lg border border-border/60 bg-background p-6 shadow-sm"
             >
               <span className="text-sm font-mono font-semibold text-emerald">

@@ -1,7 +1,19 @@
 import { siteCopy } from "@/lib/marketing-copy";
 
 export function SocialProof() {
-  const { eyebrow, headline, logos, testimonials } = siteCopy.socialProof;
+  const {
+    eyebrow,
+    headline,
+    logosAriaLabel,
+    logos,
+    testimonialsAriaLabel,
+    testimonialSkeletonLabel,
+    testimonialSkeletonCount,
+  } = siteCopy.socialProof;
+  const skeletonIndexes = Array.from(
+    { length: testimonialSkeletonCount },
+    (_, i) => i,
+  );
   return (
     <section className="border-t border-border/40 bg-background">
       <div className="mx-auto max-w-6xl px-6 py-20 sm:py-24">
@@ -14,7 +26,7 @@ export function SocialProof() {
           </h2>
         </div>
         <div
-          aria-label="Customer logos"
+          aria-label={logosAriaLabel}
           className="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5"
         >
           {logos.map((logo) => (
@@ -28,18 +40,34 @@ export function SocialProof() {
             </div>
           ))}
         </div>
-        <div className="mt-16 grid gap-6 md:grid-cols-2">
-          {testimonials.map((t) => (
+        <div
+          aria-label={testimonialsAriaLabel}
+          className="mt-16 grid gap-6 md:grid-cols-2"
+        >
+          {skeletonIndexes.map((i) => (
             <figure
-              key={t.author + t.role}
+              key={i}
+              aria-label={testimonialSkeletonLabel}
               className="rounded-lg border border-border/60 bg-card p-6 shadow-sm"
             >
-              <blockquote className="text-sm text-muted-foreground">
-                “{t.quote}”
-              </blockquote>
-              <figcaption className="mt-4 text-sm">
-                <span className="font-semibold">{t.author}</span>
-                <span className="text-muted-foreground"> — {t.role}</span>
+              <div
+                aria-hidden="true"
+                className="space-y-3"
+                data-testid="testimonial-skeleton"
+              >
+                <div className="h-3 w-11/12 animate-pulse rounded bg-muted" />
+                <div className="h-3 w-10/12 animate-pulse rounded bg-muted" />
+                <div className="h-3 w-8/12 animate-pulse rounded bg-muted" />
+              </div>
+              <figcaption
+                aria-hidden="true"
+                className="mt-6 flex items-center gap-3"
+              >
+                <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-2.5 w-1/3 animate-pulse rounded bg-muted" />
+                  <div className="h-2 w-1/2 animate-pulse rounded bg-muted" />
+                </div>
               </figcaption>
             </figure>
           ))}

@@ -13,10 +13,14 @@ export function FeatureGrid() {
             {headline}
           </h2>
         </div>
-        <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div
+          data-testid="feature-grid"
+          className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
+        >
           {features.map((feature) => (
             <div
               key={feature.title}
+              data-testid="feature-grid-card"
               className="rounded-lg border border-border/60 bg-background p-6 shadow-sm"
             >
               <h3 className="text-lg font-semibold">{feature.title}</h3>
