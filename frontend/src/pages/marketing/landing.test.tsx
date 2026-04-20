@@ -26,7 +26,9 @@ describe("MarketingLandingPage (signed-out routing)", () => {
       </MemoryRouter>,
     );
     expect(
-      screen.getByText(/AI-powered surplus funds recovery/i),
+      screen.getByRole("heading", {
+        name: /Find, qualify, and close surplus claims/i,
+      }),
     ).toBeInTheDocument();
   });
 
