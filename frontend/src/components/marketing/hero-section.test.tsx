@@ -25,7 +25,7 @@ describe("HeroSection", () => {
         <HeroSection />
       </MemoryRouter>,
     );
-    const primary = screen.getByRole("link", { name: /start free/i });
+    const primary = screen.getByRole("link", { name: /start free trial/i });
     expect(primary.getAttribute("href")).toBe("/sign-up");
     await user.click(primary);
     expect(trackMock).toHaveBeenCalledWith("marketing.hero_cta.click", {
@@ -34,7 +34,7 @@ describe("HeroSection", () => {
     });
   });
 
-  it("secondary CTA links to /sign-in and fires marketing.hero_cta.click with variant=secondary", async () => {
+  it("secondary CTA anchors to #how and fires marketing.hero_cta.click with variant=secondary", async () => {
     const user = userEvent.setup();
     trackMock.mockClear();
     render(
@@ -42,12 +42,12 @@ describe("HeroSection", () => {
         <HeroSection />
       </MemoryRouter>,
     );
-    const secondary = screen.getByRole("link", { name: /^sign in$/i });
-    expect(secondary.getAttribute("href")).toBe("/sign-in");
+    const secondary = screen.getByRole("link", { name: /see how it works/i });
+    expect(secondary.getAttribute("href")).toBe("#how");
     await user.click(secondary);
     expect(trackMock).toHaveBeenCalledWith("marketing.hero_cta.click", {
       variant: "secondary",
-      destination: "sign-in",
+      destination: "how",
     });
   });
 });

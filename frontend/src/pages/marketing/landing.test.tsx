@@ -17,82 +17,61 @@ vi.mock("@clerk/clerk-react", () => ({
 
 const AppModulePromise = import("@/App");
 
+async function renderAt(path: string) {
+  const { default: App } = await AppModulePromise;
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <App />
+    </MemoryRouter>,
+  );
+}
+
 describe("MarketingLandingPage (signed-out routing)", () => {
   it("renders marketing landing at /", async () => {
-    const { default: App } = await AppModulePromise;
-    render(
-      <MemoryRouter initialEntries={["/"]}>
-        <App />
-      </MemoryRouter>,
-    );
+    await renderAt("/");
     expect(
       screen.getByRole("heading", {
-        name: /Find, qualify, and close surplus claims/i,
+        name: /Find the surplus funds/i,
       }),
     ).toBeInTheDocument();
   });
 
   it("renders Clerk SignIn at /sign-in", async () => {
-    const { default: App } = await AppModulePromise;
-    render(
-      <MemoryRouter initialEntries={["/sign-in"]}>
-        <App />
-      </MemoryRouter>,
-    );
+    await renderAt("/sign-in");
     expect(screen.getByTestId("clerk-sign-in")).toBeInTheDocument();
   });
 
   it("renders Clerk SignUp at /sign-up", async () => {
-    const { default: App } = await AppModulePromise;
-    render(
-      <MemoryRouter initialEntries={["/sign-up"]}>
-        <App />
-      </MemoryRouter>,
-    );
+    await renderAt("/sign-up");
     expect(screen.getByTestId("clerk-sign-up")).toBeInTheDocument();
   });
 
   it("redirects /checkout to sign-in while preserving redirect_url", async () => {
-    const { default: App } = await AppModulePromise;
-    render(
-      <MemoryRouter initialEntries={["/checkout?plan=pro&interval=annual"]}>
-        <App />
-      </MemoryRouter>,
-    );
+    await renderAt("/checkout?plan=pro&interval=annual#pricing");
     const redirect = screen.getByTestId("redirect-to-sign-in");
     expect(redirect).toBeInTheDocument();
     expect(redirect.getAttribute("data-redirect")).toBe(
-      "/checkout?plan=pro&interval=annual",
+      "/checkout?plan=pro&interval=annual#pricing",
     );
   });
 
-  it("renders 4 how-it-works steps on /", async () => {
-    const { default: App } = await AppModulePromise;
-    render(
-      <MemoryRouter initialEntries={["/"]}>
-        <App />
-      </MemoryRouter>,
-    );
-    expect(screen.getAllByTestId("how-it-works-step")).toHaveLength(4);
-  });
-
-  it("renders 6 feature-grid cards on /", async () => {
-    const { default: App } = await AppModulePromise;
-    render(
-      <MemoryRouter initialEntries={["/"]}>
-        <App />
-      </MemoryRouter>,
-    );
-    expect(screen.getAllByTestId("feature-grid-card")).toHaveLength(6);
+  it("renders 3 how-it-works steps on /", async () => {
+    await renderAt("/");
+    expect(screen.getAllByTestId("how-it-works-step")).toHaveLength(3);
   });
 
   it("renders 3 audience tabs on /", async () => {
-    const { default: App } = await AppModulePromise;
-    render(
-      <MemoryRouter initialEntries={["/"]}>
-        <App />
-      </MemoryRouter>,
-    );
+    await renderAt("/");
     expect(screen.getAllByTestId("audience-tab")).toHaveLength(3);
+  });
+
+  it("renders 3 pricing plans on /", async () => {
+    await renderAt("/");
+    expect(screen.getAllByTestId("pricing-plan")).toHaveLength(3);
+  });
+
+  it("renders 6 FAQ items on /", async () => {
+    await renderAt("/");
+    expect(screen.getAllByTestId("faq-item")).toHaveLength(6);
   });
 });

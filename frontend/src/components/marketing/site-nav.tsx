@@ -1,40 +1,80 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { siteCopy } from "@/lib/marketing-copy";
 import { useTrackEvent } from "@/hooks/use-track-event";
-import { CtaButton } from "./cta-button";
+import { ArrowRightIcon, BrandLogo } from "./icons";
+
+const SECTION_IDS = siteCopy.nav.items.map((i) => i.id);
 
 export function SiteNav() {
   const track = useTrackEvent();
+  const [scrolled, setScrolled] = useState(false);
+  const [active, setActive] = useState<string>(SECTION_IDS[0]);
+
+  useEffect(() => {
+    const onScroll = () => {
+      setScrolled(window.scrollY > 10);
+      for (const id of SECTION_IDS) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.top < 120 && rect.bottom > 120) {
+          setActive(id);
+          break;
+        }
+      }
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   const handleSignInClick = () => {
     track("marketing.nav_cta.click", { destination: "sign-in" });
     track("marketing.signin_intent", { source: "nav" });
   };
 
+  const handlePrimaryClick = () => {
+    track("marketing.nav_cta.click", { destination: "sign-up" });
+  };
+
   return (
-    <header className="sticky top-0 z-40 border-b border-border/40 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-        <Link to="/" className="text-lg font-bold tracking-tight">
-          <span className="text-emerald">Recover</span>
-          {siteCopy.brand.name.replace("Recover", "")}
+    <header className={`nav ${scrolled ? "scrolled" : ""}`}>
+      <div className="wrap nav-inner">
+        <Link to="/" aria-label={siteCopy.brand.name}>
+          <BrandLogo />
         </Link>
-        <nav className="flex items-center gap-3">
+        <nav className="nav-pill" aria-label="Page sections">
+          {siteCopy.nav.items.map((item) => (
+            <a
+              key={item.id}
+              href={`#${item.id}`}
+              className={active === item.id ? "active" : ""}
+            >
+              {"liveDot" in item && item.liveDot && (
+                <span className="dot" aria-hidden="true" />
+              )}
+              {item.label}
+            </a>
+          ))}
+        </nav>
+        <div className="nav-right">
           <Link
             to="/sign-in"
+            className="btn btn-ghost"
             onClick={handleSignInClick}
-            className="text-sm font-medium text-foreground hover:text-emerald"
           >
             {siteCopy.nav.signIn}
           </Link>
-          <CtaButton
+          <Link
             to="/sign-up"
-            variant="primary"
-            event="marketing.nav_cta.click"
-            eventProps={{ destination: "sign-up" }}
-            className="px-4 py-2 text-sm"
+            className="btn btn-primary"
+            onClick={handlePrimaryClick}
           >
-            {siteCopy.nav.signUp}
-          </CtaButton>
-        </nav>
+            {siteCopy.nav.primaryCta}
+            <ArrowRightIcon />
+          </Link>
+        </div>
       </div>
     </header>
   );

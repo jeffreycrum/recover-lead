@@ -1,31 +1,29 @@
 import { Link } from "react-router-dom";
 import { siteCopy } from "@/lib/marketing-copy";
+import { BrandLogo } from "./icons";
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-border/40 bg-background">
-      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-10 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted-foreground">
-          {siteCopy.footer.copyright}
-        </p>
-        <ul className="flex gap-6 text-sm text-muted-foreground">
+    <footer className="lt-footer">
+      <div className="wrap foot">
+        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+          <BrandLogo />
+          <span>{siteCopy.footer.copyright}</span>
+        </div>
+        <div style={{ display: "flex", gap: 24 }}>
           {siteCopy.footer.links.map((link) => {
             const isInternal = link.href.startsWith("/");
-            return (
-              <li key={link.href}>
-                {isInternal ? (
-                  <Link to={link.href} className="hover:text-foreground">
-                    {link.label}
-                  </Link>
-                ) : (
-                  <a href={link.href} className="hover:text-foreground">
-                    {link.label}
-                  </a>
-                )}
-              </li>
+            return isInternal ? (
+              <Link key={link.href} to={link.href}>
+                {link.label}
+              </Link>
+            ) : (
+              <a key={link.href} href={link.href}>
+                {link.label}
+              </a>
             );
           })}
-        </ul>
+        </div>
       </div>
     </footer>
   );

@@ -36,7 +36,7 @@ describe("SiteNav", () => {
     });
   });
 
-  it("Start free CTA fires marketing.nav_cta.click with destination=sign-up", async () => {
+  it("primary CTA fires marketing.nav_cta.click with destination=sign-up", async () => {
     const user = userEvent.setup();
     trackMock.mockClear();
     render(
@@ -44,7 +44,7 @@ describe("SiteNav", () => {
         <SiteNav />
       </MemoryRouter>,
     );
-    const cta = screen.getByRole("link", { name: /start free/i });
+    const cta = screen.getByRole("link", { name: /start recovering/i });
     expect(cta.getAttribute("href")).toBe("/sign-up");
     await user.click(cta);
     expect(trackMock).toHaveBeenCalledWith("marketing.nav_cta.click", {
