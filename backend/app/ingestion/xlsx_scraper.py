@@ -126,6 +126,8 @@ class XlsxScraper(BaseScraper):
         owner_col = col_map.get("owner_name")
         addr_col = col_map.get("property_address")
         parcel_col = col_map.get("parcel_id")
+        sale_date_col = col_map.get("sale_date")
+        sale_type = self.config.get("sale_type", "tax_deed")
 
         leads: list[RawLead] = []
         wb = openpyxl.load_workbook(BytesIO(raw_data), read_only=True, data_only=True)
@@ -169,7 +171,8 @@ class XlsxScraper(BaseScraper):
                         owner_name=cell(row, owner_col) or None,
                         surplus_amount=surplus_amount,
                         property_state=self.state,
-                        sale_type="tax_deed",
+                        sale_date=cell(row, sale_date_col) or None,
+                        sale_type=sale_type,
                         raw_data={"row": [str(c) if c is not None else "" for c in row]},
                     )
                 )
