@@ -215,10 +215,10 @@ These counties do not publish bulk surplus fund lists online. Contact each to re
 
 - [x] ROI dashboard: `roi-stats.tsx` — total recovered, fees earned, deals closed, avg days to close
 - [x] Pipeline metrics: `pipeline-funnel.tsx` — 7-stage Recharts funnel (new→qualified→contacted→signed→filed→paid→closed)
-- [ ] Multi-county upsell prompts ("You've qualified 90% of Hillsborough leads...")
+- [x] Multi-county upsell prompts — `GET /leads/stats/county-exhaustion` + `county-upsell-banner.tsx` wired into dashboard (75% threshold, 7-day localStorage dismiss)
 - [x] Expand to 20+ FL counties — 33 active as of PR #21 (all scrapable counties activated).
-- [ ] Qualification result caching: skip re-qualification of unchanged leads
-- [ ] Contract generation: template-based with Claude filling case-specific fields
+- [x] Qualification result caching: skip re-qualification of unchanged leads — `UserLead.qualified_source_hash` + cache-hit path in single/bulk qualify (no billing on hit)
+- [x] Contract generation: template-based with Claude filling case-specific fields — `Contract` model, `contract_templates/fl_recovery_agreement.j2`, Claude narrative clause injection, `/contracts` API + UI (FL template only; CA/GA/TX/OH templates still TODO)
 
 ---
 
