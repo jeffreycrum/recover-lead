@@ -8,12 +8,18 @@ import { LeadScoreBadge } from "./lead-score-badge";
 import { SkipTraceResults } from "./skip-trace-results";
 import { ActivityTimeline } from "./activity-timeline";
 import { DealOutcomeDialog } from "./deal-outcome-dialog";
-import { X, MapPin, User, DollarSign, Zap, Search, Loader2 } from "lucide-react";
+import { EyebrowTag, MonoCell, StatusPill } from "@/components/landing-chrome";
+import { X, MapPin, User, DollarSign, Search, Loader2 } from "lucide-react";
 
 interface LeadDetailProps {
   leadId: string;
   onClose: () => void;
 }
+
+const primaryButtonClass =
+  "rounded-full bg-[var(--lt-emerald)] px-4 py-2 text-sm font-semibold text-[#042014] transition-all hover:bg-[var(--lt-emerald-light)] disabled:opacity-50";
+const secondaryButtonClass =
+  "rounded-full border border-[var(--lt-line)] bg-[var(--lt-surface)] px-4 py-2 text-sm font-medium text-[var(--lt-text)] transition-colors hover:bg-[var(--lt-surface-2)] disabled:opacity-50";
 
 export function LeadDetail({ leadId, onClose }: LeadDetailProps) {
   const qc = useQueryClient();
@@ -35,9 +41,9 @@ export function LeadDetail({ leadId, onClose }: LeadDetailProps) {
 
   if (isLoading) {
     return (
-      <div className="fixed inset-y-0 right-0 w-[480px] bg-white border-l shadow-xl z-50 animate-in slide-in-from-right">
-        <div className="p-6 flex items-center justify-center h-full">
-          <div className="animate-pulse text-muted-foreground">Loading...</div>
+      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-[480px] border-l border-[var(--lt-line-2)] bg-[linear-gradient(180deg,var(--lt-surface)_0%,var(--lt-bg-2)_100%)] shadow-[-24px_0_80px_-32px_rgba(0,0,0,0.85)] animate-in slide-in-from-right sm:w-[480px]">
+        <div className="flex h-full items-center justify-center p-6">
+          <div className="text-[var(--lt-text-muted)]">Loading...</div>
         </div>
       </div>
     );
@@ -48,81 +54,93 @@ export function LeadDetail({ leadId, onClose }: LeadDetailProps) {
   const isClaimed = !!lead.user_lead;
 
   return (
-    <div className="fixed inset-y-0 right-0 w-[480px] bg-white border-l shadow-xl z-50 overflow-y-auto animate-in slide-in-from-right">
-      <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Case #{lead.case_number}</h2>
-          <p className="text-sm text-muted-foreground">{lead.county_name} County</p>
+    <div className="fixed inset-y-0 right-0 z-50 w-full max-w-[480px] overflow-y-auto border-l border-[var(--lt-line-2)] bg-[linear-gradient(180deg,var(--lt-surface)_0%,var(--lt-bg-2)_100%)] shadow-[-24px_0_80px_-32px_rgba(0,0,0,0.85)] animate-in slide-in-from-right sm:w-[480px]">
+      <div className="sticky top-0 z-10 border-b border-[var(--lt-line)] bg-[rgba(19,25,41,0.94)] px-5 py-4 backdrop-blur">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold tracking-[-0.02em] text-[var(--lt-text)]">
+              Case #{lead.case_number}
+            </h2>
+            <p className="mt-1 text-sm text-[var(--lt-text-muted)]">
+              {lead.county_name} County
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-full border border-transparent p-1.5 text-[var(--lt-text-muted)] transition-colors hover:border-[var(--lt-line)] hover:bg-[var(--lt-surface-2)] hover:text-[var(--lt-text)]"
+          >
+            <X size={18} />
+          </button>
         </div>
-        <button onClick={onClose} className="p-1 rounded hover:bg-gray-100">
-          <X size={20} />
-        </button>
       </div>
 
-      <div className="p-6 space-y-6">
-        {/* Surplus Amount */}
-        <div className="flex items-center gap-3 p-4 bg-emerald/5 rounded-lg border border-emerald/20">
-          <DollarSign className="text-emerald" size={24} />
-          <div>
-            <p className="text-2xl font-bold text-emerald">
-              {formatCurrency(lead.surplus_amount)}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {lead.sale_type?.replace("_", " ")} sale
-              {lead.sale_date && ` on ${formatDate(lead.sale_date)}`}
-            </p>
+      <div className="space-y-6 p-5">
+        <div className="rounded-[18px] border border-[rgba(16,185,129,0.18)] bg-[rgba(16,185,129,0.08)] p-4">
+          <div className="flex items-start gap-3">
+            <div className="mt-1 rounded-full bg-[var(--lt-emerald-dim)] p-2 text-[var(--lt-emerald)]">
+              <DollarSign size={18} />
+            </div>
+            <div>
+              <MonoCell as="p" size="lg" tone="emerald">
+                {formatCurrency(lead.surplus_amount)}
+              </MonoCell>
+              <p className="mt-1 text-xs text-[var(--lt-text-muted)]">
+                {lead.sale_type?.replace("_", " ")} sale
+                {lead.sale_date && ` on ${formatDate(lead.sale_date)}`}
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Owner */}
-        <section>
-          <h3 className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-2">
-            <User size={14} /> Owner
-          </h3>
-          <p className="font-medium">{lead.owner_name || "Unknown"}</p>
-          {lead.owner_last_known_address && (
-            <p className="text-sm text-muted-foreground">{lead.owner_last_known_address}</p>
-          )}
+        <section className="space-y-2">
+          <EyebrowTag>Owner</EyebrowTag>
+          <div className="space-y-1 text-sm text-[var(--lt-text)]">
+            <div className="flex items-center gap-2">
+              <User size={14} className="text-[var(--lt-text-dim)]" />
+              <span className="font-medium">{lead.owner_name || "Unknown"}</span>
+            </div>
+            {lead.owner_last_known_address && (
+              <p className="text-[var(--lt-text-muted)]">{lead.owner_last_known_address}</p>
+            )}
+          </div>
         </section>
 
-        {/* Property */}
-        <section>
-          <h3 className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-2">
-            <MapPin size={14} /> Property
-          </h3>
-          <p>{lead.property_address || "No address on file"}</p>
-          {lead.property_city && (
-            <p className="text-sm text-muted-foreground">
-              {lead.property_city}, {lead.property_state} {lead.property_zip}
-            </p>
-          )}
+        <section className="space-y-2">
+          <EyebrowTag>Property</EyebrowTag>
+          <div className="space-y-1 text-sm text-[var(--lt-text)]">
+            <div className="flex items-center gap-2">
+              <MapPin size={14} className="text-[var(--lt-text-dim)]" />
+              <span>{lead.property_address || "No address on file"}</span>
+            </div>
+            {lead.property_city && (
+              <p className="text-[var(--lt-text-muted)]">
+                {lead.property_city}, {lead.property_state} {lead.property_zip}
+              </p>
+            )}
+          </div>
         </section>
 
-        {/* Score */}
         {lead.user_lead && (
-          <section>
-            <h3 className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-2">
-              <Zap size={14} /> AI Qualification
-            </h3>
-            <div className="flex items-center gap-2 mb-2">
+          <section className="space-y-2">
+            <EyebrowTag>AI Qualification</EyebrowTag>
+            <div className="flex items-center gap-2">
               <LeadScoreBadge score={lead.user_lead.quality_score} />
-              <span className="text-xs text-muted-foreground capitalize">
-                {lead.user_lead.status}
-              </span>
+              <StatusPill status={lead.user_lead.status} />
             </div>
             {lead.user_lead.quality_reasoning && (
-              <p className="text-sm text-muted-foreground">{lead.user_lead.quality_reasoning}</p>
+              <p className="text-sm leading-6 text-[var(--lt-text-muted)]">
+                {lead.user_lead.quality_reasoning}
+              </p>
             )}
           </section>
         )}
 
-        {/* Actions */}
-        <div className="flex gap-2 pt-4 border-t">
+        <div className="flex flex-wrap gap-2 border-t border-[var(--lt-line)] pt-4">
           {!isClaimed ? (
             <button
               onClick={() => claimMutation.mutate(leadId)}
               disabled={claimMutation.isPending}
-              className="flex-1 px-4 py-2 bg-emerald text-white rounded-md hover:bg-emerald/90 disabled:opacity-50 text-sm font-medium"
+              className={primaryButtonClass}
             >
               {claimMutation.isPending ? "Claiming..." : "Claim Lead"}
             </button>
@@ -133,17 +151,15 @@ export function LeadDetail({ leadId, onClose }: LeadDetailProps) {
                   qualifyMutation.mutate(leadId, {
                     onSuccess: (data) => {
                       if (data.task_id) {
-                        // Async path — poll until done
                         setQualifyTaskId(data.task_id);
                       } else {
-                        // Cache hit — result inline, just refetch
                         qc.invalidateQueries({ queryKey: ["leads", leadId] });
                       }
                     },
                   })
                 }
                 disabled={isQualifying}
-                className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 text-sm font-medium"
+                className={primaryButtonClass}
               >
                 {isQualifying ? (
                   <span className="flex items-center justify-center gap-1">
@@ -156,28 +172,29 @@ export function LeadDetail({ leadId, onClose }: LeadDetailProps) {
               <button
                 onClick={() => releaseMutation.mutate(leadId)}
                 disabled={releaseMutation.isPending}
-                className="px-4 py-2 border rounded-md hover:bg-gray-50 text-sm"
+                className={secondaryButtonClass}
               >
                 Release
               </button>
-              {lead.user_lead && (lead.user_lead.status === "filed" || lead.user_lead.status === "paid" || lead.user_lead.status === "contacted") && (
-                <button
-                  onClick={() => setShowDealDialog(true)}
-                  className="px-4 py-2 border border-emerald text-emerald rounded-md hover:bg-emerald/5 text-sm"
-                >
-                  Deal Outcome
-                </button>
-              )}
+              {lead.user_lead &&
+                (lead.user_lead.status === "filed" ||
+                  lead.user_lead.status === "paid" ||
+                  lead.user_lead.status === "contacted") && (
+                  <button
+                    onClick={() => setShowDealDialog(true)}
+                    className="rounded-full border border-[rgba(16,185,129,0.3)] bg-[var(--lt-emerald-dim)] px-4 py-2 text-sm font-medium text-[var(--lt-emerald-light)] transition-colors hover:bg-[rgba(16,185,129,0.2)]"
+                  >
+                    Deal Outcome
+                  </button>
+                )}
             </>
           )}
         </div>
 
-        {/* Skip Trace */}
         {isClaimed && (
           <SkipTraceSection leadId={leadId} skipTraceResults={lead.skip_trace_results} />
         )}
 
-        {/* Activity Timeline */}
         {isClaimed && <ActivityTimeline leadId={leadId} />}
       </div>
 
@@ -192,7 +209,6 @@ export function LeadDetail({ leadId, onClose }: LeadDetailProps) {
   );
 }
 
-
 function SkipTraceSection({
   leadId,
   skipTraceResults,
@@ -202,20 +218,17 @@ function SkipTraceSection({
 }) {
   const qc = useQueryClient();
 
-  // Seed from lead detail; update optimistically on mutation success.
   const { data: results = [] } = useQuery<any[]>({
     queryKey: ["skip-trace", leadId],
     queryFn: () => Promise.resolve(skipTraceResults || []),
     initialData: skipTraceResults || [],
-    staleTime: Infinity, // driven by setQueryData below, not polling
+    staleTime: Infinity,
   });
 
   const mutation = useMutation({
     mutationFn: () => api.skipTraceLead(leadId),
     onSuccess: (data) => {
-      // Prepend the fresh result immediately without a round-trip
       qc.setQueryData(["skip-trace", leadId], (old: any[] = []) => [data, ...old]);
-      // Also invalidate the lead so contacts + shared results refresh
       qc.invalidateQueries({ queryKey: ["leads", leadId] });
     },
   });
@@ -230,20 +243,21 @@ function SkipTraceSection({
     : null;
 
   return (
-    <div className="pt-2">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-          <Search size={14} /> Skip Trace
-        </h3>
+    <div className="space-y-3 pt-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <EyebrowTag>Skip Trace</EyebrowTag>
+          <Search size={14} className="text-[var(--lt-text-dim)]" />
+        </div>
         <button
           onClick={() => mutation.mutate()}
           disabled={mutation.isPending}
-          className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50 flex items-center gap-1"
+          className={primaryButtonClass}
         >
           {mutation.isPending ? (
-            <>
+            <span className="flex items-center gap-1">
               <Loader2 size={12} className="animate-spin" /> Running...
-            </>
+            </span>
           ) : results.length > 0 ? (
             "Re-run Skip Trace"
           ) : (
@@ -252,7 +266,7 @@ function SkipTraceSection({
         </button>
       </div>
       {errorMessage && (
-        <p className="text-xs text-red-600 mb-2">{errorMessage}</p>
+        <p className="text-xs text-[#fca5a5]">{errorMessage}</p>
       )}
       <SkipTraceResults results={results} />
     </div>

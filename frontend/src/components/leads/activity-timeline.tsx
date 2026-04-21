@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Clock, MessageSquare, Zap, FileText, Search, ArrowRight, Send, Loader2 } from "lucide-react";
+import { EyebrowTag } from "@/components/landing-chrome";
 
 const ACTIVITY_ICONS: Record<string, any> = {
   claimed: ArrowRight,
@@ -17,16 +18,16 @@ const ACTIVITY_ICONS: Record<string, any> = {
 };
 
 const ACTIVITY_COLORS: Record<string, string> = {
-  claimed: "text-emerald bg-emerald/10",
-  released: "text-gray-500 bg-gray-100",
-  status_change: "text-blue-600 bg-blue-50",
-  qualified: "text-purple-600 bg-purple-50",
-  qualify_started: "text-purple-400 bg-purple-50",
-  letter_generated: "text-amber-600 bg-amber-50",
-  skip_trace_completed: "text-cyan-600 bg-cyan-50",
-  deal_paid: "text-emerald bg-emerald/10",
-  deal_closed: "text-gray-600 bg-gray-100",
-  note: "text-blue-500 bg-blue-50",
+  claimed: "text-[var(--lt-emerald)] bg-[var(--lt-emerald-dim)]",
+  released: "text-[var(--lt-text-muted)] bg-[rgba(148,163,184,0.12)]",
+  status_change: "text-[#93c5fd] bg-[var(--lt-blue-dim)]",
+  qualified: "text-[#c4b5fd] bg-[var(--lt-violet-dim)]",
+  qualify_started: "text-[#c4b5fd] bg-[var(--lt-violet-dim)]",
+  letter_generated: "text-[#fcd34d] bg-[var(--lt-amber-dim)]",
+  skip_trace_completed: "text-[#67e8f9] bg-[rgba(6,182,212,0.16)]",
+  deal_paid: "text-[var(--lt-emerald)] bg-[var(--lt-emerald-dim)]",
+  deal_closed: "text-[var(--lt-text-muted)] bg-[rgba(148,163,184,0.12)]",
+  note: "text-[#93c5fd] bg-[var(--lt-blue-dim)]",
 };
 
 function formatRelativeTime(dateStr: string): string {
@@ -80,13 +81,10 @@ export function ActivityTimeline({ leadId }: ActivityTimelineProps) {
   const activities = data?.pages.flatMap((p: any) => p.items) || [];
 
   return (
-    <div className="pt-2">
-      <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-        <Clock size={14} /> Activity
-      </h3>
+    <div className="space-y-3 pt-2">
+      <EyebrowTag>Activity</EyebrowTag>
 
-      {/* Add note input */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2">
         <input
           type="text"
           value={noteText}
@@ -97,34 +95,41 @@ export function ActivityTimeline({ leadId }: ActivityTimelineProps) {
             }
           }}
           placeholder="Add a note..."
-          className="flex-1 px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-1 focus:ring-emerald"
+          className="flex-1 rounded-full border border-[var(--lt-line)] bg-[var(--lt-surface)] px-4 py-2 text-sm text-[var(--lt-text)] placeholder:text-[var(--lt-text-dim)] focus:outline-none focus:ring-1 focus:ring-[var(--lt-emerald)]"
         />
         <button
           onClick={() => noteText.trim() && addNote.mutate(noteText.trim())}
           disabled={!noteText.trim() || addNote.isPending}
-          className="px-3 py-1.5 text-sm bg-emerald text-white rounded-md hover:bg-emerald/90 disabled:opacity-50"
+          className="rounded-full bg-[var(--lt-emerald)] px-3 py-2 text-[#042014] transition-all hover:bg-[var(--lt-emerald-light)] disabled:opacity-50"
         >
           {addNote.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
         </button>
       </div>
 
       {isLoading ? (
-        <p className="text-xs text-muted-foreground">Loading activities...</p>
+        <p className="text-xs text-[var(--lt-text-muted)]">Loading activities...</p>
       ) : activities.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No activity yet</p>
+        <p className="text-xs text-[var(--lt-text-muted)]">No activity yet</p>
       ) : (
-        <div className="space-y-0">
+        <div className="space-y-2">
           {activities.map((activity: any) => {
             const Icon = ACTIVITY_ICONS[activity.activity_type] || Clock;
-            const colorClass = ACTIVITY_COLORS[activity.activity_type] || "text-gray-500 bg-gray-100";
+            const colorClass = ACTIVITY_COLORS[activity.activity_type] || "text-[var(--lt-text-muted)] bg-[rgba(148,163,184,0.12)]";
             return (
-              <div key={activity.id} className="flex gap-3 py-2">
-                <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${colorClass}`}>
+              <div
+                key={activity.id}
+                className="flex gap-3 rounded-[14px] border border-[var(--lt-line)] bg-[rgba(255,255,255,0.015)] px-3 py-3"
+              >
+                <div className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full ${colorClass}`}>
                   <Icon size={14} />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm">{activity.description || activity.activity_type.replace(/_/g, " ")}</p>
-                  <p className="text-xs text-muted-foreground">{formatRelativeTime(activity.created_at)}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-[var(--lt-text)]">
+                    {activity.description || activity.activity_type.replace(/_/g, " ")}
+                  </p>
+                  <p className="text-xs text-[var(--lt-text-muted)]">
+                    {formatRelativeTime(activity.created_at)}
+                  </p>
                 </div>
               </div>
             );
@@ -133,7 +138,7 @@ export function ActivityTimeline({ leadId }: ActivityTimelineProps) {
             <button
               onClick={() => fetchNextPage()}
               disabled={isFetchingNextPage}
-              className="text-xs text-emerald hover:underline mt-2"
+              className="text-xs font-medium text-[var(--lt-emerald)] hover:underline"
             >
               {isFetchingNextPage ? "Loading..." : "Load more"}
             </button>
