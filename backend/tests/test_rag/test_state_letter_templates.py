@@ -1,16 +1,9 @@
 """Tests for state-specific letter template rendering and dispatch."""
 
 import uuid
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-_TEMPLATES_DIR = Path(__file__).parents[2] / "app" / "templates"
 
 
 def _render(template_name: str, **kwargs) -> str:
@@ -25,20 +18,20 @@ _LEAD_DATA = {
     "case_number": "2024-TC-00123",
     "parcel_id": "123-456-789",
     "sale_date": "2024-06-15",
-    "owner_name": "Jane Smith",
-    "owner_last_known_address": "456 Oak Lane, Dallas, TX 75201",
-    "property_address": "123 Main St",
-    "property_city": "Dallas",
+    "owner_name": "TEST OWNER",
+    "owner_last_known_address": "456 TEST AVENUE, TEST CITY, TX 75201",
+    "property_address": "123 TEST STREET",
+    "property_city": "TEST CITY",
     "property_state": "TX",
     "property_zip": "75201",
     "surplus_amount": 8450.00,
 }
 
 _SENDER = {
-    "sender_name": "John Doe",
-    "sender_company": "Doe Recovery LLC",
-    "sender_phone": "555-123-4567",
-    "sender_email": "john@doerecovery.com",
+    "sender_name": "TEST AGENT",
+    "sender_company": "TEST RECOVERY LLC",
+    "sender_phone": "555-0100",
+    "sender_email": "test.agent@example.com",
 }
 
 
@@ -74,10 +67,10 @@ class TestTexasTemplate:
         assert "Travis County" in self._rendered()
 
     def test_contains_owner_name(self):
-        assert "Jane Smith" in self._rendered()
+        assert "TEST OWNER" in self._rendered()
 
     def test_contains_sender_name(self):
-        assert "John Doe" in self._rendered()
+        assert "TEST AGENT" in self._rendered()
 
     def test_no_em_dashes(self):
         assert "\u2014" not in self._rendered()
@@ -143,15 +136,15 @@ class TestOhioTemplate:
     def test_null_surplus_shows_unknown(self):
         result = _render(
             "ohio_excess_proceeds.j2",
-            owner_name="Jane Smith",
-            recipient_name="Jane Smith",
-            owner_address="456 Oak Lane",
-            owner_last_known_address="456 Oak Lane",
+            owner_name="TEST OWNER",
+            recipient_name="TEST OWNER",
+            owner_address="456 TEST AVENUE",
+            owner_last_known_address="456 TEST AVENUE",
             case_number="2024-TC-00123",
             parcel_id="123-456",
             sale_date="2024-06-15",
             county_name="Cuyahoga",
-            property_address="123 Main St",
+            property_address="123 TEST STREET",
             surplus_amount=None,
             **_SENDER,
         )
@@ -233,6 +226,7 @@ class TestGeorgiaTemplate:
 @pytest.fixture
 def mock_session():
     session = AsyncMock()
+    session.add = MagicMock()
     # execute() is async; its return value must be a plain MagicMock so that
     # scalar_one_or_none() is synchronous and returns None (no user found).
     execute_result = MagicMock()
