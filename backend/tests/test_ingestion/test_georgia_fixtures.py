@@ -262,6 +262,65 @@ class TestHallFixture:
             assert lead.property_state == "GA"
 
 
+# ─── Cobb ─────────────────────────────────────────────────────────────────────
+
+
+class TestCobbFixture:
+    """Cobb layout: word-clustered PDF (no grid lines).
+
+    Column bucketing by x-coordinate: col0=sale_date, col1=purchaser (ignored),
+    col2=owner_name, col3=parcel_id (case_number), col4=amount, col5=claim flag
+    (ignored). Rows whose col3 doesn't match the Cobb parcel regex are skipped —
+    this drops header/footer rows and the handful of source rows where the PDF
+    has overlapping column text that cannot be cleanly resegmented.
+    """
+
+    @pytest.fixture(scope="class")
+    def leads(self):
+        scraper = _make_scraper("Cobb", "cobb")
+        return scraper.parse(_load_fixture("georgia_cobb_excess_funds.pdf"))
+
+    def test_parse_leads_count(self, leads):
+        # 31 data rows in source; 2 are dropped due to overlapping column text
+        # in the PDF (parcel id spatially collides with owner name).
+        assert len(leads) == 29
+
+    def test_first_lead_fields(self, leads):
+        first = leads[0]
+        assert first.case_number == "17-0297-0-086-0"
+        assert first.owner_name == "Couch Donna Jean"
+        assert first.surplus_amount == Decimal("1077.03")
+        assert first.sale_date == "9/1/2020"
+
+    def test_handles_comma_separated_owner(self, leads):
+        # "WATSON, CAMERON WILEY" → owner stays intact across commas.
+        target = next(l for l in leads if l.case_number == "16-0375-0-035-0")
+        assert target.owner_name == "WATSON, CAMERON WILEY"
+        assert target.surplus_amount == Decimal("4915.95")
+
+    def test_large_amount_parsed_correctly(self, leads):
+        # $274,514.15 — largest in the fixture — must preserve thousands commas.
+        target = next(l for l in leads if l.case_number == "17-1067-0-109-0")
+        assert target.surplus_amount == Decimal("274514.15")
+        assert target.owner_name == "BURCH, WILLARD & BETTY ANN"
+
+    def test_property_state_is_ga(self, leads):
+        for lead in leads:
+            assert lead.property_state == "GA"
+
+    def test_sale_type_is_tax_deed(self, leads):
+        for lead in leads:
+            assert lead.sale_type == "tax_deed"
+
+    def test_case_numbers_are_unique(self, leads):
+        case_numbers = [lead.case_number for lead in leads]
+        assert len(case_numbers) == len(set(case_numbers))
+
+    def test_total_surplus_amount(self, leads):
+        total = sum(lead.surplus_amount for lead in leads)
+        assert total == Decimal("1072158.27")
+
+
 # ─── Cross-layout edge cases ──────────────────────────────────────────────────
 
 
