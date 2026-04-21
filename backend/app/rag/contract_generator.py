@@ -37,7 +37,49 @@ _semaphore = asyncio.Semaphore(4)
 
 _CONTRACT_TEMPLATE_MAP: dict[str, str] = {
     "FL": "fl_recovery_agreement.j2",
+    "CA": "ca_recovery_agreement.j2",
+    "GA": "ga_recovery_agreement.j2",
+    "TX": "tx_recovery_agreement.j2",
+    "OH": "oh_recovery_agreement.j2",
 }
+
+# State-specific context passed into the clause-generation prompt. Keeps the
+# prompt uniform across states while letting Claude cite the correct statute
+# and sale nomenclature per jurisdiction.
+_STATE_CONTEXT: dict[str, dict[str, str]] = {
+    "FL": {
+        "state_name": "Florida",
+        "sale_proceeding": "tax deed sale or foreclosure proceeding",
+        "surplus_statute": "Fla. Stat. § 197.582",
+        "typical_timeline": "60 to 120 days",
+    },
+    "CA": {
+        "state_name": "California",
+        "sale_proceeding": "tax-defaulted property sale",
+        "surplus_statute": "Cal. Rev. & Tax. Code § 4675",
+        "typical_timeline": "90 to 180 days",
+    },
+    "GA": {
+        "state_name": "Georgia",
+        "sale_proceeding": "tax sale",
+        "surplus_statute": "O.C.G.A. § 48-4-5",
+        "typical_timeline": "90 to 180 days",
+    },
+    "TX": {
+        "state_name": "Texas",
+        "sale_proceeding": "tax sale",
+        "surplus_statute": "Tex. Tax Code § 34.03",
+        "typical_timeline": "90 to 180 days",
+    },
+    "OH": {
+        "state_name": "Ohio",
+        "sale_proceeding": "sheriff's or tax foreclosure sale",
+        "surplus_statute": "Ohio Rev. Code § 2329.44",
+        "typical_timeline": "90 to 180 days",
+    },
+}
+
+_DEFAULT_STATE = "FL"
 
 
 async def generate_contract_content(
@@ -55,7 +97,9 @@ async def generate_contract_content(
     Loads the state Jinja2 skeleton template, calls Claude to fill narrative
     clauses, merges them, and returns the final contract text.
     """
-    template_name = _CONTRACT_TEMPLATE_MAP.get(state, "fl_recovery_agreement.j2")
+    state_key = state if state in _CONTRACT_TEMPLATE_MAP else _DEFAULT_STATE
+    template_name = _CONTRACT_TEMPLATE_MAP[state_key]
+    state_context = _STATE_CONTEXT[state_key]
     today = datetime.now(UTC).strftime("%B %d, %Y")
 
     clauses = await _generate_clauses_via_claude(
@@ -65,6 +109,7 @@ async def generate_contract_content(
         county_name=county_name,
         fee_percentage=fee_percentage,
         agent_name=agent_name,
+        state_context=state_context,
     )
 
     template = _contract_env.get_template(template_name)
@@ -90,10 +135,11 @@ async def _generate_clauses_via_claude(
     county_name: str,
     fee_percentage: float,
     agent_name: str,
+    state_context: dict[str, str],
 ) -> dict[str, str]:
     """Call Claude to generate narrative clauses. Returns a dict of clause_name -> text."""
     if not settings.anthropic_api_key:
-        return _placeholder_clauses(fee_percentage)
+        return _placeholder_clauses(fee_percentage, state_context)
 
     prompt_template = _prompt_env.get_template("contract.j2")
     prompt = prompt_template.render(
@@ -104,6 +150,7 @@ async def _generate_clauses_via_claude(
         agent_name=agent_name,
         fee_percentage=fee_percentage,
         owner_name=lead_data.get("owner_name"),
+        **state_context,
     )
 
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
@@ -140,7 +187,7 @@ async def _generate_clauses_via_claude(
 
     # Whitelist: only pass known clause keys to the template; fall back to
     # placeholders for any key that Claude omitted or added unexpectedly.
-    placeholders = _placeholder_clauses(fee_percentage)
+    placeholders = _placeholder_clauses(fee_percentage, state_context)
     clauses = {
         key: str(parsed[key]) if key in parsed else placeholders[key]
         for key in expected_clause_keys
@@ -169,8 +216,17 @@ async def _generate_clauses_via_claude(
     return clauses
 
 
-def _placeholder_clauses(fee_percentage: float) -> dict[str, str]:
-    """Fallback clauses used when the Anthropic API key is not configured."""
+def _placeholder_clauses(
+    fee_percentage: float, state_context: dict[str, str]
+) -> dict[str, str]:
+    """Fallback clauses used when the Anthropic API key is not configured.
+
+    State-specific phrasing (governing law, typical timeline, statute citation)
+    is injected from state_context so the fallback still matches the jurisdiction.
+    """
+    state_name = state_context["state_name"]
+    typical_timeline = state_context["typical_timeline"]
+    surplus_statute = state_context["surplus_statute"]
     return {
         "authorization_clause": (
             "AUTHORIZATION TO REPRESENT\n\n"
@@ -188,8 +244,8 @@ def _placeholder_clauses(fee_percentage: float) -> dict[str, str]:
         "timeline_clause": (
             "TIMELINE AND BEST EFFORTS\n\n"
             "Recovery Agent shall use commercially reasonable efforts to recover"
-            " the Surplus Funds. Florida surplus claims typically resolve within"
-            " 60 to 120 days of filing."
+            f" the Surplus Funds. {state_name} surplus claims typically resolve within"
+            f" {typical_timeline} of filing."
             " Recovery Agent shall provide Client with periodic status updates."
         ),
         "warranty_clause": (
@@ -200,7 +256,8 @@ def _placeholder_clauses(fee_percentage: float) -> dict[str, str]:
         ),
         "governing_law_clause": (
             "GOVERNING LAW AND DISPUTE RESOLUTION\n\n"
-            "This Agreement is governed by the laws of the State of Florida. "
+            f"This Agreement is governed by the laws of the State of {state_name}, "
+            f"and the disbursement of Surplus Funds is subject to {surplus_statute}. "
             "Any dispute shall first be submitted to non-binding mediation before litigation. "
             "Venue for any legal proceeding shall be the county identified in the Recitals."
         ),
