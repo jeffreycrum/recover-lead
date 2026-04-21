@@ -3,9 +3,10 @@ import { Link } from "react-router-dom";
 import { X, TrendingUp } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { ProductCard } from "@/components/landing-chrome";
 
 const DISMISS_KEY_PREFIX = "recoverlead_upsell_dismissed_";
-const DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function isDismissed(countyId: string): boolean {
   const raw = localStorage.getItem(`${DISMISS_KEY_PREFIX}${countyId}`);
@@ -30,9 +31,6 @@ export function CountyUpsellBanner() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Tracks in-session dismissals so the banner disappears immediately on click.
-  // isDismissed() reads localStorage directly on every render to catch dismissals
-  // from previous sessions — no dependency on exhaustion at init time.
   const [sessionDismissed, setSessionDismissed] = useState<Set<string>>(
     () => new Set<string>()
   );
@@ -48,7 +46,6 @@ export function CountyUpsellBanner() {
 
   if (nudges.length === 0) return null;
 
-  // Show only the top nudge (highest exhaustion %)
   const top = nudges[0];
   const pct = Math.round(top.exhaustion_pct * 100);
 
@@ -58,27 +55,30 @@ export function CountyUpsellBanner() {
   };
 
   return (
-    <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-      <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-      <div className="flex-1">
-        <span className="font-semibold">
-          You've qualified {pct}% of {top.county_name} leads.
-        </span>{" "}
-        <Link
-          to="/counties"
-          className="underline underline-offset-2 hover:text-amber-700 dark:hover:text-amber-300"
+    <ProductCard
+      heading="County expansion"
+      className="border-[rgba(245,158,11,0.28)] bg-[linear-gradient(180deg,rgba(245,158,11,0.08)_0%,var(--lt-bg-2)_100%)]"
+      bodyClassName="pt-4"
+    >
+      <div className="flex items-start gap-3 text-sm text-[#fde68a]">
+        <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-[#fcd34d]" />
+        <div className="flex-1 leading-6">
+          <span className="font-semibold text-[#fef3c7]">
+            You&apos;ve qualified {pct}% of {top.county_name} leads.
+          </span>{" "}
+          <Link to="/counties" className="font-medium underline underline-offset-4">
+            Explore more counties
+          </Link>{" "}
+          to find new opportunities.
+        </div>
+        <button
+          onClick={handleDismiss}
+          aria-label="Dismiss"
+          className="ml-1 rounded-full border border-transparent p-1 text-[var(--lt-text-dim)] transition-colors hover:border-[var(--lt-line)] hover:bg-[var(--lt-surface)] hover:text-[var(--lt-text)]"
         >
-          Explore more counties
-        </Link>{" "}
-        to find new opportunities.
+          <X className="h-4 w-4" />
+        </button>
       </div>
-      <button
-        onClick={handleDismiss}
-        aria-label="Dismiss"
-        className="ml-1 rounded p-0.5 hover:bg-amber-100 dark:hover:bg-amber-900"
-      >
-        <X className="h-4 w-4" />
-      </button>
-    </div>
+    </ProductCard>
   );
 }

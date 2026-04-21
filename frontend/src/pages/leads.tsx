@@ -5,8 +5,18 @@ import { LeadTable } from "@/components/leads/lead-table";
 import { LeadDetail } from "@/components/leads/lead-detail";
 import { EmptyState } from "@/components/common/empty-state";
 import { Search } from "lucide-react";
+import { EyebrowTag, ProductCard } from "@/components/landing-chrome";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export function LeadsPage() {
+  const allValue = "__all__";
   const [selectedLead, setSelectedLead] = useState<string | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [cursor, setCursor] = useState<string | undefined>(undefined);
@@ -26,6 +36,14 @@ export function LeadsPage() {
     ? (counties ?? []).filter((c: any) => c.state === filters.property_state)
     : (counties ?? []);
   const claimMutation = useClaimLead();
+  const selectTriggerClass =
+    "h-10 min-w-[160px] rounded-full border-[var(--lt-line)] bg-[var(--lt-surface)] px-4 text-[var(--lt-text)] hover:bg-[var(--lt-surface-2)]";
+  const selectContentClass =
+    "border border-[var(--lt-line)] bg-[var(--lt-surface)] text-[var(--lt-text)] shadow-[0_18px_50px_-24px_rgba(0,0,0,0.8)]";
+  const selectItemClass =
+    "text-[var(--lt-text)] focus:bg-[var(--lt-surface-2)] focus:text-[var(--lt-text)]";
+  const inputClass =
+    "h-10 w-36 rounded-full border-[var(--lt-line)] bg-[var(--lt-surface)] px-4 text-[var(--lt-text)] placeholder:text-[var(--lt-text-dim)]";
 
   useEffect(() => {
     if (!data?.items) return;
@@ -51,95 +69,123 @@ export function LeadsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Browse Leads</h1>
-          <p className="text-muted-foreground">
-            All surplus fund leads across available counties
-          </p>
+      <div>
+        <EyebrowTag>Lead discovery</EyebrowTag>
+        <h1 className="mt-4 text-3xl font-bold tracking-[-0.03em] text-[var(--lt-text)]">
+          Browse Leads
+        </h1>
+        <p className="mt-2 text-[var(--lt-text-muted)]">
+          All surplus fund leads across available counties
+        </p>
+      </div>
+
+      <ProductCard heading="Filters" bodyClassName="pt-4">
+        <div className="flex flex-wrap gap-3">
+          <Select
+            value={filters.property_state || allValue}
+            onValueChange={(value) =>
+              updateFilter((f) => {
+                const { county_id: _dropped, ...rest } = f;
+                return value && value !== allValue ? { ...rest, property_state: value } : rest;
+              })
+            }
+          >
+            <SelectTrigger className={selectTriggerClass}>
+              <SelectValue placeholder="All States" />
+            </SelectTrigger>
+            <SelectContent className={selectContentClass}>
+              <SelectItem value={allValue} className={selectItemClass}>
+                All States
+              </SelectItem>
+              {allStates.map((s) => (
+                <SelectItem key={s} value={s} className={selectItemClass}>
+                  {s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={filters.county_id || allValue}
+            onValueChange={(value) =>
+              updateFilter((f) => {
+                const { county_id: _dropped, ...rest } = f;
+                return value && value !== allValue ? { ...rest, county_id: value } : rest;
+              })
+            }
+          >
+            <SelectTrigger className={selectTriggerClass}>
+              <SelectValue placeholder="All Counties" />
+            </SelectTrigger>
+            <SelectContent className={selectContentClass}>
+              <SelectItem value={allValue} className={selectItemClass}>
+                All Counties
+              </SelectItem>
+              {visibleCounties.map((c: any) => (
+                <SelectItem key={c.id} value={c.id} className={selectItemClass}>
+                  {c.name} ({c.lead_count})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Input
+            type="number"
+            placeholder="Min surplus ($)"
+            className={inputClass}
+            value={filters.surplus_min ?? ""}
+            onChange={(e) =>
+              updateFilter((f) => {
+                const { surplus_min: _dropped, ...rest } = f;
+                return e.target.value ? { ...rest, surplus_min: e.target.value } : rest;
+              })
+            }
+          />
+          <Input
+            type="number"
+            placeholder="Max surplus ($)"
+            className={inputClass}
+            value={filters.surplus_max ?? ""}
+            onChange={(e) =>
+              updateFilter((f) => {
+                const { surplus_max: _dropped, ...rest } = f;
+                return e.target.value ? { ...rest, surplus_max: e.target.value } : rest;
+              })
+            }
+          />
+
+          <Select
+            value={filters.sale_type || allValue}
+            onValueChange={(value) =>
+              updateFilter((f) => {
+                const { sale_type: _dropped, ...rest } = f;
+                return value && value !== allValue ? { ...rest, sale_type: value } : rest;
+              })
+            }
+          >
+            <SelectTrigger className={selectTriggerClass}>
+              <SelectValue placeholder="All Types" />
+            </SelectTrigger>
+            <SelectContent className={selectContentClass}>
+              <SelectItem value={allValue} className={selectItemClass}>
+                All Types
+              </SelectItem>
+              <SelectItem value="tax_deed" className={selectItemClass}>
+                Tax Deed
+              </SelectItem>
+              <SelectItem value="foreclosure" className={selectItemClass}>
+                Foreclosure
+              </SelectItem>
+              <SelectItem value="lien" className={selectItemClass}>
+                Lien
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-      </div>
+      </ProductCard>
 
-      {/* Filters */}
-      <div className="flex gap-3 flex-wrap">
-        <select
-          className="px-3 py-2 border rounded-md text-sm bg-white"
-          value={filters.property_state || ""}
-          onChange={(e) =>
-            updateFilter((f) => {
-              const { county_id: _dropped, ...rest } = f;
-              return e.target.value
-                ? { ...rest, property_state: e.target.value }
-                : rest;
-            })
-          }
-        >
-          <option value="">All States</option>
-          {allStates.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-
-        <select
-          className="px-3 py-2 border rounded-md text-sm bg-white"
-          value={filters.county_id || ""}
-          onChange={(e) =>
-            updateFilter((f) => {
-              const { county_id: _dropped, ...rest } = f;
-              return e.target.value ? { ...rest, county_id: e.target.value } : rest;
-            })
-          }
-        >
-          <option value="">All Counties</option>
-          {visibleCounties.map((c: any) => (
-            <option key={c.id} value={c.id}>
-              {c.name} ({c.lead_count})
-            </option>
-          ))}
-        </select>
-
-        <input
-          type="number"
-          placeholder="Min surplus ($)"
-          className="px-3 py-2 border rounded-md text-sm w-36"
-          onChange={(e) =>
-            updateFilter((f) => {
-              const { surplus_min: _dropped, ...rest } = f;
-              return e.target.value ? { ...rest, surplus_min: e.target.value } : rest;
-            })
-          }
-        />
-        <input
-          type="number"
-          placeholder="Max surplus ($)"
-          className="px-3 py-2 border rounded-md text-sm w-36"
-          onChange={(e) =>
-            updateFilter((f) => {
-              const { surplus_max: _dropped, ...rest } = f;
-              return e.target.value ? { ...rest, surplus_max: e.target.value } : rest;
-            })
-          }
-        />
-        <select
-          className="px-3 py-2 border rounded-md text-sm bg-white"
-          value={filters.sale_type || ""}
-          onChange={(e) =>
-            updateFilter((f) => {
-              const { sale_type: _dropped, ...rest } = f;
-              return e.target.value ? { ...rest, sale_type: e.target.value } : rest;
-            })
-          }
-        >
-          <option value="">All Types</option>
-          <option value="tax_deed">Tax Deed</option>
-          <option value="foreclosure">Foreclosure</option>
-          <option value="lien">Lien</option>
-        </select>
-      </div>
-
-      {/* Table */}
       {isLoading && allLeads.length === 0 ? (
-        <div className="py-16 text-center text-muted-foreground">Loading leads...</div>
+        <div className="py-16 text-center text-[var(--lt-text-muted)]">Loading leads...</div>
       ) : allLeads.length > 0 ? (
         <>
           <LeadTable
@@ -153,7 +199,7 @@ export function LeadsPage() {
               <button
                 onClick={handleLoadMore}
                 disabled={isLoading}
-                className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50 disabled:opacity-50"
+                className="rounded-full border border-[var(--lt-line)] bg-[var(--lt-surface)] px-4 py-2 text-sm font-medium text-[var(--lt-text)] transition-colors hover:bg-[var(--lt-surface-2)] disabled:opacity-50"
               >
                 {isLoading ? "Loading..." : "Load more"}
               </button>
@@ -161,14 +207,16 @@ export function LeadsPage() {
           )}
         </>
       ) : (
-        <EmptyState
-          icon={<Search size={48} />}
-          title="No leads found"
-          description="Try adjusting your filters or check back later for new leads."
-        />
+        <ProductCard bodyClassName="py-10">
+          <EmptyState
+            icon={<Search size={48} />}
+            title="No leads found"
+            description="Try adjusting your filters or check back later for new leads."
+            className="text-[var(--lt-text)]"
+          />
+        </ProductCard>
       )}
 
-      {/* Detail drawer */}
       {selectedLead && (
         <LeadDetail leadId={selectedLead} onClose={() => setSelectedLead(null)} />
       )}

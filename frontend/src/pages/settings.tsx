@@ -3,6 +3,7 @@ import { UserProfile } from "@clerk/clerk-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSubscription } from "@/hooks/use-subscription";
 import { api } from "@/lib/api";
+import { EyebrowTag, MonoCell, ProductCard } from "@/components/landing-chrome";
 
 const PLANS = [
   { name: "Free", price: "$0", qualifications: 15, letters: 10, skipTraces: 0 },
@@ -10,6 +11,13 @@ const PLANS = [
   { name: "Pro", price: "$199/mo", qualifications: "1,000", letters: 500, skipTraces: 100, plan: "pro" },
   { name: "Agency", price: "$499/mo", qualifications: "5,000", letters: "2,000", skipTraces: 500, plan: "agency" },
 ];
+
+const primaryButtonClass =
+  "inline-flex items-center justify-center rounded-full bg-[var(--lt-emerald)] px-4 py-2 text-sm font-semibold text-[#042014] transition-all hover:bg-[var(--lt-emerald-light)]";
+const secondaryButtonClass =
+  "inline-flex items-center justify-center rounded-full border border-[var(--lt-line)] bg-[var(--lt-surface)] px-4 py-2 text-sm font-medium text-[var(--lt-text)] transition-colors hover:bg-[var(--lt-surface-2)]";
+const inputClass =
+  "rounded-[14px] border border-[var(--lt-line)] bg-[rgba(7,11,21,0.75)] px-3 py-2 text-sm text-[var(--lt-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] focus:outline-none focus:ring-2 focus:ring-[rgba(16,185,129,0.3)]";
 
 export function SettingsPage() {
   const { data: sub } = useSubscription();
@@ -46,50 +54,52 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="space-y-8 max-w-4xl">
+    <div className="max-w-5xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">Manage your account and subscription</p>
+        <EyebrowTag>Account controls</EyebrowTag>
+        <h1 className="mt-4 text-3xl font-bold tracking-[-0.03em] text-[var(--lt-text)]">
+          Settings
+        </h1>
+        <p className="mt-2 text-[var(--lt-text-muted)]">Manage your account, alerts, and subscription</p>
       </div>
 
       {/* Current plan & usage */}
       {sub && (
-        <section className="p-6 bg-white rounded-lg border">
-          <h2 className="text-lg font-semibold mb-4">Current Plan</h2>
-          <div className="flex items-center gap-3 mb-4">
-            <span className="px-3 py-1 rounded bg-emerald/10 text-emerald font-medium text-sm uppercase">
+        <ProductCard heading="Current plan" subtitle="Usage and billing state">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <span className="rounded-full border border-[rgba(16,185,129,0.2)] bg-[var(--lt-emerald-dim)] px-3 py-1 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--lt-emerald)]">
               {sub.plan}
             </span>
-            <span className="text-sm text-muted-foreground capitalize">{sub.status}</span>
+            <span className="text-sm capitalize text-[var(--lt-text-muted)]">{sub.status}</span>
           </div>
 
           {sub.usage && (
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Qualifications</p>
-                <p className="font-medium">
+            <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="rounded-[18px] border border-[var(--lt-line)] bg-[rgba(255,255,255,0.015)] p-4">
+                <p className="text-sm text-[var(--lt-text-muted)]">Qualifications</p>
+                <MonoCell className="mt-2">
                   {sub.usage.qualifications_used} / {sub.usage.qualifications_limit}
-                </p>
-                <div className="mt-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                </MonoCell>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-[rgba(148,163,184,0.12)]">
                   <div
                     className={`h-full rounded-full ${
-                      sub.usage.qualifications_pct >= 90 ? "bg-red-500" :
-                      sub.usage.qualifications_pct >= 80 ? "bg-amber-500" : "bg-emerald"
+                      sub.usage.qualifications_pct >= 90 ? "bg-[#ef4444]" :
+                      sub.usage.qualifications_pct >= 80 ? "bg-[#f59e0b]" : "bg-[var(--lt-emerald)]"
                     }`}
                     style={{ width: `${Math.min(100, sub.usage.qualifications_pct)}%` }}
                   />
                 </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Letters</p>
-                <p className="font-medium">
+              <div className="rounded-[18px] border border-[var(--lt-line)] bg-[rgba(255,255,255,0.015)] p-4">
+                <p className="text-sm text-[var(--lt-text-muted)]">Letters</p>
+                <MonoCell className="mt-2">
                   {sub.usage.letters_used} / {sub.usage.letters_limit}
-                </p>
-                <div className="mt-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                </MonoCell>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-[rgba(148,163,184,0.12)]">
                   <div
                     className={`h-full rounded-full ${
-                      sub.usage.letters_pct >= 90 ? "bg-red-500" :
-                      sub.usage.letters_pct >= 80 ? "bg-amber-500" : "bg-emerald"
+                      sub.usage.letters_pct >= 90 ? "bg-[#ef4444]" :
+                      sub.usage.letters_pct >= 80 ? "bg-[#f59e0b]" : "bg-[var(--lt-emerald)]"
                     }`}
                     style={{ width: `${Math.min(100, sub.usage.letters_pct)}%` }}
                   />
@@ -99,7 +109,7 @@ export function SettingsPage() {
           )}
 
           {sub.usage && sub.usage.overage_cost_estimate > 0 && sub.plan !== "free" && (
-            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+            <div className="mt-3 rounded-[18px] border border-[rgba(59,130,246,0.18)] bg-[var(--lt-blue-dim)] p-3 text-sm text-[#bfdbfe]">
               Estimated overage charges this period:{" "}
               <span className="font-semibold">
                 ${sub.usage.overage_cost_estimate.toFixed(2)}
@@ -120,18 +130,17 @@ export function SettingsPage() {
           {sub.plan !== "free" && (
             <button
               onClick={handleManageBilling}
-              className="text-sm text-emerald hover:underline mt-3"
+              className={`${secondaryButtonClass} mt-4`}
             >
               Manage billing
             </button>
           )}
-        </section>
+        </ProductCard>
       )}
 
       {/* Email Alerts */}
-      <section className="p-6 bg-white rounded-lg border">
-        <h2 className="text-lg font-semibold mb-4">Email Alerts</h2>
-        <p className="text-sm text-muted-foreground mb-4">
+      <ProductCard heading="Email alerts" subtitle="Daily lead thresholds">
+        <p className="mb-4 text-sm text-[var(--lt-text-muted)]">
           Get daily emails about new high-value leads in your counties.
         </p>
         <div className="space-y-4">
@@ -143,16 +152,16 @@ export function SettingsPage() {
                 setAlertEnabled(e.target.checked);
                 prefMutation.mutate({ alert_enabled: e.target.checked });
               }}
-              className="w-4 h-4 rounded border-gray-300 text-emerald focus:ring-emerald"
+              className="h-4 w-4 rounded border-[var(--lt-line)] bg-[var(--lt-surface)]"
             />
-            <span className="text-sm">Enable daily lead alerts</span>
+            <span className="text-sm text-[var(--lt-text)]">Enable daily lead alerts</span>
           </label>
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label className="mb-1 block text-sm font-medium text-[var(--lt-text)]">
               Minimum surplus amount
             </label>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">$</span>
+              <span className="text-sm text-[var(--lt-text-muted)]">$</span>
               <input
                 type="number"
                 min="0"
@@ -164,30 +173,32 @@ export function SettingsPage() {
                   prefMutation.mutate({ min_alert_amount: val });
                 }}
                 placeholder="5000"
-                className="w-40 px-3 py-1.5 border rounded-md text-sm"
+                className={`${inputClass} w-40`}
               />
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="mt-1 text-xs text-[var(--lt-text-muted)]">
               Only alert for leads above this amount (default: $5,000)
             </p>
           </div>
         </div>
-      </section>
+      </ProductCard>
 
       {/* Plan comparison */}
       <section>
-        <h2 className="text-lg font-semibold mb-4">Plans</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <h2 className="text-lg font-semibold text-[var(--lt-text)]">Plans</h2>
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {PLANS.map((plan) => (
-            <div
+            <ProductCard
               key={plan.name}
-              className={`p-4 bg-white rounded-lg border ${
-                sub?.plan === (plan.plan || "free") ? "border-emerald ring-1 ring-emerald" : ""
+              heading={plan.name}
+              className={`${
+                sub?.plan === (plan.plan || "free")
+                  ? "border-[rgba(16,185,129,0.32)] shadow-[0_40px_80px_-30px_rgba(0,0,0,0.8),0_0_0_1px_rgba(16,185,129,0.18)_inset,0_-1px_0_rgba(255,255,255,0.02)_inset]"
+                  : ""
               }`}
             >
-              <h3 className="font-semibold">{plan.name}</h3>
-              <p className="text-2xl font-bold mt-1">{plan.price}</p>
-              <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
+              <MonoCell size="lg" tone="emerald">{plan.price}</MonoCell>
+              <ul className="mt-4 space-y-1 text-sm text-[var(--lt-text-muted)]">
                 <li>{plan.qualifications} qualifications</li>
                 <li>{plan.letters} letters</li>
                 <li>{plan.skipTraces} skip traces</li>
@@ -196,24 +207,25 @@ export function SettingsPage() {
               {plan.plan && sub?.plan !== plan.plan && (
                 <button
                   onClick={() => handleUpgrade(plan.plan!)}
-                  className="mt-4 w-full px-3 py-2 text-sm bg-emerald text-white rounded-md hover:bg-emerald/90"
+                  className={`${primaryButtonClass} mt-4 w-full`}
                 >
                   Upgrade
                 </button>
               )}
               {sub?.plan === (plan.plan || "free") && (
-                <p className="mt-4 text-center text-sm text-emerald font-medium">Current plan</p>
+                <p className="mt-4 text-center text-sm font-medium text-[var(--lt-emerald)]">Current plan</p>
               )}
-            </div>
+            </ProductCard>
           ))}
         </div>
       </section>
 
       {/* Profile */}
-      <section>
-        <h2 className="text-lg font-semibold mb-4">Profile</h2>
-        <UserProfile />
-      </section>
+      <ProductCard heading="Profile" subtitle="Clerk account controls">
+        <div className="overflow-hidden rounded-[18px] border border-[var(--lt-line)] bg-[rgba(255,255,255,0.015)] p-2">
+          <UserProfile />
+        </div>
+      </ProductCard>
     </div>
   );
 }

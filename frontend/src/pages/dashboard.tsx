@@ -8,6 +8,7 @@ import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
 import { RoiStats } from "@/components/dashboard/roi-stats";
 import { PipelineFunnel } from "@/components/dashboard/pipeline-funnel";
 import { CountyUpsellBanner } from "@/components/dashboard/county-upsell-banner";
+import { EyebrowTag, MonoCell, ProductCard } from "@/components/landing-chrome";
 
 export function DashboardPage() {
   const { data: sub } = useSubscription();
@@ -22,16 +23,16 @@ export function DashboardPage() {
     setShowOnboarding(false);
   };
 
-  // Show onboarding wizard for first-time users
   if (showOnboarding && (myLeads?.items?.length ?? 0) === 0) {
     return (
       <div className="space-y-6">
-        <div className="text-center mb-4">
-          <h1 className="text-2xl font-bold">
-            Welcome to <span className="text-emerald">Recover</span>Lead
+        <div className="mb-4 text-center">
+          <EyebrowTag>First-run setup</EyebrowTag>
+          <h1 className="mt-4 text-3xl font-bold tracking-[-0.03em] text-[var(--lt-text)]">
+            Welcome to <span className="text-[var(--lt-emerald)]">Recover</span>Lead
           </h1>
-          <p className="text-muted-foreground">
-            Let's get you started with your first qualified lead and outreach letter.
+          <p className="mt-2 text-[var(--lt-text-muted)]">
+            Let&apos;s get you started with your first qualified lead and outreach letter.
           </p>
         </div>
         <OnboardingWizard onComplete={handleOnboardingComplete} />
@@ -73,66 +74,78 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome to RecoverLead</p>
+        <EyebrowTag>Operator dashboard</EyebrowTag>
+        <h1 className="mt-4 text-3xl font-bold tracking-[-0.03em] text-[var(--lt-text)]">
+          Dashboard
+        </h1>
+        <p className="mt-2 text-[var(--lt-text-muted)]">Welcome to RecoverLead</p>
       </div>
 
       <CountyUpsellBanner />
       <RoiStats />
       <PipelineFunnel />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
-          <Link
+          <ProductCard
             key={stat.label}
+            as={Link}
             to={stat.to}
-            className="p-6 bg-white rounded-lg border hover:border-emerald/50 transition-colors"
+            heading={stat.label}
+            showDots
+            className="transition-transform hover:-translate-y-0.5"
           >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-muted-foreground">{stat.label}</span>
-              <stat.icon size={18} className="text-muted-foreground" />
+            <div className="flex items-end justify-between gap-4">
+              <MonoCell size="lg" tone="emerald">
+                {stat.value}
+              </MonoCell>
+              <div className="rounded-full border border-[var(--lt-line)] bg-[var(--lt-surface)] p-2 text-[var(--lt-text-muted)]">
+                <stat.icon size={16} />
+              </div>
             </div>
-            <p className="text-2xl font-bold">{stat.value}</p>
-          </Link>
+          </ProductCard>
         ))}
       </div>
 
       {sub?.usage && sub.usage.qualifications_pct >= 80 && (
-        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-          <p className="text-sm text-amber-800">
-            You've used {formatPercent(sub.usage.qualifications_pct)} of your monthly qualifications.
+        <div className="rounded-[18px] border border-[rgba(245,158,11,0.3)] bg-[rgba(245,158,11,0.12)] p-4">
+          <p className="text-sm leading-6 text-[#fde68a]">
+            You&apos;ve used {formatPercent(sub.usage.qualifications_pct)} of your monthly
+            qualifications.
             {sub.usage.qualifications_pct >= 100
               ? " Upgrade your plan to continue qualifying leads."
               : " Consider upgrading to avoid interruptions."}
           </p>
           <Link
             to="/settings"
-            className="mt-2 inline-block text-sm font-medium text-amber-900 underline"
+            className="mt-3 inline-block text-sm font-medium text-[#fcd34d] underline underline-offset-4"
           >
             Manage subscription
           </Link>
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Link
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <ProductCard
+          as={Link}
           to="/leads"
-          className="p-6 bg-white rounded-lg border hover:border-emerald/50 transition-colors"
+          heading="Browse Leads"
+          className="transition-transform hover:-translate-y-0.5"
         >
-          <h3 className="font-medium mb-1">Browse Leads</h3>
-          <p className="text-sm text-muted-foreground">
-            Search surplus fund leads across all Florida counties
+          <p className="mt-2 text-sm leading-6 text-[var(--lt-text-muted)]">
+            Search surplus fund leads across all Florida counties.
           </p>
-        </Link>
-        <Link
+        </ProductCard>
+        <ProductCard
+          as={Link}
           to="/counties"
-          className="p-6 bg-white rounded-lg border hover:border-emerald/50 transition-colors"
+          heading="View Counties"
+          className="transition-transform hover:-translate-y-0.5"
         >
-          <h3 className="font-medium mb-1">View Counties</h3>
-          <p className="text-sm text-muted-foreground">
-            See available counties and their latest lead counts
+          <p className="mt-2 text-sm leading-6 text-[var(--lt-text-muted)]">
+            See available counties and their latest lead counts.
           </p>
-        </Link>
+        </ProductCard>
       </div>
     </div>
   );

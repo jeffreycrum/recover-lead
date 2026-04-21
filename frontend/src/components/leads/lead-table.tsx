@@ -2,6 +2,8 @@ import { useState, useMemo } from "react";
 import { ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { LeadScoreBadge } from "./lead-score-badge";
+import { MonoCell, ProductCard, StatusPill } from "@/components/landing-chrome";
+import { cn } from "@/lib/utils";
 
 interface Lead {
   id: string;
@@ -71,14 +73,25 @@ export function LeadTable({
 
   if (leads.length === 0) return null;
 
-  const thClass = "px-4 py-3 font-medium text-muted-foreground select-none cursor-pointer hover:text-foreground";
+  const cardTitle = showClaim ? "Available leads" : showStatus ? "Claimed leads" : "Lead list";
+  const headerCellClass =
+    "px-4 py-3 align-middle text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--lt-text-dim)]";
 
   const Th = ({ col, label, align = "left" }: { col: SortKey; label: string; align?: "left" | "right" }) => (
     <th
-      className={`${thClass} text-${align}`}
+      className={cn(
+        headerCellClass,
+        "cursor-pointer select-none transition-colors hover:text-[var(--lt-text)]",
+        align === "right" ? "text-right" : "text-left"
+      )}
       onClick={() => handleSort(col)}
     >
-      <span className={`inline-flex items-center gap-1 ${align === "right" ? "flex-row-reverse" : ""}`}>
+      <span
+        className={cn(
+          "mono inline-flex items-center gap-1.5",
+          align === "right" ? "flex-row-reverse" : ""
+        )}
+      >
         {label}
         <SortIcon col={col} sortKey={sortKey} sortDir={sortDir} />
       </span>
@@ -86,74 +99,88 @@ export function LeadTable({
   );
 
   return (
-    <div className="overflow-x-auto rounded-lg border bg-white">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b bg-gray-50/50">
-            <Th col="county_name" label="County" />
-            <Th col="case_number" label="Case #" />
-            <Th col="owner_name" label="Owner" />
-            <Th col="surplus_amount" label="Surplus" align="right" />
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground">Property</th>
-            <Th col="sale_date" label="Sale Date" />
-            {showScore && (
-              <th className="text-center px-4 py-3 font-medium text-muted-foreground">Score</th>
-            )}
-            {showStatus && (
-              <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
-            )}
-            {showClaim && <th className="px-4 py-3" />}
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((lead) => (
-            <tr
-              key={lead.id}
-              onClick={() => onSelect?.(lead.id)}
-              className="border-b hover:bg-gray-50 cursor-pointer transition-colors"
-            >
-              <td className="px-4 py-3">{lead.county_name}</td>
-              <td className="px-4 py-3 font-mono text-xs">{lead.case_number}</td>
-              <td className="px-4 py-3">{lead.owner_name || "—"}</td>
-              <td className="px-4 py-3 text-right font-medium text-emerald">
-                {formatCurrency(lead.surplus_amount)}
-              </td>
-              <td className="px-4 py-3 text-muted-foreground">
-                {lead.property_address
-                  ? `${lead.property_address}${lead.property_city ? `, ${lead.property_city}` : ""}`
-                  : "—"}
-              </td>
-              <td className="px-4 py-3 text-muted-foreground">{formatDate(lead.sale_date)}</td>
+    <ProductCard heading={cardTitle} showDots bodyClassName="px-0 pb-0 pt-4">
+      <div className="overflow-x-auto">
+        <table className="min-w-[1024px] w-full text-sm">
+          <thead>
+            <tr className="border-y border-[var(--lt-line)] bg-[var(--lt-bg-2)]">
+              <Th col="county_name" label="County" />
+              <Th col="case_number" label="Case #" />
+              <Th col="owner_name" label="Owner" />
+              <Th col="surplus_amount" label="Surplus" align="right" />
+              <th className={cn(headerCellClass, "text-left")}>
+                <span className="mono">Property</span>
+              </th>
+              <Th col="sale_date" label="Sale Date" />
               {showScore && (
-                <td className="px-4 py-3 text-center">
-                  <LeadScoreBadge score={lead.quality_score ?? null} />
-                </td>
+                <th className={cn(headerCellClass, "text-center")}>
+                  <span className="mono">Score</span>
+                </th>
               )}
               {showStatus && (
-                <td className="px-4 py-3">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 capitalize">
-                    {lead.status || "new"}
-                  </span>
-                </td>
+                <th className={cn(headerCellClass, "text-left")}>
+                  <span className="mono">Status</span>
+                </th>
               )}
-              {showClaim && (
-                <td className="px-4 py-3">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onClaim?.(lead.id);
-                      onSelect?.(lead.id);
-                    }}
-                    className="px-3 py-1 text-xs bg-emerald text-white rounded hover:bg-emerald/90 transition-colors"
-                  >
-                    Claim
-                  </button>
-                </td>
-              )}
+              {showClaim && <th className={headerCellClass} />}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {sorted.map((lead) => (
+              <tr
+                key={lead.id}
+                onClick={() => onSelect?.(lead.id)}
+                className="cursor-pointer border-b border-[var(--lt-line)] transition-colors hover:bg-[var(--lt-emerald-dim)]"
+              >
+                <td className="px-4 py-3.5 text-[var(--lt-text)]">{lead.county_name}</td>
+                <td className="px-4 py-3.5">
+                  <MonoCell size="sm">{lead.case_number}</MonoCell>
+                </td>
+                <td className="px-4 py-3.5 text-[var(--lt-text)]">{lead.owner_name || "—"}</td>
+                <td className="px-4 py-3.5 text-right">
+                  <MonoCell size="md" tone="emerald">
+                    {formatCurrency(lead.surplus_amount)}
+                  </MonoCell>
+                </td>
+                <td className="px-4 py-3.5 text-[var(--lt-text-muted)]">
+                  {lead.property_address
+                    ? `${lead.property_address}${lead.property_city ? `, ${lead.property_city}` : ""}`
+                    : "—"}
+                </td>
+                <td className="px-4 py-3.5">
+                  <MonoCell size="sm" tone="muted">
+                    {formatDate(lead.sale_date)}
+                  </MonoCell>
+                </td>
+                {showScore && (
+                  <td className="px-4 py-3.5 text-center">
+                    <LeadScoreBadge score={lead.quality_score ?? null} />
+                  </td>
+                )}
+                {showStatus && (
+                  <td className="px-4 py-3.5">
+                    <StatusPill status={lead.status || "new"} />
+                  </td>
+                )}
+                {showClaim && (
+                  <td className="px-4 py-3.5">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onClaim?.(lead.id);
+                        onSelect?.(lead.id);
+                      }}
+                      className="rounded-full bg-[var(--lt-emerald)] px-3.5 py-1.5 text-xs font-semibold text-[#042014] transition-all hover:bg-[var(--lt-emerald-light)]"
+                    >
+                      Claim
+                    </button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </ProductCard>
   );
 }

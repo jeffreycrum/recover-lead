@@ -9,15 +9,16 @@ import {
   Cell,
 } from "recharts";
 import { api } from "@/lib/api";
+import { ProductCard } from "@/components/landing-chrome";
 
 const COLORS = {
-  new: "#94a3b8",
-  qualified: "#a78bfa",
-  contacted: "#60a5fa",
-  signed: "#34d399",
-  filed: "#fbbf24",
-  paid: "#10b981",
-  closed: "#6b7280",
+  new: "#64748b",
+  qualified: "#8b5cf6",
+  contacted: "#3b82f6",
+  signed: "url(#signed-gradient)",
+  filed: "#f59e0b",
+  paid: "url(#paid-gradient)",
+  closed: "#475569",
 };
 
 export function PipelineFunnel() {
@@ -40,29 +41,47 @@ export function PipelineFunnel() {
 
   if (pipeline.leads_total === 0) {
     return (
-      <div className="p-6 bg-white rounded-lg border text-center">
-        <p className="text-muted-foreground text-sm">
+      <ProductCard heading="Pipeline">
+        <p className="text-sm text-[var(--lt-text-muted)]">
           Claim your first lead to see your pipeline.
         </p>
-      </div>
+      </ProductCard>
     );
   }
 
   return (
-    <div className="p-6 bg-white rounded-lg border">
-      <h3 className="text-lg font-semibold mb-4">Pipeline</h3>
+    <ProductCard heading="Pipeline" showDots>
       <ResponsiveContainer width="100%" height={280}>
-        <BarChart data={data} layout="vertical" margin={{ left: 16 }}>
-          <XAxis type="number" allowDecimals={false} />
-          <YAxis type="category" dataKey="stage" width={80} />
-          <Tooltip cursor={{ fill: "rgba(0,0,0,0.04)" }} />
-          <Bar dataKey="count">
-            {data.map((entry, i) => (
-              <Cell key={i} fill={entry.color} />
+        <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16 }}>
+          <defs>
+            <linearGradient id="signed-gradient" x1="0" x2="1">
+              <stop offset="0%" stopColor="#34d399" />
+              <stop offset="100%" stopColor="#10b981" />
+            </linearGradient>
+            <linearGradient id="paid-gradient" x1="0" x2="1">
+              <stop offset="0%" stopColor="#10b981" />
+              <stop offset="100%" stopColor="#0ea572" />
+            </linearGradient>
+          </defs>
+          <XAxis type="number" allowDecimals={false} stroke="#64748b" tick={{ fill: "#94a3b8", fontSize: 12 }} />
+          <YAxis type="category" dataKey="stage" width={84} stroke="#64748b" tick={{ fill: "#94a3b8", fontSize: 12 }} />
+          <Tooltip
+            cursor={{ fill: "rgba(16,185,129,0.08)" }}
+            contentStyle={{
+              background: "var(--lt-surface)",
+              border: "1px solid var(--lt-line)",
+              borderRadius: 12,
+              color: "var(--lt-text)",
+            }}
+            labelStyle={{ color: "var(--lt-text)" }}
+          />
+          <Bar dataKey="count" radius={[8, 8, 8, 8]}>
+            {data.map((entry) => (
+              <Cell key={entry.stage} fill={entry.color} />
             ))}
           </Bar>
         </BarChart>
       </ResponsiveContainer>
-    </div>
+    </ProductCard>
   );
 }

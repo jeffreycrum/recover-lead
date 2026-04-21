@@ -18,10 +18,10 @@ function getBannerLevel(pct: number, plan: string): BannerLevel {
 }
 
 const bannerStyles: Record<string, string> = {
-  warning: "bg-amber-50 border-amber-200 text-amber-800",
-  danger: "bg-red-50 border-red-200 text-red-800",
-  blocked: "bg-red-50 border-red-300 text-red-900",
-  overage: "bg-blue-50 border-blue-200 text-blue-800",
+  warning: "border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.12)] text-[#fde68a]",
+  danger: "border-[rgba(239,68,68,0.4)] bg-[rgba(239,68,68,0.14)] text-[#fecaca]",
+  blocked: "border-[rgba(239,68,68,0.45)] bg-[rgba(239,68,68,0.18)] text-[#fee2e2]",
+  overage: "border-[rgba(59,130,246,0.4)] bg-[rgba(59,130,246,0.14)] text-[#bfdbfe]",
 };
 
 export function UsageBanner() {
@@ -76,13 +76,15 @@ export function UsageBanner() {
   };
 
   return (
-    <div className={`flex items-center justify-between px-4 py-2 border-b text-sm ${bannerStyles[activeLevel]}`}>
-      <span>{getMessage()}</span>
-      <div className="flex items-center gap-2 ml-4 shrink-0">
+    <div
+      className={`flex flex-col gap-3 border-b px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:px-6 ${bannerStyles[activeLevel]}`}
+    >
+      <span className="max-w-4xl leading-6">{getMessage()}</span>
+      <div className="ml-auto flex items-center gap-2 shrink-0">
         {(activeLevel === "blocked" || activeLevel === "warning" || activeLevel === "danger") && (
           <button
             onClick={() => navigate("/settings")}
-            className="px-3 py-1 text-xs font-medium bg-emerald text-white rounded hover:bg-emerald/90"
+            className="rounded-full bg-[var(--lt-emerald)] px-3 py-1.5 text-xs font-semibold text-[#042014] transition-all hover:bg-[var(--lt-emerald-light)]"
           >
             Upgrade
           </button>
@@ -90,7 +92,7 @@ export function UsageBanner() {
         {activeLevel !== "blocked" && (
           <button
             onClick={handleDismiss}
-            className="text-xs opacity-60 hover:opacity-100"
+            className="rounded-full border border-transparent px-3 py-1.5 text-xs font-medium text-[var(--lt-text-muted)] transition-colors hover:border-[var(--lt-line)] hover:bg-[var(--lt-surface)] hover:text-[var(--lt-text)]"
           >
             Dismiss
           </button>

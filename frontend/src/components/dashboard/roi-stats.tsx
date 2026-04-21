@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { DollarSign, TrendingUp, Award, Clock } from "lucide-react";
+import { MonoCell, ProductCard } from "@/components/landing-chrome";
 
 function formatCurrency(n: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -19,11 +20,11 @@ export function RoiStats() {
   if (isLoading) return null;
   if (!roi || roi.deal_count === 0) {
     return (
-      <div className="p-6 bg-white rounded-lg border text-center">
-        <p className="text-muted-foreground text-sm">
+      <ProductCard heading="ROI snapshot">
+        <p className="text-sm text-[var(--lt-text-muted)]">
           Close your first deal to see ROI metrics here.
         </p>
-      </div>
+      </ProductCard>
     );
   }
 
@@ -32,19 +33,19 @@ export function RoiStats() {
       label: "Total Recovered",
       value: formatCurrency(roi.total_recovered),
       icon: DollarSign,
-      color: "text-emerald",
+      color: "text-[var(--lt-emerald)]",
     },
     {
       label: "Fees Earned",
       value: formatCurrency(roi.total_fees),
       icon: TrendingUp,
-      color: "text-emerald",
+      color: "text-[var(--lt-emerald)]",
     },
     {
       label: "Deals Closed",
       value: roi.deal_count.toString(),
       icon: Award,
-      color: "text-blue-600",
+      color: "text-[#93c5fd]",
     },
     {
       label: "Avg Days to Close",
@@ -52,20 +53,21 @@ export function RoiStats() {
         ? Math.round(roi.avg_days_to_close).toString()
         : "—",
       icon: Clock,
-      color: "text-amber-600",
+      color: "text-[#fcd34d]",
     },
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {cards.map((card) => (
-        <div key={card.label} className="p-4 bg-white rounded-lg border">
-          <div className="flex items-center gap-2 mb-2">
+        <ProductCard key={card.label} heading={card.label}>
+          <div className="mb-3 flex items-center gap-2">
             <card.icon size={16} className={card.color} />
-            <span className="text-xs text-muted-foreground">{card.label}</span>
           </div>
-          <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
-        </div>
+          <MonoCell size="lg" className={card.color}>
+            {card.value}
+          </MonoCell>
+        </ProductCard>
       ))}
     </div>
   );
