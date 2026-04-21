@@ -6,6 +6,7 @@ import { useCounties } from "@/hooks/use-subscription";
 import { formatCurrency } from "@/lib/utils";
 import { LeadScoreBadge } from "@/components/leads/lead-score-badge";
 import { Map, Zap, FileText, Download, ArrowRight, CheckCircle, Loader2 } from "lucide-react";
+import { EyebrowTag, MonoCell, ProductCard } from "@/components/landing-chrome";
 
 type Step = "county" | "qualifying" | "results" | "letter" | "done";
 
@@ -18,6 +19,11 @@ interface WizardLead {
   property_city: string | null;
   quality_score: number | null;
 }
+
+const primaryButtonClass =
+  "inline-flex items-center justify-center gap-2 rounded-full bg-[var(--lt-emerald)] px-4 py-2 text-sm font-semibold text-[#042014] transition-all hover:bg-[var(--lt-emerald-light)]";
+const secondaryButtonClass =
+  "inline-flex items-center justify-center rounded-full border border-[var(--lt-line)] bg-[var(--lt-surface)] px-4 py-2 text-sm font-medium text-[var(--lt-text)] transition-colors hover:bg-[var(--lt-surface-2)]";
 
 export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
   const { getToken } = useAuth();
@@ -35,60 +41,54 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
     api.setTokenFn(getToken);
   }, [getToken]);
 
-  const activeCounties = counties?.filter((c: any) => c.is_active && c.lead_count > 0) ?? [];
+  const activeCounties = counties?.filter((county: any) => county.is_active && county.lead_count > 0) ?? [];
 
   const handleSelectCounty = async (countyId: string, name: string) => {
     setSelectedCounty(countyId);
     setSelectedCountyName(name);
     setStep("qualifying");
 
-    // Fetch top leads from this county
     try {
       const data = await api.browseLeads({
         county_id: countyId,
         limit: "10",
       });
 
-      const topLeads: WizardLead[] = (data.items || []).map((l: any) => ({
-        id: l.id,
-        case_number: l.case_number,
-        owner_name: l.owner_name,
-        surplus_amount: l.surplus_amount,
-        property_address: l.property_address,
-        property_city: l.property_city,
+      const topLeads: WizardLead[] = (data.items || []).map((lead: any) => ({
+        id: lead.id,
+        case_number: lead.case_number,
+        owner_name: lead.owner_name,
+        surplus_amount: lead.surplus_amount,
+        property_address: lead.property_address,
+        property_city: lead.property_city,
         quality_score: null,
       }));
 
       setLeads(topLeads);
       setQualifyProgress({ done: 0, total: topLeads.length });
 
-      // Claim and qualify each lead
       for (let i = 0; i < topLeads.length; i++) {
         try {
           await api.claimLead(topLeads[i].id);
           const result = await api.qualifyLead(topLeads[i].id);
-          // Poll for completion
           if (result.task_id && result.task_id !== "placeholder") {
             await pollTask(result.task_id);
           }
-          // Refresh lead data
           const detail = await api.getLead(topLeads[i].id);
           if (detail.user_lead?.quality_score) {
             topLeads[i].quality_score = detail.user_lead.quality_score;
           }
         } catch {
-          // Continue with next lead on error
+          // Continue with next lead on error.
         }
         setQualifyProgress({ done: i + 1, total: topLeads.length });
         setLeads([...topLeads]);
       }
 
-      // Sort by score descending
       topLeads.sort((a, b) => (b.quality_score ?? 0) - (a.quality_score ?? 0));
       setLeads([...topLeads]);
       setStep("results");
     } catch {
-      // If fetching fails, show results with what we have
       setStep("results");
     }
   };
@@ -100,7 +100,6 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
       const result = await api.generateLetter(leadId);
       if (result.task_id) {
         const taskResult = await pollTask(result.task_id);
-        // Use the letter_id from the task result directly
         if (taskResult?.letter_id) {
           setGeneratedLetterId(taskResult.letter_id);
         }
@@ -124,7 +123,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 
   const pollTask = async (taskId: string, maxAttempts = 30): Promise<any> => {
     for (let i = 0; i < maxAttempts; i++) {
-      await new Promise((r) => setTimeout(r, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
       const status = await api.getTaskStatus(taskId);
       if (status.status === "SUCCESS") return status.result;
       if (status.status === "FAILURE") return null;
@@ -133,87 +132,83 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
   };
 
   const steps = [
-    { key: "county", label: "Select County", icon: Map },
-    { key: "qualifying", label: "Qualifying", icon: Zap },
-    { key: "results", label: "Top Leads", icon: CheckCircle },
-    { key: "letter", label: "Generate Letter", icon: FileText },
+    { key: "county", label: "County", icon: Map },
+    { key: "qualifying", label: "Qualify", icon: Zap },
+    { key: "results", label: "Results", icon: CheckCircle },
+    { key: "letter", label: "Letter", icon: FileText },
     { key: "done", label: "Download", icon: Download },
   ];
 
-  const currentStepIndex = steps.findIndex((s) => s.key === step);
+  const currentStepIndex = steps.findIndex((item) => item.key === step);
 
   return (
-    <div className="max-w-3xl mx-auto">
-      {/* Step indicator */}
-      <div className="flex items-center justify-between mb-8">
-        {steps.map((s, i) => (
-          <div key={s.key} className="flex items-center">
+    <div className="mx-auto max-w-4xl">
+      <div className="mb-8 grid grid-cols-5 gap-2">
+        {steps.map((item, index) => (
+          <div key={item.key} className="flex flex-col items-center gap-2 text-center">
             <div
-              className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${
-                i <= currentStepIndex
-                  ? "bg-emerald text-white"
-                  : "bg-gray-200 text-gray-500"
+              className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium ${
+                index <= currentStepIndex
+                  ? "bg-[var(--lt-emerald)] text-[#042014]"
+                  : "bg-[rgba(148,163,184,0.14)] text-[var(--lt-text-dim)]"
               }`}
             >
-              {i < currentStepIndex ? (
-                <CheckCircle size={16} />
-              ) : (
-                <s.icon size={16} />
-              )}
+              {index < currentStepIndex ? <CheckCircle size={16} /> : <item.icon size={16} />}
             </div>
-            {i < steps.length - 1 && (
-              <div
-                className={`w-16 h-0.5 mx-2 ${
-                  i < currentStepIndex ? "bg-emerald" : "bg-gray-200"
-                }`}
-              />
-            )}
+            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--lt-text-dim)]">
+              {item.label}
+            </span>
           </div>
         ))}
       </div>
 
-      {/* Step content */}
       {step === "county" && (
         <div>
-          <h2 className="text-xl font-bold mb-2">Select Your County</h2>
-          <p className="text-muted-foreground mb-6">
+          <EyebrowTag>Step 1</EyebrowTag>
+          <h2 className="mb-2 mt-4 text-xl font-bold text-[var(--lt-text)]">Select Your County</h2>
+          <p className="mb-6 text-[var(--lt-text-muted)]">
             Choose a Florida county to see qualified surplus fund leads.
           </p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {activeCounties.map((county: any) => (
-              <button
+              <ProductCard
                 key={county.id}
+                as="button"
+                type="button"
+                heading={county.name}
+                subtitle={`${county.lead_count.toLocaleString()} leads`}
                 onClick={() => handleSelectCounty(county.id, county.name)}
-                className="p-4 text-left bg-white border rounded-lg hover:border-emerald transition-colors"
+                className="text-left transition-transform hover:-translate-y-0.5"
               >
-                <p className="font-medium">{county.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {county.lead_count.toLocaleString()} leads
+                <p className="text-sm text-[var(--lt-text-muted)]">
+                  Start by qualifying the top county leads automatically.
                 </p>
-              </button>
+              </ProductCard>
             ))}
           </div>
           {activeCounties.length === 0 && (
-            <p className="text-center text-muted-foreground py-8">
-              Loading counties...
+            <p className="py-8 text-center text-[var(--lt-text-muted)]">
+              {counties
+                ? "No active counties are available yet. Check back after county data finishes syncing."
+                : "Loading counties..."}
             </p>
           )}
         </div>
       )}
 
       {step === "qualifying" && (
-        <div className="text-center py-8">
-          <Loader2 size={48} className="animate-spin text-emerald mx-auto mb-4" />
-          <h2 className="text-xl font-bold mb-2">
+        <div className="py-8 text-center">
+          <Loader2 size={48} className="mx-auto mb-4 animate-spin text-emerald" />
+          <h2 className="mb-2 text-xl font-bold text-[var(--lt-text)]">
             Qualifying leads in {selectedCountyName}
           </h2>
-          <p className="text-muted-foreground mb-4">
+          <p className="mb-4 text-[var(--lt-text-muted)]">
             Our AI is scoring each lead on recovery potential...
           </p>
-          <div className="w-64 mx-auto">
-            <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+          <div className="mx-auto w-64">
+            <div className="h-3 overflow-hidden rounded-full bg-[rgba(148,163,184,0.12)]">
               <div
-                className="h-full bg-emerald rounded-full transition-all duration-500"
+                className="h-full rounded-full bg-[var(--lt-emerald)] transition-all duration-500"
                 style={{
                   width: `${
                     qualifyProgress.total > 0
@@ -223,7 +218,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
                 }}
               />
             </div>
-            <p className="text-sm text-muted-foreground mt-2">
+            <p className="mt-2 text-sm text-[var(--lt-text-muted)]">
               {qualifyProgress.done} / {qualifyProgress.total} leads
             </p>
           </div>
@@ -232,72 +227,69 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 
       {step === "results" && (
         <div>
-          <h2 className="text-xl font-bold mb-2">
+          <EyebrowTag>Step 3</EyebrowTag>
+          <h2 className="mb-2 mt-4 text-xl font-bold text-[var(--lt-text)]">
             Top Leads in {selectedCountyName}
           </h2>
-          <p className="text-muted-foreground mb-6">
+          <p className="mb-6 text-[var(--lt-text-muted)]">
             Select a lead to generate a personalized outreach letter.
           </p>
           <div className="space-y-2">
             {leads.map((lead) => (
-              <div
-                key={lead.id}
-                className="flex items-center justify-between p-4 bg-white border rounded-lg hover:border-emerald transition-colors"
-              >
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {lead.case_number}
-                    </span>
-                    <LeadScoreBadge score={lead.quality_score} />
+              <ProductCard key={lead.id} className="transition-transform hover:-translate-y-0.5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs text-[var(--lt-text-muted)]">
+                        {lead.case_number}
+                      </span>
+                      <LeadScoreBadge score={lead.quality_score} />
+                    </div>
+                    <p className="mt-1 font-medium text-[var(--lt-text)]">
+                      {lead.owner_name || "Unknown Owner"}
+                    </p>
+                    <p className="text-sm text-[var(--lt-text-muted)]">
+                      {lead.property_address
+                        ? `${lead.property_address}${lead.property_city ? `, ${lead.property_city}` : ""}`
+                        : "Address not on file"}
+                    </p>
                   </div>
-                  <p className="font-medium mt-1">{lead.owner_name || "Unknown Owner"}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {lead.property_address
-                      ? `${lead.property_address}${lead.property_city ? `, ${lead.property_city}` : ""}`
-                      : "Address not on file"}
-                  </p>
+                  <div className="flex flex-col items-start gap-2 sm:items-end">
+                    <MonoCell tone="emerald">{formatCurrency(lead.surplus_amount)}</MonoCell>
+                    <button
+                      onClick={() => handleGenerateLetter(lead.id)}
+                      className={`${primaryButtonClass} text-xs`}
+                    >
+                      Generate Letter <ArrowRight size={12} />
+                    </button>
+                  </div>
                 </div>
-                <div className="text-right ml-4">
-                  <p className="font-bold text-emerald">
-                    {formatCurrency(lead.surplus_amount)}
-                  </p>
-                  <button
-                    onClick={() => handleGenerateLetter(lead.id)}
-                    className="mt-2 px-3 py-1.5 text-xs bg-emerald text-white rounded hover:bg-emerald/90 flex items-center gap-1"
-                  >
-                    Generate Letter <ArrowRight size={12} />
-                  </button>
-                </div>
-              </div>
+              </ProductCard>
             ))}
           </div>
         </div>
       )}
 
       {step === "letter" && (
-        <div className="text-center py-8">
-          <Loader2 size={48} className="animate-spin text-emerald mx-auto mb-4" />
-          <h2 className="text-xl font-bold mb-2">Generating your letter</h2>
-          <p className="text-muted-foreground">
+        <div className="py-8 text-center">
+          <Loader2 size={48} className="mx-auto mb-4 animate-spin text-emerald" />
+          <h2 className="mb-2 text-xl font-bold text-[var(--lt-text)]">Generating your letter</h2>
+          <p className="text-[var(--lt-text-muted)]">
             AI is writing a personalized outreach letter...
           </p>
         </div>
       )}
 
       {step === "done" && (
-        <div className="text-center py-8">
-          <CheckCircle size={48} className="text-emerald mx-auto mb-4" />
-          <h2 className="text-xl font-bold mb-2">Your letter is ready!</h2>
-          <p className="text-muted-foreground mb-6">
+        <div className="py-8 text-center">
+          <CheckCircle size={48} className="mx-auto mb-4 text-emerald" />
+          <h2 className="mb-2 text-xl font-bold text-[var(--lt-text)]">Your letter is ready!</h2>
+          <p className="mb-6 text-[var(--lt-text-muted)]">
             Review, edit, and download your personalized outreach letter.
           </p>
-          <div className="flex items-center justify-center gap-3">
+          <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
             {generatedLetterId && (
-              <button
-                onClick={handleDownloadPdf}
-                className="px-6 py-2.5 bg-emerald text-white rounded-md hover:bg-emerald/90 flex items-center gap-2"
-              >
+              <button onClick={handleDownloadPdf} className={primaryButtonClass}>
                 <Download size={16} /> Download PDF
               </button>
             )}
@@ -306,14 +298,14 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
                 onComplete();
                 navigate("/letters");
               }}
-              className="px-6 py-2.5 border rounded-md hover:bg-gray-50"
+              className={secondaryButtonClass}
             >
               View All Letters
             </button>
           </div>
           <button
             onClick={onComplete}
-            className="mt-4 text-sm text-muted-foreground hover:text-foreground"
+            className="mt-4 text-sm text-[var(--lt-text-muted)] transition-colors hover:text-[var(--lt-text)]"
           >
             Skip to dashboard
           </button>
