@@ -3,6 +3,7 @@ import { useAuth } from "@clerk/clerk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, type MailLetterData } from "@/lib/api";
 import { X, Send, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { StatusPill } from "@/components/landing-chrome";
 
 interface MailDialogProps {
   open: boolean;
@@ -100,13 +101,21 @@ export function MailDialog({ open, onClose, letter }: MailDialogProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <div className="px-6 py-4 border-b flex items-center justify-between">
-          <h3 className="font-semibold flex items-center gap-2">
-            <Send size={18} />
-            Mail Letter via Lob {letter.case_number ? `— Case #${letter.case_number}` : ""}
-          </h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100">
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-[24px] border border-[var(--lt-line-2)] bg-[linear-gradient(180deg,var(--lt-surface)_0%,var(--lt-bg-2)_100%)] shadow-[0_40px_120px_-40px_rgba(0,0,0,0.9)] flex flex-col">
+        <div className="px-6 py-4 border-b border-[var(--lt-line)] flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold flex items-center gap-2 text-[var(--lt-text)]">
+              <Send size={18} />
+              Mail Letter via Lob {letter.case_number ? `— Case #${letter.case_number}` : ""}
+            </h3>
+            <div className="mt-2">
+              <StatusPill status="queued" label="Physical mail" />
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-full border border-transparent p-1.5 text-[var(--lt-text-muted)] transition-colors hover:border-[var(--lt-line)] hover:bg-[var(--lt-surface-2)] hover:text-[var(--lt-text)]"
+          >
             <X size={18} />
           </button>
         </div>
@@ -114,17 +123,17 @@ export function MailDialog({ open, onClose, letter }: MailDialogProps) {
         {done ? (
           <div className="p-8 text-center">
             <CheckCircle size={48} className="text-emerald mx-auto mb-4" />
-            <h3 className="text-lg font-medium">Letter queued for mailing</h3>
-            <p className="text-sm text-muted-foreground mt-1">{done.message}</p>
-            <p className="text-xs text-muted-foreground mt-2">
+            <h3 className="text-lg font-medium text-[var(--lt-text)]">Letter queued for mailing</h3>
+            <p className="mt-1 text-sm text-[var(--lt-text-muted)]">{done.message}</p>
+            <p className="mt-2 text-xs text-[var(--lt-text-muted)]">
               Task ID: <span className="font-mono">{done.task_id}</span>
             </p>
-            <p className="text-xs text-muted-foreground mt-2">
+            <p className="mt-2 text-xs text-[var(--lt-text-muted)]">
               Tracking URL will appear on the letter after the mailing provider confirms the send.
             </p>
             <button
               onClick={onClose}
-              className="mt-6 px-4 py-2 bg-emerald text-white rounded-md hover:bg-emerald/90 text-sm"
+              className="mt-6 rounded-full bg-[var(--lt-emerald)] px-4 py-2 text-sm font-semibold text-[#042014] transition-all hover:bg-[var(--lt-emerald-light)]"
             >
               Close
             </button>
@@ -132,12 +141,12 @@ export function MailDialog({ open, onClose, letter }: MailDialogProps) {
         ) : submitting ? (
           <div className="p-8 text-center">
             <Loader2 size={48} className="animate-spin text-emerald mx-auto mb-4" />
-            <h3 className="text-lg font-medium">Queueing letter...</h3>
+            <h3 className="text-lg font-medium text-[var(--lt-text)]">Queueing letter...</h3>
           </div>
         ) : (
           <>
             <div className="flex-1 overflow-auto p-6 space-y-6">
-              <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900 flex items-start gap-2">
+              <div className="rounded-[18px] border border-[rgba(245,158,11,0.16)] bg-[var(--lt-amber-dim)] p-4 text-sm text-[#fcd34d] flex items-start gap-2">
                 <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
                 <div>
                   Lob charges ~<strong>$1.00 per letter</strong> (4-page double-sided, first-class).
@@ -146,8 +155,8 @@ export function MailDialog({ open, onClose, letter }: MailDialogProps) {
               </div>
 
               <section>
-                <h4 className="font-medium text-sm mb-3">From (Return Address)</h4>
-                <div className="grid grid-cols-2 gap-3">
+                <h4 className="mb-3 text-sm font-medium text-[var(--lt-text)]">From (Return Address)</h4>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <FormField
                     label="Name"
                     value={form.from_name}
@@ -182,8 +191,8 @@ export function MailDialog({ open, onClose, letter }: MailDialogProps) {
               </section>
 
               <section>
-                <h4 className="font-medium text-sm mb-3">To (Recipient)</h4>
-                <div className="grid grid-cols-2 gap-3">
+                <h4 className="mb-3 text-sm font-medium text-[var(--lt-text)]">To (Recipient)</h4>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <FormField
                     label="Name"
                     value={form.to_name}
@@ -218,33 +227,33 @@ export function MailDialog({ open, onClose, letter }: MailDialogProps) {
               </section>
 
               {error && (
-                <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-900">
+                <div className="rounded-[18px] border border-[rgba(248,113,113,0.18)] bg-[var(--lt-red-dim)] p-3 text-sm text-[#fca5a5]">
                   {error}
                 </div>
               )}
 
-              <label className="flex items-start gap-2 text-sm cursor-pointer">
+              <label className="flex items-start gap-2 text-sm cursor-pointer text-[var(--lt-text-muted)]">
                 <input
                   type="checkbox"
                   checked={confirmed}
                   onChange={(e) => setConfirmed(e.target.checked)}
-                  className="mt-0.5 rounded"
+                  className="mt-0.5 rounded border-[var(--lt-line)] bg-[var(--lt-surface)]"
                 />
                 <span>I understand this will physically mail this letter via USPS.</span>
               </label>
             </div>
 
-            <div className="px-6 py-4 border-t flex justify-end gap-2">
+            <div className="px-6 py-4 border-t border-[var(--lt-line)] flex justify-end gap-2">
               <button
                 onClick={onClose}
-                className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50"
+                className="rounded-full border border-[var(--lt-line)] bg-[var(--lt-surface)] px-4 py-2 text-sm font-medium text-[var(--lt-text)] transition-colors hover:bg-[var(--lt-surface-2)]"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSubmit}
                 disabled={!canSubmit}
-                className="px-4 py-2 bg-emerald text-white rounded-md hover:bg-emerald/90 disabled:opacity-50 text-sm font-medium flex items-center gap-2"
+                className="inline-flex items-center gap-2 rounded-full bg-[var(--lt-emerald)] px-4 py-2 text-sm font-semibold text-[#042014] transition-all hover:bg-[var(--lt-emerald-light)] disabled:opacity-50"
               >
                 <Send size={14} />
                 Mail Letter
@@ -266,12 +275,12 @@ interface FormFieldProps {
 function FormField({ label, value, onChange }: FormFieldProps) {
   return (
     <label className="flex flex-col gap-1 text-sm">
-      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-xs text-[var(--lt-text-dim)]">{label}</span>
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-emerald/50"
+        className="rounded-[14px] border border-[var(--lt-line)] bg-[rgba(7,11,21,0.75)] px-3 py-2 text-sm text-[var(--lt-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] focus:outline-none focus:ring-2 focus:ring-[rgba(16,185,129,0.3)]"
       />
     </label>
   );
