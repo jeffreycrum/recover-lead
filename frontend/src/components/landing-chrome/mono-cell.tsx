@@ -34,7 +34,7 @@ export function MonoCell<T extends ElementType = "span">({
   return (
     <Component
       className={cn(
-        "mono font-semibold tracking-[-0.02em]",
+        "mono font-mono font-semibold tracking-[-0.02em]",
         sizeClass,
         toneClass,
         className

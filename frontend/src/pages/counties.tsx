@@ -27,12 +27,11 @@ export function CountiesPage() {
 
   const stateGroups = visibleCounties.reduce<Record<string, any[]>>((groups, county: any) => {
     const key = county.state || "Unknown";
-    if (!groups[key]) {
-      groups[key] = [];
-    }
-    groups[key].push(county);
-    return groups;
+    return { ...groups, [key]: [...(groups[key] ?? []), county] };
   }, {});
+
+  const safeSourceUrl = (url: unknown): string | undefined =>
+    typeof url === "string" && /^https?:\/\//i.test(url) ? url : undefined;
 
   const orderedStateGroups = Object.entries(stateGroups).sort(([left], [right]) =>
     left.localeCompare(right)
@@ -94,7 +93,7 @@ export function CountiesPage() {
                       <CountyChip variant={county.is_active ? "active" : "pending"}>
                         {county.is_active ? "Active county" : "Request data"}
                       </CountyChip>
-                      <MonoCell tone="emerald">{county.lead_count.toLocaleString()}</MonoCell>
+                      <MonoCell tone="emerald">{(county.lead_count ?? 0).toLocaleString()}</MonoCell>
                     </div>
 
                     <div className="space-y-2 text-sm text-[var(--lt-text-muted)]">
@@ -103,14 +102,14 @@ export function CountiesPage() {
                       <p>Last scraped: {formatDate(county.last_scraped_at)}</p>
                     </div>
 
-                    {!county.is_active && (county.contact_phone || county.contact_email || county.source_url) && (
+                    {!county.is_active && (county.contact_phone || county.contact_email || safeSourceUrl(county.source_url)) && (
                       <div className="mt-4 space-y-2 border-t border-[var(--lt-line)] pt-4">
                         <p className="text-xs font-medium uppercase tracking-[0.12em] text-[var(--lt-text-dim)]">
                           Request data
                         </p>
-                        {county.source_url && (
+                        {safeSourceUrl(county.source_url) && (
                           <a
-                            href={county.source_url}
+                            href={safeSourceUrl(county.source_url)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-1.5 text-sm text-[var(--lt-text)] transition-colors hover:text-[var(--lt-emerald)]"

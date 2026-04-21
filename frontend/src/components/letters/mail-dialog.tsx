@@ -91,9 +91,8 @@ export function MailDialog({ open, onClose, letter }: MailDialogProps) {
       const result = await api.mailLetter(letter.id, form);
       setDone({ task_id: result.task_id, message: result.message });
       qc.invalidateQueries({ queryKey: ["letters"] });
-    } catch (e: unknown) {
-      const err = e as { message?: string; code?: string };
-      setError(err?.message || "Failed to queue letter for mailing");
+    } catch {
+      setError("Failed to queue letter for mailing. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -101,10 +100,15 @@ export function MailDialog({ open, onClose, letter }: MailDialogProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-[24px] border border-[var(--lt-line-2)] bg-[linear-gradient(180deg,var(--lt-surface)_0%,var(--lt-bg-2)_100%)] shadow-[0_40px_120px_-40px_rgba(0,0,0,0.9)] flex flex-col">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mail-dialog-title"
+        className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-[24px] border border-[var(--lt-line-2)] bg-[linear-gradient(180deg,var(--lt-surface)_0%,var(--lt-bg-2)_100%)] shadow-[0_40px_120px_-40px_rgba(0,0,0,0.9)] flex flex-col"
+      >
         <div className="px-6 py-4 border-b border-[var(--lt-line)] flex items-center justify-between">
           <div>
-            <h3 className="font-semibold flex items-center gap-2 text-[var(--lt-text)]">
+            <h3 id="mail-dialog-title" className="font-semibold flex items-center gap-2 text-[var(--lt-text)]">
               <Send size={18} />
               Mail Letter via Lob {letter.case_number ? `— Case #${letter.case_number}` : ""}
             </h3>
@@ -114,6 +118,7 @@ export function MailDialog({ open, onClose, letter }: MailDialogProps) {
           </div>
           <button
             onClick={onClose}
+            aria-label="Close dialog"
             className="rounded-full border border-transparent p-1.5 text-[var(--lt-text-muted)] transition-colors hover:border-[var(--lt-line)] hover:bg-[var(--lt-surface-2)] hover:text-[var(--lt-text)]"
           >
             <X size={18} />

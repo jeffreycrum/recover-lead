@@ -20,6 +20,7 @@ export function CountyChip({
       {...props}
     >
       <span
+        aria-hidden="true"
         className={cn(
           "h-1.5 w-1.5 rounded-full",
           variant === "active" ? "bg-[var(--lt-emerald)]" : "bg-[var(--lt-amber)]"

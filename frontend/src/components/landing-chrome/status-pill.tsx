@@ -43,7 +43,8 @@ interface StatusPillProps {
 }
 
 export function StatusPill({ status, label, className }: StatusPillProps) {
-  const normalizedLabel = label ?? status?.replace(/_/g, " ") ?? "new";
+  const normalizedLabel =
+    label?.trim() ?? status?.trim().replace(/_/g, " ") ?? "new";
 
   return (
     <span

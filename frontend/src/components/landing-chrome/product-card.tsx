@@ -49,7 +49,7 @@ export function ProductCard<T extends ElementType = "section">({
             )}
           </div>
           {showDots && (
-            <div className="flex gap-1.5">
+            <div aria-hidden="true" className="flex gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-[#ef4444]" />
               <span className="h-2.5 w-2.5 rounded-full bg-[#f59e0b]" />
               <span className="h-2.5 w-2.5 rounded-full bg-[var(--lt-emerald)]" />

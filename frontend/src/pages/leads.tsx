@@ -133,6 +133,7 @@ export function LeadsPage() {
             type="number"
             placeholder="Min surplus ($)"
             className={inputClass}
+            value={filters.surplus_min ?? ""}
             onChange={(e) =>
               updateFilter((f) => {
                 const { surplus_min: _dropped, ...rest } = f;
@@ -144,6 +145,7 @@ export function LeadsPage() {
             type="number"
             placeholder="Max surplus ($)"
             className={inputClass}
+            value={filters.surplus_max ?? ""}
             onChange={(e) =>
               updateFilter((f) => {
                 const { surplus_max: _dropped, ...rest } = f;

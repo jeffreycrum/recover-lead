@@ -132,7 +132,6 @@ export function DashboardPage() {
           heading="Browse Leads"
           className="transition-transform hover:-translate-y-0.5"
         >
-          <p className="text-sm font-medium text-[var(--lt-text)]">Browse Leads</p>
           <p className="mt-2 text-sm leading-6 text-[var(--lt-text-muted)]">
             Search surplus fund leads across all Florida counties.
           </p>
@@ -143,7 +142,6 @@ export function DashboardPage() {
           heading="View Counties"
           className="transition-transform hover:-translate-y-0.5"
         >
-          <p className="text-sm font-medium text-[var(--lt-text)]">View Counties</p>
           <p className="mt-2 text-sm leading-6 text-[var(--lt-text-muted)]">
             See available counties and their latest lead counts.
           </p>

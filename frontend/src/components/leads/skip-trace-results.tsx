@@ -68,7 +68,7 @@ export function SkipTraceResults({ results }: { results: SkipTraceResult[] }) {
 
       {latest.persons.map((person, i) => (
         <div
-          key={i}
+          key={person.full_name || `${person.first_name}-${person.last_name}-${i}`}
           className="space-y-3 rounded-[18px] border border-[var(--lt-line)] bg-[rgba(255,255,255,0.015)] p-4"
         >
           <div className="flex flex-wrap items-center gap-2">
@@ -98,8 +98,8 @@ export function SkipTraceResults({ results }: { results: SkipTraceResult[] }) {
 
           {person.phones.length > 0 && (
             <div className="space-y-1.5">
-              {person.phones.map((phone, j) => (
-                <div key={j} className="flex flex-wrap items-center gap-2 text-sm text-[var(--lt-text)]">
+              {person.phones.map((phone) => (
+                <div key={phone.number} className="flex flex-wrap items-center gap-2 text-sm text-[var(--lt-text)]">
                   <Phone size={12} className="text-[var(--lt-text-dim)]" />
                   <span className="mono">{phone.number}</span>
                   <span className="rounded-md bg-[rgba(148,163,184,0.12)] px-2 py-0.5 text-xs text-[var(--lt-text-muted)]">
@@ -120,8 +120,8 @@ export function SkipTraceResults({ results }: { results: SkipTraceResult[] }) {
 
           {person.emails.length > 0 && (
             <div className="space-y-1.5">
-              {person.emails.map((email, j) => (
-                <div key={j} className="flex items-center gap-2 text-sm text-[var(--lt-text)]">
+              {person.emails.map((email) => (
+                <div key={email.email} className="flex items-center gap-2 text-sm text-[var(--lt-text)]">
                   <Mail size={12} className="text-[var(--lt-text-dim)]" />
                   <span>{email.email}</span>
                 </div>

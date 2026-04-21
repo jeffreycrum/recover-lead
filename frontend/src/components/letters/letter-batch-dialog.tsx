@@ -78,15 +78,8 @@ export function LetterBatchDialog({ open, onClose }: LetterBatchDialogProps) {
 
       setDone(true);
       qc.invalidateQueries({ queryKey: ["letters"] });
-    } catch (err: unknown) {
-      const message =
-        typeof err === "object" &&
-        err !== null &&
-        "message" in err &&
-        typeof (err as { message?: unknown }).message === "string"
-          ? ((err as { message: string }).message)
-          : "Failed to generate letters";
-      setError(message);
+    } catch {
+      setError("Failed to generate letters. Please try again.");
     } finally {
       setGenerating(false);
     }
@@ -94,14 +87,20 @@ export function LetterBatchDialog({ open, onClose }: LetterBatchDialogProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-lg max-h-[80vh] overflow-hidden rounded-[24px] border border-[var(--lt-line-2)] bg-[linear-gradient(180deg,var(--lt-surface)_0%,var(--lt-bg-2)_100%)] shadow-[0_40px_120px_-40px_rgba(0,0,0,0.9)] flex flex-col">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="letter-batch-title"
+        className="w-full max-w-lg max-h-[80vh] overflow-hidden rounded-[24px] border border-[var(--lt-line-2)] bg-[linear-gradient(180deg,var(--lt-surface)_0%,var(--lt-bg-2)_100%)] shadow-[0_40px_120px_-40px_rgba(0,0,0,0.9)] flex flex-col"
+      >
         <div className="px-6 py-4 border-b border-[var(--lt-line)] flex items-center justify-between">
-          <h3 className="font-semibold flex items-center gap-2 text-[var(--lt-text)]">
+          <h3 id="letter-batch-title" className="font-semibold flex items-center gap-2 text-[var(--lt-text)]">
             <FileText size={18} />
             Batch Generate Letters
           </h3>
           <button
             onClick={onClose}
+            aria-label="Close dialog"
             className="rounded-full border border-transparent p-1.5 text-[var(--lt-text-muted)] transition-colors hover:border-[var(--lt-line)] hover:bg-[var(--lt-surface-2)] hover:text-[var(--lt-text)]"
           >
             <X size={18} />

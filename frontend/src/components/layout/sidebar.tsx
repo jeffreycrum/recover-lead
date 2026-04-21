@@ -52,18 +52,23 @@ export function Sidebar() {
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!collapsed}
+          aria-controls="app-sidebar-nav"
           className="rounded-full border border-transparent p-1.5 text-[var(--lt-text-muted)] transition-colors hover:border-[var(--lt-line)] hover:bg-[var(--lt-surface-2)] hover:text-[var(--lt-text)]"
         >
           {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
         </button>
       </div>
 
-      <nav className="flex-1 px-2 py-4">
+      <nav id="app-sidebar-nav" className="flex-1 px-2 py-4">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.to === "/"}
+            aria-label={collapsed ? item.label : undefined}
+            title={collapsed ? item.label : undefined}
             className={({ isActive }) =>
               cn(
                 "mx-1.5 flex items-center gap-3 rounded-full border border-transparent py-2.5 text-sm font-medium transition-all",
@@ -75,7 +80,7 @@ export function Sidebar() {
             }
           >
             <item.icon size={18} />
-            {!collapsed && <span>{item.label}</span>}
+            <span className={collapsed ? "sr-only" : undefined}>{item.label}</span>
           </NavLink>
         ))}
       </nav>

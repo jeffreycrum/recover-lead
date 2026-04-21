@@ -161,7 +161,7 @@
     font-feature-settings: "ss01", "cv11";
     -webkit-font-smoothing: antialiased;
   }
-  .dashboard-theme .mono {
+  .mono {
     font-family: "JetBrains Mono", ui-monospace, monospace;
   }
   .dashboard-theme a {
@@ -173,19 +173,10 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
   html {
     @apply font-sans;
-  }
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
@@ -195,9 +186,6 @@
   font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
   font-feature-settings: "ss01", "cv11";
   -webkit-font-smoothing: antialiased;
-}
-.landing-theme .mono {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
 }
 .landing-theme a {
   color: inherit;

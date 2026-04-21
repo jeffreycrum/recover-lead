@@ -68,16 +68,16 @@ export function PipelineFunnel() {
           <Tooltip
             cursor={{ fill: "rgba(16,185,129,0.08)" }}
             contentStyle={{
-              background: "#131929",
-              border: "1px solid #1e293b",
+              background: "var(--lt-surface)",
+              border: "1px solid var(--lt-line)",
               borderRadius: 12,
-              color: "#e2e8f0",
+              color: "var(--lt-text)",
             }}
-            labelStyle={{ color: "#e2e8f0" }}
+            labelStyle={{ color: "var(--lt-text)" }}
           />
           <Bar dataKey="count" radius={[8, 8, 8, 8]}>
-            {data.map((entry, i) => (
-              <Cell key={i} fill={entry.color} />
+            {data.map((entry) => (
+              <Cell key={entry.stage} fill={entry.color} />
             ))}
           </Bar>
         </BarChart>
