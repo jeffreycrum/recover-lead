@@ -31,12 +31,18 @@ class CloudscraperFetchMixin:
         return await asyncio.to_thread(self._blocking_fetch)
 
     def _blocking_fetch(self) -> bytes:
+        # cloudscraper subclasses requests.Session — close it explicitly so
+        # pooled connections release promptly on the worker thread instead
+        # of waiting on GC.
         scraper = cloudscraper.create_scraper(
             browser={"browser": "chrome", "platform": "darwin", "mobile": False}
         )
-        response = scraper.get(self.source_url, timeout=60)
-        response.raise_for_status()
-        content = response.content
+        try:
+            response = scraper.get(self.source_url, timeout=60)
+            response.raise_for_status()
+            content = response.content
+        finally:
+            scraper.close()
         if len(content) > MAX_CLOUDSCRAPER_BYTES:
             raise ValueError(
                 f"Cloudscraper response exceeds {MAX_CLOUDSCRAPER_BYTES} bytes "
