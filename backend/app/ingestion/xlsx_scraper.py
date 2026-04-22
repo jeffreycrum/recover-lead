@@ -14,6 +14,13 @@ from app.ingestion.tls import scraper_client
 # load-time. Sized for the largest observed county publications plus headroom.
 MAX_XLSX_BYTES = 50 * 1024 * 1024  # 50 MiB
 
+# Sale types that normalizer.py / downstream templates know how to render.
+# Keep aligned with the comment on Lead.sale_type in app/models/lead.py.
+_ALLOWED_SALE_TYPES = frozenset(
+    {"tax_deed", "foreclosure", "lien", "property_tax_refund"}
+)
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
 
 @register_scraper("XlsxScraper")
 class XlsxScraper(BaseScraper):
@@ -142,7 +149,10 @@ class XlsxScraper(BaseScraper):
         addr_col = col_map.get("property_address")
         parcel_col = col_map.get("parcel_id")
         sale_date_col = col_map.get("sale_date")
-        sale_type = self.config.get("sale_type", "tax_deed")
+        # Config is trusted but not perfect — validate before letting it
+        # leak into RawLead.sale_type, which downstream templates branch on.
+        raw_sale_type = (self.config.get("sale_type") or "tax_deed").strip()
+        sale_type = raw_sale_type if raw_sale_type in _ALLOWED_SALE_TYPES else "tax_deed"
 
         leads: list[RawLead] = []
         wb = openpyxl.load_workbook(BytesIO(raw_data), read_only=True, data_only=True)
@@ -160,7 +170,9 @@ class XlsxScraper(BaseScraper):
             def sale_date_cell(row: tuple, idx: int | None) -> str | None:
                 # openpyxl returns a datetime for date-formatted cells; emit
                 # ISO YYYY-MM-DD so downstream Lead.sale_date (Date column)
-                # parses cleanly. Plain strings pass through unchanged.
+                # parses cleanly. String cells must already be ISO — normalizer.py
+                # uses date.fromisoformat and silently drops anything else, so
+                # we pre-validate here to avoid persisting bogus values.
                 if idx is None or idx >= len(row) or row[idx] is None:
                     return None
                 raw = row[idx]
@@ -168,7 +180,10 @@ class XlsxScraper(BaseScraper):
                     return raw.date().isoformat()
                 if isinstance(raw, date):
                     return raw.isoformat()
-                return cell(row, idx) or None
+                text = cell(row, idx)
+                if not text:
+                    return None
+                return text if _ISO_DATE_RE.match(text) else None
 
             for row in ws.iter_rows(values_only=True):
                 case_number = cell(row, case_col)

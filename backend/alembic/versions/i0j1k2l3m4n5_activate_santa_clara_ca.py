@@ -47,10 +47,12 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 COUNTY_NAME = "Santa Clara"
+# Canonical URL without ?VersionId — that query param pins to a frozen
+# snapshot, which means scheduled scrapes would never pick up new refund
+# determinations. The CDN serves the latest snapshot at this path by default.
 SOURCE_URL = (
     "https://files.santaclaracounty.gov/exjcpb1496/migrated/"
     "unclaimed-property-tax-refunds.xlsx"
-    "?VersionId=_l7uhvc1x839Xbd7IHJvqMaQcDNB.CvT"
 )
 SCRAPE_SCHEDULE = "35 3 * * *"
 CONFIG = {
@@ -67,8 +69,7 @@ CONFIG = {
         "Verified 2026-04-21 against live XLSX. 1,106 leads parsed locally, "
         "$4,273,329.34 total. Source is the DTAC Unclaimed Property Tax "
         "Refunds list (not tax-sale excess proceeds). Cloudflare-protected "
-        "CDN — fetch goes through cloudscraper. Versioned URL will need a "
-        "refresh when Santa Clara publishes a new snapshot."
+        "CDN — fetch goes through cloudscraper."
     ),
 }
 
@@ -101,7 +102,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     conn = op.get_bind()
-    conn.execute(
+    result = conn.execute(
         sa.text(
             "UPDATE counties "
             "SET is_active = false, "
@@ -114,3 +115,7 @@ def downgrade() -> None:
         ),
         {"name": COUNTY_NAME},
     )
+    if result.rowcount != 1:
+        raise RuntimeError(
+            f"Expected exactly 1 row for {COUNTY_NAME}, CA — got {result.rowcount}"
+        )
