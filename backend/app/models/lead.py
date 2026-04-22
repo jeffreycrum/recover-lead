@@ -46,7 +46,7 @@ class Lead(Base):
     sale_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     sale_type: Mapped[str | None] = mapped_column(
         String(20), nullable=True
-    )  # tax_deed|foreclosure|lien
+    )  # tax_deed|foreclosure|lien|property_tax_refund
 
     # Owner (encrypted PII)
     owner_name: Mapped[str | None] = mapped_column(EncryptedString(1024), nullable=True)

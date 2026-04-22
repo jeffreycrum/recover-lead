@@ -8,6 +8,7 @@ all environments, so tests are skipped when the dep is absent.
 from __future__ import annotations
 
 import importlib.util
+from datetime import datetime
 from decimal import Decimal
 from io import BytesIO
 from unittest.mock import MagicMock, patch
@@ -39,11 +40,19 @@ SANTA_CLARA_CONFIG = {
 
 
 def _build_sample_xlsx() -> bytes:
-    """Build a minimal in-memory XLSX mirroring Santa Clara's column layout."""
+    """Build a minimal in-memory XLSX mirroring Santa Clara's column layout.
+
+    First data row uses a real `datetime` for DATE — openpyxl returns a
+    datetime for date-formatted cells in the live XLSX, so this pins the
+    ISO-conversion path in `sale_date_cell`. Remaining rows use plain
+    strings to exercise the pass-through branch.
+    """
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.append(["DATE", "APN/ASMNT", "BALANCE", "DESCRIPTION", "ASSESSEE/PAYEE"])
-    ws.append(["2025-08-06", "120-06-031", 15479.06, "REDUCED ASSESSMENT", "1110 WEBSTER ST LLC"])
+    ws.append(
+        [datetime(2025, 8, 6), "120-06-031", 15479.06, "REDUCED ASSESSMENT", "1110 WEBSTER ST LLC"]
+    )
     ws.append(["2026-03-05", "274-05-031", 150.43, "REDUCED ASSESSMENT", "1490 DAVIS STREET LLC"])
     ws.append(["2025-01-06", "303-39-062", 4687.57, "REDUCED ASSESSMENT", "395 S WINCHESTER BLVD LLC"])
     # Zero-balance row — should be skipped by _parse_simple_table.
@@ -109,6 +118,22 @@ class TestCloudscraperXlsxFetch:
 
         mock_bf.assert_called_once()
         assert result == b"xlsx"
+
+    def test_fetch_raises_on_oversized_response(self):
+        from app.ingestion.cloudscraper_fetch import MAX_CLOUDSCRAPER_BYTES
+
+        scraper = _make_scraper()
+
+        mock_response = MagicMock()
+        mock_response.content = b"x" * (MAX_CLOUDSCRAPER_BYTES + 1)
+        mock_response.raise_for_status = MagicMock()
+
+        mock_cs = MagicMock()
+        mock_cs.get.return_value = mock_response
+
+        with patch("cloudscraper.create_scraper", return_value=mock_cs):
+            with pytest.raises(ValueError, match="exceeds"):
+                scraper._blocking_fetch()
 
 
 @skip_if_no_cloudscraper
