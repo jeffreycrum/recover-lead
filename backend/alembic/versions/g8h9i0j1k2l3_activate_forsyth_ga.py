@@ -86,7 +86,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     conn = op.get_bind()
-    conn.execute(
+    result = conn.execute(
         sa.text(
             "UPDATE counties "
             "SET is_active = false, "
@@ -99,3 +99,7 @@ def downgrade() -> None:
         ),
         {"name": _COUNTY_NAME},
     )
+    if result.rowcount != 1:
+        raise RuntimeError(
+            f"Expected exactly 1 row for {_COUNTY_NAME}, GA — got {result.rowcount}"
+        )
