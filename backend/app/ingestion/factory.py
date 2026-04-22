@@ -58,6 +58,7 @@ def _ensure_scrapers_imported() -> None:
     # noqa imports — side effects only
     from app.ingestion import (  # noqa: F401
         csv_scraper,
+        georgia_html_scraper,
         georgia_pdf_scraper,
         gulf_scraper,
         html_scraper,
