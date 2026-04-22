@@ -1,4 +1,5 @@
 import re
+from datetime import date, datetime
 from decimal import Decimal
 from io import BytesIO
 
@@ -7,6 +8,11 @@ import openpyxl
 from app.ingestion.base_scraper import BaseScraper, RawLead
 from app.ingestion.factory import register_scraper
 from app.ingestion.tls import scraper_client
+
+# Hard cap on raw XLSX byte size before we hand it to openpyxl. Even with
+# read_only=True, a crafted XLSX (zip-bomb) can exhaust worker memory at
+# load-time. Sized for the largest observed county publications plus headroom.
+MAX_XLSX_BYTES = 50 * 1024 * 1024  # 50 MiB
 
 
 @register_scraper("XlsxScraper")
@@ -32,7 +38,12 @@ class XlsxScraper(BaseScraper):
         async with scraper_client(self.source_url) as client:
             response = await client.get(self.source_url)
             response.raise_for_status()
-            return response.content
+            content = response.content
+            if len(content) > MAX_XLSX_BYTES:
+                raise ValueError(
+                    f"XLSX response exceeds {MAX_XLSX_BYTES} bytes (got {len(content)})"
+                )
+            return content
 
     def parse(self, raw_data: bytes) -> list[RawLead]:
         """Parse Excel data into leads.
@@ -61,6 +72,10 @@ class XlsxScraper(BaseScraper):
           header rows, blank spacer rows, and owner/address continuation
           rows that are common in these sheets.
         """
+        if len(raw_data) > MAX_XLSX_BYTES:
+            raise ValueError(
+                f"XLSX exceeds {MAX_XLSX_BYTES} bytes (got {len(raw_data)})"
+            )
         if self.config.get("simple_table_mode"):
             return self._parse_simple_table(raw_data)
 
@@ -126,6 +141,8 @@ class XlsxScraper(BaseScraper):
         owner_col = col_map.get("owner_name")
         addr_col = col_map.get("property_address")
         parcel_col = col_map.get("parcel_id")
+        sale_date_col = col_map.get("sale_date")
+        sale_type = self.config.get("sale_type", "tax_deed")
 
         leads: list[RawLead] = []
         wb = openpyxl.load_workbook(BytesIO(raw_data), read_only=True, data_only=True)
@@ -139,6 +156,19 @@ class XlsxScraper(BaseScraper):
                 if val and val[0] in ("=", "+", "-", "@"):
                     val = "'" + val
                 return val
+
+            def sale_date_cell(row: tuple, idx: int | None) -> str | None:
+                # openpyxl returns a datetime for date-formatted cells; emit
+                # ISO YYYY-MM-DD so downstream Lead.sale_date (Date column)
+                # parses cleanly. Plain strings pass through unchanged.
+                if idx is None or idx >= len(row) or row[idx] is None:
+                    return None
+                raw = row[idx]
+                if isinstance(raw, datetime):
+                    return raw.date().isoformat()
+                if isinstance(raw, date):
+                    return raw.isoformat()
+                return cell(row, idx) or None
 
             for row in ws.iter_rows(values_only=True):
                 case_number = cell(row, case_col)
@@ -169,7 +199,8 @@ class XlsxScraper(BaseScraper):
                         owner_name=cell(row, owner_col) or None,
                         surplus_amount=surplus_amount,
                         property_state=self.state,
-                        sale_type="tax_deed",
+                        sale_date=sale_date_cell(row, sale_date_col),
+                        sale_type=sale_type,
                         raw_data={"row": [str(c) if c is not None else "" for c in row]},
                     )
                 )
