@@ -11,11 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.billing import LLMUsage
+from app.rag.state_registry import LETTER_TEMPLATE_MAP as _STATE_TEMPLATE_MAP
 
 logger = structlog.get_logger()
 
-_TEMPLATES_DIR = Path("app/templates")
-_PROMPTS_DIR = Path("app/rag/prompts")
+_MODULE_DIR = Path(__file__).resolve().parent
+_TEMPLATES_DIR = _MODULE_DIR.parent / "templates"
+_PROMPTS_DIR = _MODULE_DIR / "prompts"
 
 _prompt_env = Environment(
     loader=FileSystemLoader(str(_PROMPTS_DIR)),
@@ -35,14 +37,8 @@ _state_template_env = Environment(
 )
 _state_template_env.filters["money"] = _money
 
-_STATE_TEMPLATE_MAP: dict[str, str] = {
-    "TX": "texas_excess_proceeds.j2",
-    "OH": "ohio_excess_proceeds.j2",
-    "CA": "california_excess_proceeds.j2",
-    "GA": "georgia_excess_proceeds.j2",
-}
-
-# Rate limit: max 10 concurrent Claude calls
+# Letters are shorter single-pass generations, so they can run at a higher
+# concurrency than contract clause generation.
 _semaphore = asyncio.Semaphore(10)
 
 
@@ -81,12 +77,20 @@ async def generate_letter_content(
     For states with a Jinja2 template (TX, OH, CA, GA), renders the template
     directly without an LLM call. Falls back to Claude for all other states.
     """
-    template_name = _STATE_TEMPLATE_MAP.get(state)
+    normalized_state = (state or "").strip().upper()
+    template_name = _STATE_TEMPLATE_MAP.get(normalized_state)
 
     if template_name:
         return await _render_state_template(session, user_id, lead_data, county_name, template_name)
 
-    return await _generate_via_claude(session, user_id, lead_data, county_name, state, letter_type)
+    return await _generate_via_claude(
+        session,
+        user_id,
+        lead_data,
+        county_name,
+        normalized_state or state,
+        letter_type,
+    )
 
 
 async def _render_state_template(

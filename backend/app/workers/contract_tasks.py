@@ -9,6 +9,7 @@ from app.models.contract import Contract
 from app.models.county import County
 from app.models.lead import Lead, UserLead
 from app.rag.contract_generator import generate_contract_content
+from app.rag.state_registry import DEFAULT_STATE
 from app.workers.celery_app import celery_app
 
 logger = structlog.get_logger()
@@ -75,7 +76,7 @@ async def _generate_contract(
         # Extract primitive values so they survive session expiry after commit.
         lead_data: dict = {}
         county_name: str = ""
-        state: str = "FL"
+        state: str = DEFAULT_STATE
 
         async with session.begin():
             result = await session.execute(
@@ -102,7 +103,7 @@ async def _generate_contract(
             if not result.scalar_one_or_none():
                 return {"error": "Lead not claimed"}
 
-            state = county_state or lead.property_state or "FL"
+            state = county_state or lead.property_state or DEFAULT_STATE
             lead_data = {
                 "case_number": lead.case_number,
                 "owner_name": lead.owner_name,
