@@ -35,7 +35,7 @@ STATE_REGISTRY: dict[str, StateRegistryEntry] = {
         contract_template="fl_recovery_agreement.j2",
         contract_context=ContractStateContext(
             state_name="Florida",
-            sale_proceeding="tax deed sale or foreclosure proceeding",
+            sale_proceeding="tax deed sale",
             surplus_statute="Fla. Stat. § 197.582",
             typical_timeline="60 to 120 days",
         ),
@@ -69,7 +69,7 @@ STATE_REGISTRY: dict[str, StateRegistryEntry] = {
         contract_context=ContractStateContext(
             state_name="Texas",
             sale_proceeding="tax sale",
-            surplus_statute="Tex. Tax Code § 34.03",
+            surplus_statute="Tex. Tax Code §§ 34.03 and 34.04",
             typical_timeline="90 to 180 days",
         ),
         letter_template="texas_excess_proceeds.j2",
@@ -79,8 +79,8 @@ STATE_REGISTRY: dict[str, StateRegistryEntry] = {
         contract_template="oh_recovery_agreement.j2",
         contract_context=ContractStateContext(
             state_name="Ohio",
-            sale_proceeding="sheriff's or tax foreclosure sale",
-            surplus_statute="Ohio Rev. Code § 2329.44",
+            sale_proceeding="tax foreclosure sale",
+            surplus_statute="Ohio Rev. Code § 5721.20",
             typical_timeline="90 to 180 days",
         ),
         letter_template="ohio_excess_proceeds.j2",

@@ -1,12 +1,12 @@
 {{ recipient_name or owner_name or "Property Owner" }}
 {{ owner_address or owner_last_known_address or "Address on file" }}
 
-Re: Possible claim for excess proceeds from an Ohio tax foreclosure or forfeited land sale
+Re: Possible claim for excess proceeds from an Ohio tax foreclosure sale
 Case / Parcel Reference: {{ parcel_id or case_number }}
 
 Dear {{ recipient_name or owner_name or "Property Owner" }},
 
-I am writing about a property in {{ county_name }} County, Ohio that may have generated excess proceeds after a tax foreclosure or forfeited land sale. Excess proceeds are the funds remaining after the county applies the sale proceeds to delinquent taxes, penalties, costs, and other amounts allowed by law. Those funds are held by the County Treasurer until someone with a valid claim comes forward.
+I am writing about a property in {{ county_name }} County, Ohio that may have generated excess proceeds after a tax foreclosure sale. Excess proceeds are the funds remaining after the county applies the sale proceeds to delinquent taxes, penalties, costs, and other amounts allowed by law.
 
 Here are the details we have from the public record:
 
@@ -14,13 +14,13 @@ Parcel / Case: {{ parcel_id or case_number }}
 Sale date: {{ sale_date or "See county records" }}
 Estimated excess proceeds: {% if surplus_amount is not none %}${{ surplus_amount|money }}{% else %}Unknown - confirm with the county{% endif %}
 
-Under Ohio Revised Code Section 5721.19(D), a former owner or junior lienholder generally has 90 days from the date the court enters its order confirming the sale to file a claim. The claim is filed by motion inside the same court case that ordered the foreclosure, not as a new lawsuit. Claims filed after the 90-day window are typically barred, and unclaimed funds are transferred to the county general fund.
+Under Ohio Revised Code Section 5721.20, after the sale is confirmed and notice is given, any residue that remains unclaimed for 90 days after final notice is paid into the county treasury. The proper owner may then demand those funds from the county treasurer for up to three years from the date the treasurer receives them.
 
-To support a claim, you will generally need to show a recorded interest in the property at the time of sale, such as a deed, mortgage, or judgment lien, along with a certified copy of the relevant recorded instrument from the county recorder. If the former owner has passed away, the estate typically needs to be opened in probate court, though some courts will accept an affidavit of heirship in limited circumstances.
+To support a claim, you will generally need to show the interest you held in the property at the time of sale and provide whatever additional documentation the county requests. Because the notice and transfer process can involve both the clerk of court and the county treasurer, it is worth confirming the current status with both offices.
 
-Ohio law does not set a statutory cap on recovery fees for this type of claim. Any fee agreement with a recovery professional should clearly state the percentage or other compensation method before you sign anything.
+If you choose to work with someone to help pursue the funds, review the fee terms carefully before signing anything.
 
-Given that claims must be filed within an active court case and deadlines are firm, we recommend speaking with an Ohio-licensed attorney if you believe you have a valid interest. We are happy to review the county records with you and explain what documentation is typically required. This letter is informational only and is not legal advice.
+Because Ohio's notice and treasury-transfer deadlines are firm, we recommend acting promptly and speaking with an Ohio-licensed attorney if you believe you have a valid interest. We are happy to review the county records with you and explain what documentation is typically required. This letter is informational only and is not legal advice.
 
 Sincerely,
 

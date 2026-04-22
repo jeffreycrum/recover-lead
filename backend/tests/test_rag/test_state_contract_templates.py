@@ -54,8 +54,8 @@ class TestSupportedStates:
         ("FL", "Florida", "Fla. Stat. § 197.582"),
         ("CA", "California", "Cal. Rev. & Tax. Code § 4675"),
         ("GA", "Georgia", "O.C.G.A. § 48-4-5"),
-        ("TX", "Texas", "Tex. Tax Code § 34.03"),
-        ("OH", "Ohio", "Ohio Rev. Code § 2329.44"),
+        ("TX", "Texas", "Tex. Tax Code §§ 34.03 and 34.04"),
+        ("OH", "Ohio", "Ohio Rev. Code § 5721.20"),
     ],
 )
 def test_placeholder_clauses_are_state_aware(
@@ -90,8 +90,8 @@ def test_placeholder_clauses_are_state_aware(
             "California Revenue and Taxation Code § 4675",
         ),
         ("GA", "Fulton", "Fulton County, Georgia", "O.C.G.A. § 48-4-5"),
-        ("TX", "Harris", "Harris County, Texas", "Texas Tax Code § 34.03"),
-        ("OH", "Cuyahoga", "Cuyahoga County, Ohio", "Ohio Revised Code § 2329.44"),
+        ("TX", "Harris", "Harris County, Texas", "Texas Tax Code §§ 34.03 and 34.04"),
+        ("OH", "Cuyahoga", "Cuyahoga County, Ohio", "Ohio Revised Code § 5721.20"),
     ],
 )
 async def test_generate_contract_content_renders_state_template(
@@ -124,6 +124,16 @@ async def test_generate_contract_content_renders_state_template(
     assert "CONTINGENCY FEE AGREEMENT" in content
     assert "30.0%" in content
     session.add.assert_not_called()
+
+    if state == "FL":
+        assert "foreclosure proceeding" not in content
+
+    if state == "TX":
+        assert "court that ordered" in content
+
+    if state == "OH":
+        assert "tax foreclosure sale" in content
+        assert "sheriff's sale" not in content
 
 
 @pytest.mark.asyncio

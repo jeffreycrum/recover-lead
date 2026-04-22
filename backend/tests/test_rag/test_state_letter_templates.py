@@ -58,7 +58,12 @@ class TestTexasTemplate:
         )
 
     def test_contains_statutory_citation(self):
-        assert "34.04" in self._rendered()
+        rendered = self._rendered()
+        assert "34.03" in rendered
+        assert "34.04" in rendered
+
+    def test_routes_claim_to_ordering_court(self):
+        assert "court that ordered the sale" in self._rendered()
 
     def test_contains_surplus_amount(self):
         assert "8,450.00" in self._rendered()
@@ -119,7 +124,10 @@ class TestOhioTemplate:
         )
 
     def test_contains_statutory_citation(self):
-        assert "5721.19" in self._rendered()
+        rendered = self._rendered()
+        assert "5721.20" in rendered
+        assert "three years" in rendered
+        assert "county general fund" not in rendered
 
     def test_contains_surplus_amount(self):
         assert "8,450.00" in self._rendered()
@@ -172,6 +180,11 @@ class TestCaliforniaTemplate:
     def test_contains_statutory_citation(self):
         assert "4671" in self._rendered()
 
+    def test_contains_direct_file_disclosure(self):
+        rendered = self._rendered()
+        assert "file directly with the county at no cost" in rendered
+        assert "13100" in rendered
+
     def test_contains_surplus_amount(self):
         assert "8,450.00" in self._rendered()
 
@@ -205,6 +218,11 @@ class TestGeorgiaTemplate:
 
     def test_contains_statutory_citation(self):
         assert "48-4-5" in self._rendered()
+
+    def test_warns_about_county_representation_rules(self):
+        rendered = self._rendered()
+        assert "Georgia-licensed attorney" in rendered
+        assert "non-attorney recovery companies" in rendered
 
     def test_contains_surplus_amount(self):
         assert "8,450.00" in self._rendered()
@@ -251,6 +269,7 @@ async def test_tx_routes_to_jinja2_not_claude(mock_session):
         )
 
     mock_anthropic.assert_not_called()
+    assert "34.03" in result
     assert "34.04" in result
     assert "8,450.00" in result
 
@@ -270,7 +289,8 @@ async def test_oh_routes_to_jinja2_not_claude(mock_session):
         )
 
     mock_anthropic.assert_not_called()
-    assert "5721.19" in result
+    assert "5721.20" in result
+    assert "three years" in result
 
 
 @pytest.mark.asyncio
@@ -289,6 +309,7 @@ async def test_ca_routes_to_jinja2_not_claude(mock_session):
 
     mock_anthropic.assert_not_called()
     assert "4671" in result
+    assert "file directly with the county at no cost" in result
 
 
 @pytest.mark.asyncio
@@ -307,6 +328,7 @@ async def test_ga_routes_to_jinja2_not_claude(mock_session):
 
     mock_anthropic.assert_not_called()
     assert "48-4-5" in result
+    assert "Georgia-licensed attorney" in result
 
 
 @pytest.mark.asyncio
