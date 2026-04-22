@@ -32,31 +32,49 @@ class GeorgiaExcessFundsPdfScraper(PdfScraper):
 
     def parse(self, raw_data: bytes) -> list[RawLead]:
         layout = (self.config.get("layout") or "").strip().lower()
-        parser = {
-            "gwinnett": self._parse_gwinnett_row,
-            "dekalb": self._parse_dekalb_row,
-            "clayton": self._parse_clayton_row,
-            "henry": self._parse_henry_row,
-            "hall": self._parse_hall_row,
-            "cobb": self._parse_cobb_row,
-        }.get(layout)
-
-        if parser is None:
+        # Each entry is (extractor, parser). Layouts that need a non-standard
+        # extraction path (e.g. Cobb has no grid lines → word-position
+        # clustering) supply both; table-based layouts share _extract_rows.
+        layouts: dict[str, tuple[Any, Any]] = {
+            "gwinnett": (self._extract_rows, self._parse_gwinnett_row),
+            "dekalb": (self._extract_rows, self._parse_dekalb_row),
+            "clayton": (self._extract_rows, self._parse_clayton_row),
+            "henry": (self._extract_rows, self._parse_henry_row),
+            "hall": (self._extract_rows, self._parse_hall_row),
+            "cobb": (self._extract_cobb_rows, self._parse_cobb_row),
+        }
+        dispatch = layouts.get(layout)
+        if dispatch is None:
             raise RuntimeError(f"{self.county_name}: unsupported Georgia PDF layout '{layout}'")
+        extractor, parser = dispatch
 
-        extractor = self._extract_cobb_rows if layout == "cobb" else self._extract_rows
         leads: list[RawLead] = []
         seen: set[tuple[str, str]] = set()
+        candidate_rows = 0
+        skipped_rows = 0
 
         for row in extractor(raw_data):
+            candidate_rows += 1
             lead = parser(row)
             if lead is None:
+                skipped_rows += 1
                 continue
             dedupe_key = (lead.case_number, str(lead.surplus_amount))
             if dedupe_key in seen:
                 continue
             seen.add(dedupe_key)
             leads.append(lead)
+
+        # Warn when parsing drops most of a PDF — a likely signal that the
+        # layout has drifted or the extractor's column boundaries are stale.
+        if candidate_rows and skipped_rows / candidate_rows > 0.5:
+            self.logger.warning(
+                "georgia_pdf_high_skip_rate",
+                layout=layout,
+                candidate_rows=candidate_rows,
+                skipped_rows=skipped_rows,
+                parsed_leads=len(leads),
+            )
 
         return leads
 
@@ -205,8 +223,16 @@ class GeorgiaExcessFundsPdfScraper(PdfScraper):
 
     @staticmethod
     def _extract_cobb_rows(raw_data: bytes) -> list[list[str]]:
+        # Import locally to avoid a circular hint and to keep the defense
+        # co-located with where it matters.
+        from app.ingestion.pdf_scraper import MAX_PDF_PAGES
+
         rows: list[list[str]] = []
         with pdfplumber.open(BytesIO(raw_data)) as pdf:
+            if len(pdf.pages) > MAX_PDF_PAGES:
+                raise ValueError(
+                    f"Cobb PDF has {len(pdf.pages)} pages, exceeds cap of {MAX_PDF_PAGES}"
+                )
             for page in pdf.pages:
                 words = page.extract_words(use_text_flow=False)
                 for line in GeorgiaExcessFundsPdfScraper._cluster_lines(words):
@@ -248,7 +274,7 @@ class GeorgiaExcessFundsPdfScraper(PdfScraper):
 
     def _parse_cobb_row(self, row: list[str]) -> RawLead | None:
         # Expected row shape: [date, purchaser, owner, parcel_id, amount, claim].
-        if len(row) < 5:
+        if len(row) < self._COBB_NUM_COLUMNS:
             return None
 
         sale_date = row[0]
