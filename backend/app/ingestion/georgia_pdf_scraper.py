@@ -21,7 +21,7 @@ from typing import Any
 
 import pdfplumber
 
-from app.ingestion.base_scraper import RawLead
+from app.ingestion.base_scraper import RawLead, sanitize_text
 from app.ingestion.factory import register_scraper
 from app.ingestion.pdf_scraper import PdfScraper
 
@@ -55,7 +55,20 @@ class GeorgiaExcessFundsPdfScraper(PdfScraper):
 
         for row in extractor(raw_data):
             candidate_rows += 1
-            lead = parser(row)
+            # Don't let a single malformed row — e.g. garbled amount or
+            # unexpected cell count from layout drift — abort the whole
+            # county parse. Log and continue.
+            try:
+                lead = parser(row)
+            except Exception as exc:
+                self.logger.warning(
+                    "georgia_pdf_row_parse_failed",
+                    layout=layout,
+                    error=str(exc),
+                    row=row,
+                )
+                skipped_rows += 1
+                continue
             if lead is None:
                 skipped_rows += 1
                 continue
@@ -242,7 +255,10 @@ class GeorgiaExcessFundsPdfScraper(PdfScraper):
                     for word in sorted(line, key=lambda w: w["x0"]):
                         col = GeorgiaExcessFundsPdfScraper._cobb_column_for(word["x0"])
                         cols[col].append(word["text"])
-                    rows.append([" ".join(c) for c in cols])
+                    # sanitize_text strips control chars, collapses whitespace,
+                    # and caps length before these cells flow into raw_data
+                    # and the downstream parser.
+                    rows.append([sanitize_text(" ".join(c)) or "" for c in cols])
         return rows
 
     @staticmethod

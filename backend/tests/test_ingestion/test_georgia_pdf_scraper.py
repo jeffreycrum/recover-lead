@@ -190,11 +190,23 @@ class TestGeorgiaExcessFundsPdfScraper:
         assert scraper._parse_cobb_row(row) is None
 
     def test_cobb_column_bucketing(self):
-        # Verify x0 → column mapping at each boundary.
+        # Verify x0 → column mapping at each boundary. Bucketing is
+        # half-open on the right (x0 < boundary → column i), so exact-
+        # threshold values land in the *next* column. Pin both near-
+        # boundary values and the exact thresholds so layout drift is
+        # caught immediately.
         col_for = GeorgiaExcessFundsPdfScraper._cobb_column_for
+        # Near-boundary values
         assert col_for(73.0) == 0    # date
         assert col_for(113.0) == 1   # purchaser
         assert col_for(295.0) == 2   # owner
         assert col_for(497.0) == 3   # parcel
         assert col_for(592.0) == 4   # amount
         assert col_for(676.0) == 5   # claim
+        # Exact threshold values (boundaries 112, 290, 490, 590, 670):
+        # x0 == boundary lands one column to the right.
+        assert col_for(112.0) == 1
+        assert col_for(290.0) == 2
+        assert col_for(490.0) == 3
+        assert col_for(590.0) == 4
+        assert col_for(670.0) == 5
