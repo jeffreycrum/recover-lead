@@ -146,3 +146,67 @@ class TestGeorgiaExcessFundsPdfScraper:
 
     def test_scraper_registered_in_factory(self):
         assert "GeorgiaExcessFundsPdfScraper" in SCRAPER_REGISTRY
+
+    def test_cobb_parser_accepts_valid_parcel(self):
+        scraper = _make_scraper("cobb")
+        row = [
+            "9/1/2020",
+            "Delmont 21 LLC",
+            "Couch Donna Jean",
+            "17-0297-0-086-0",
+            "$1,077.03",
+            "Yes",
+        ]
+        lead = scraper._parse_cobb_row(row)
+        assert lead is not None
+        assert lead.case_number == "17-0297-0-086-0"
+        assert lead.owner_name == "Couch Donna Jean"
+        assert lead.surplus_amount == Decimal("1077.03")
+        assert lead.sale_date == "9/1/2020"
+
+    def test_cobb_parser_skips_invalid_parcel(self):
+        scraper = _make_scraper("cobb")
+        # Header row — "Parcel ID" does not match the parcel regex.
+        row = [
+            "Date of Sale",
+            "Purchaser",
+            "Owner",
+            "Parcel ID",
+            "Excess Funds",
+            "",
+        ]
+        assert scraper._parse_cobb_row(row) is None
+
+    def test_cobb_parser_skips_missing_owner(self):
+        scraper = _make_scraper("cobb")
+        row = [
+            "9/1/2020",
+            "Delmont 21 LLC",
+            "",
+            "17-0297-0-086-0",
+            "$1,077.03",
+            "Yes",
+        ]
+        assert scraper._parse_cobb_row(row) is None
+
+    def test_cobb_column_bucketing(self):
+        # Verify x0 → column mapping at each boundary. Bucketing is
+        # half-open on the right (x0 < boundary → column i), so exact-
+        # threshold values land in the *next* column. Pin both near-
+        # boundary values and the exact thresholds so layout drift is
+        # caught immediately.
+        col_for = GeorgiaExcessFundsPdfScraper._cobb_column_for
+        # Near-boundary values
+        assert col_for(73.0) == 0    # date
+        assert col_for(113.0) == 1   # purchaser
+        assert col_for(295.0) == 2   # owner
+        assert col_for(497.0) == 3   # parcel
+        assert col_for(592.0) == 4   # amount
+        assert col_for(676.0) == 5   # claim
+        # Exact threshold values (boundaries 112, 290, 490, 590, 670):
+        # x0 == boundary lands one column to the right.
+        assert col_for(112.0) == 1
+        assert col_for(290.0) == 2
+        assert col_for(490.0) == 3
+        assert col_for(590.0) == 4
+        assert col_for(670.0) == 5

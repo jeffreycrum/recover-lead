@@ -11,6 +11,12 @@ from app.ingestion.tls import scraper_client
 
 logger = structlog.get_logger()
 
+# Defense-in-depth caps for PDF fetch/parse. A malicious or misconfigured CDN
+# response (or a rehosted PDF that grows unexpectedly) should fail fast instead
+# of exhausting worker memory.
+MAX_PDF_BYTES = 50 * 1024 * 1024  # 50 MiB
+MAX_PDF_PAGES = 500
+
 
 @register_scraper("PdfScraper")
 class PdfScraper(BaseScraper):
@@ -28,7 +34,12 @@ class PdfScraper(BaseScraper):
         async with scraper_client(self.source_url) as client:
             response = await client.get(self.source_url)
             response.raise_for_status()
-            return response.content
+            content = response.content
+            if len(content) > MAX_PDF_BYTES:
+                raise ValueError(
+                    f"PDF response exceeds {MAX_PDF_BYTES} bytes (got {len(content)})"
+                )
+            return content
 
     def parse(self, raw_data: bytes) -> list[RawLead]:
         """Extract leads from PDF tables using pdfplumber.

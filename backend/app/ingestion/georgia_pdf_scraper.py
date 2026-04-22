@@ -17,10 +17,11 @@ from __future__ import annotations
 import re
 from decimal import Decimal
 from io import BytesIO
+from typing import Any
 
 import pdfplumber
 
-from app.ingestion.base_scraper import RawLead
+from app.ingestion.base_scraper import RawLead, sanitize_text
 from app.ingestion.factory import register_scraper
 from app.ingestion.pdf_scraper import PdfScraper
 
@@ -31,29 +32,62 @@ class GeorgiaExcessFundsPdfScraper(PdfScraper):
 
     def parse(self, raw_data: bytes) -> list[RawLead]:
         layout = (self.config.get("layout") or "").strip().lower()
-        parser = {
-            "gwinnett": self._parse_gwinnett_row,
-            "dekalb": self._parse_dekalb_row,
-            "clayton": self._parse_clayton_row,
-            "henry": self._parse_henry_row,
-            "hall": self._parse_hall_row,
-        }.get(layout)
-
-        if parser is None:
+        # Each entry is (extractor, parser). Layouts that need a non-standard
+        # extraction path (e.g. Cobb has no grid lines → word-position
+        # clustering) supply both; table-based layouts share _extract_rows.
+        layouts: dict[str, tuple[Any, Any]] = {
+            "gwinnett": (self._extract_rows, self._parse_gwinnett_row),
+            "dekalb": (self._extract_rows, self._parse_dekalb_row),
+            "clayton": (self._extract_rows, self._parse_clayton_row),
+            "henry": (self._extract_rows, self._parse_henry_row),
+            "hall": (self._extract_rows, self._parse_hall_row),
+            "cobb": (self._extract_cobb_rows, self._parse_cobb_row),
+        }
+        dispatch = layouts.get(layout)
+        if dispatch is None:
             raise RuntimeError(f"{self.county_name}: unsupported Georgia PDF layout '{layout}'")
+        extractor, parser = dispatch
 
         leads: list[RawLead] = []
         seen: set[tuple[str, str]] = set()
+        candidate_rows = 0
+        skipped_rows = 0
 
-        for row in self._extract_rows(raw_data):
-            lead = parser(row)
+        for row in extractor(raw_data):
+            candidate_rows += 1
+            # Don't let a single malformed row — e.g. garbled amount or
+            # unexpected cell count from layout drift — abort the whole
+            # county parse. Log and continue.
+            try:
+                lead = parser(row)
+            except Exception as exc:
+                self.logger.warning(
+                    "georgia_pdf_row_parse_failed",
+                    layout=layout,
+                    error=str(exc),
+                    row=row,
+                )
+                skipped_rows += 1
+                continue
             if lead is None:
+                skipped_rows += 1
                 continue
             dedupe_key = (lead.case_number, str(lead.surplus_amount))
             if dedupe_key in seen:
                 continue
             seen.add(dedupe_key)
             leads.append(lead)
+
+        # Warn when parsing drops most of a PDF — a likely signal that the
+        # layout has drifted or the extractor's column boundaries are stale.
+        if candidate_rows and skipped_rows / candidate_rows > 0.5:
+            self.logger.warning(
+                "georgia_pdf_high_skip_rate",
+                layout=layout,
+                candidate_rows=candidate_rows,
+                skipped_rows=skipped_rows,
+                parsed_leads=len(leads),
+            )
 
         return leads
 
@@ -183,5 +217,98 @@ class GeorgiaExcessFundsPdfScraper(PdfScraper):
             property_address=row[4],
             property_city=row[5],
             sale_date=row[0],
+            raw_row=row,
+        )
+
+    # ─── Cobb ─────────────────────────────────────────────────────────────────
+    #
+    # Cobb publishes a PDF that pdfplumber.extract_tables() cannot segment into
+    # rows because there are no grid lines. The columns are spatially stable, so
+    # we cluster extracted words by Y coordinate into rows and then bucket each
+    # word by X coordinate into one of six columns.
+
+    # X-boundaries (PDF units) separating the 6 Cobb columns. Words with
+    # x0 < the first threshold go to column 0; words with x0 between threshold
+    # i-1 and i go to column i; words above the last threshold go to column 5.
+    _COBB_X_BOUNDARIES = (112, 290, 490, 590, 670)
+    _COBB_NUM_COLUMNS = len(_COBB_X_BOUNDARIES) + 1
+    _COBB_PARCEL_RE = re.compile(r"^\d{2}-\d{4}-\d-\d{3}-\d$")
+
+    @staticmethod
+    def _extract_cobb_rows(raw_data: bytes) -> list[list[str]]:
+        # Import locally to avoid a circular hint and to keep the defense
+        # co-located with where it matters.
+        from app.ingestion.pdf_scraper import MAX_PDF_PAGES
+
+        rows: list[list[str]] = []
+        with pdfplumber.open(BytesIO(raw_data)) as pdf:
+            if len(pdf.pages) > MAX_PDF_PAGES:
+                raise ValueError(
+                    f"Cobb PDF has {len(pdf.pages)} pages, exceeds cap of {MAX_PDF_PAGES}"
+                )
+            for page in pdf.pages:
+                words = page.extract_words(use_text_flow=False)
+                for line in GeorgiaExcessFundsPdfScraper._cluster_lines(words):
+                    cols: list[list[str]] = [
+                        [] for _ in range(GeorgiaExcessFundsPdfScraper._COBB_NUM_COLUMNS)
+                    ]
+                    for word in sorted(line, key=lambda w: w["x0"]):
+                        col = GeorgiaExcessFundsPdfScraper._cobb_column_for(word["x0"])
+                        cols[col].append(word["text"])
+                    # sanitize_text strips control chars, collapses whitespace,
+                    # and caps length before these cells flow into raw_data
+                    # and the downstream parser.
+                    rows.append([sanitize_text(" ".join(c)) or "" for c in cols])
+        return rows
+
+    @staticmethod
+    def _cluster_lines(
+        words: list[dict[str, Any]], y_tolerance: float = 3.0
+    ) -> list[list[dict[str, Any]]]:
+        lines: list[list[dict[str, Any]]] = []
+        current: list[dict[str, Any]] = []
+        current_top: float | None = None
+        for word in sorted(words, key=lambda w: w["top"]):
+            if current_top is None or abs(word["top"] - current_top) <= y_tolerance:
+                current.append(word)
+                if current_top is None:
+                    current_top = word["top"]
+            else:
+                lines.append(current)
+                current = [word]
+                current_top = word["top"]
+        if current:
+            lines.append(current)
+        return lines
+
+    @staticmethod
+    def _cobb_column_for(x0: float) -> int:
+        for i, boundary in enumerate(GeorgiaExcessFundsPdfScraper._COBB_X_BOUNDARIES):
+            if x0 < boundary:
+                return i
+        return len(GeorgiaExcessFundsPdfScraper._COBB_X_BOUNDARIES)
+
+    def _parse_cobb_row(self, row: list[str]) -> RawLead | None:
+        # Expected row shape: [date, purchaser, owner, parcel_id, amount, claim].
+        if len(row) < self._COBB_NUM_COLUMNS:
+            return None
+
+        sale_date = row[0]
+        owner_name = row[2]
+        parcel_id = row[3]
+        amount = row[4]
+
+        # Header row ("Date of Sale" / "Parcel ID") and footer row
+        # ("(770) 528-8600" / "www.cobbtax.gov") never match the parcel regex.
+        if not self._COBB_PARCEL_RE.match(parcel_id):
+            return None
+        if not owner_name:
+            return None
+
+        return self._build_lead(
+            case_number=parcel_id,
+            owner_name=owner_name,
+            surplus_amount=amount,
+            sale_date=sale_date,
             raw_row=row,
         )
