@@ -123,18 +123,36 @@ class TestBuildAddressDict:
         assert _build_address_dict(request) is None
 
     def test_build_address_dict_drops_short_state(self):
-        """State string shorter than 2 chars must be excluded from the dict."""
+        """Short state alone doesn't satisfy (city+state) OR zip — drop address."""
         request = SkipTraceLookupRequest(address="123 Main St", city="Tampa", state="F")
-        result = _build_address_dict(request)
-        assert result is not None
-        assert "state" not in result
+        assert _build_address_dict(request) is None
 
     def test_build_address_dict_drops_short_city(self):
-        """City string shorter than 3 chars must be excluded from the dict."""
+        """Short city alone doesn't satisfy (city+state) OR zip — drop address."""
         request = SkipTraceLookupRequest(address="123 Main St", city="LA", state="CA")
+        assert _build_address_dict(request) is None
+
+    def test_build_address_dict_zip_only_is_valid(self):
+        """Street + valid zipcode alone satisfies Skip Sherpa's rule."""
+        request = SkipTraceLookupRequest(
+            address="123 Main St", city="", state="", zip_code="33601"
+        )
         result = _build_address_dict(request)
         assert result is not None
+        assert result["street"] == "123 Main St"
+        assert result["zipcode"] == "33601"
         assert "city" not in result
+        assert "state" not in result
+
+    def test_build_address_dict_street_only_is_dropped(self):
+        """Street with no city/state/zip must drop the address (Skip Sherpa 400s)."""
+        request = SkipTraceLookupRequest(
+            address="29432 SILVERADO CANYON RD SILVERADO",
+            city="",
+            state="",
+            zip_code="",
+        )
+        assert _build_address_dict(request) is None
 
     def test_build_address_dict_full_valid(self):
         """All fields valid must return a complete dict."""
@@ -152,11 +170,9 @@ class TestBuildAddressDict:
         assert result["zipcode"] == "33601"
 
     def test_build_address_dict_omits_short_zip(self):
-        """Zip codes shorter than 5 chars must be excluded."""
+        """Short zip + state-only (no city) fails Skip Sherpa's rule — drop address."""
         request = SkipTraceLookupRequest(address="123 Main St", state="FL", zip_code="336")
-        result = _build_address_dict(request)
-        assert result is not None
-        assert "zipcode" not in result
+        assert _build_address_dict(request) is None
 
 
 # ---------------------------------------------------------------------------

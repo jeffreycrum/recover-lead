@@ -87,10 +87,11 @@ def _looks_like_business(name: str) -> bool:
 def _build_address_dict(request: SkipTraceLookupRequest) -> dict | None:
     """Build a Skip Sherpa address dict.
 
-    Skip Sherpa requires `street` whenever a mailing address is provided
-    and validates min length >= 3 on string fields. If we don't have a
-    street, return None so the caller omits the address entirely and
-    falls back to a name-only lookup.
+    Skip Sherpa requires `street` plus either (`city` AND `state`) OR
+    `zipcode`, and validates min length on string fields. When the
+    available fields don't satisfy that rule, return None so the caller
+    omits the address entirely and falls back to a name-only lookup
+    instead of letting Skip Sherpa 400 the whole request.
     """
     if not request.address or len(request.address) < 3:
         return None
@@ -102,6 +103,12 @@ def _build_address_dict(request: SkipTraceLookupRequest) -> dict | None:
         addr["state"] = request.state
     if request.zip_code and len(request.zip_code) >= 5:
         addr["zipcode"] = request.zip_code
+
+    has_city_state = "city" in addr and "state" in addr
+    has_zip = "zipcode" in addr
+    if not (has_city_state or has_zip):
+        return None
+
     return addr
 
 
