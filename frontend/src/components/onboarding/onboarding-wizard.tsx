@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@clerk/clerk-react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useCounties } from "@/hooks/use-subscription";
 import { formatCurrency } from "@/lib/utils";
@@ -28,6 +29,7 @@ const secondaryButtonClass =
 export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
   const { getToken } = useAuth();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { data: counties } = useCounties();
   const [step, setStep] = useState<Step>("county");
   const [_selectedCounty, setSelectedCounty] = useState<string | null>(null);
@@ -104,6 +106,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
           setGeneratedLetterId(taskResult.letter_id);
         }
       }
+      qc.invalidateQueries({ queryKey: ["letters"] });
       setStep("done");
     } catch {
       setStep("done");

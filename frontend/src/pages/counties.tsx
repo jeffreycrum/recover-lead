@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useCounties } from "@/hooks/use-subscription";
 import { formatDate } from "@/lib/utils";
 import { Map, Phone, Mail, ExternalLink } from "lucide-react";
@@ -51,7 +52,7 @@ export function CountiesPage() {
 
       <ProductCard heading="Filters" bodyClassName="pt-4">
         <Select
-          value={stateFilter || allValue}
+          value={stateFilter || undefined}
           onValueChange={(value) => setStateFilter(!value || value === allValue ? "" : value)}
         >
           <SelectTrigger className="h-10 w-full max-w-[220px] rounded-full border-[var(--lt-line)] bg-[var(--lt-surface)] px-4 text-[var(--lt-text)] hover:bg-[var(--lt-surface-2)]">
@@ -82,64 +83,78 @@ export function CountiesPage() {
             <section key={state} className="space-y-3">
               <StateGroupLabel label={state} count={countiesInState.length} />
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {countiesInState.map((county: any) => (
-                  <ProductCard
-                    key={county.id}
-                    heading={county.name}
-                    subtitle={`${county.state} · ${county.source_type?.toUpperCase() || "—"}`}
-                    className="transition-transform hover:-translate-y-0.5"
-                  >
-                    <div className="mb-4 flex items-center justify-between gap-3">
-                      <CountyChip variant={county.is_active ? "active" : "pending"}>
-                        {county.is_active ? "Active county" : "Request data"}
-                      </CountyChip>
-                      <MonoCell tone="emerald">{(county.lead_count ?? 0).toLocaleString()}</MonoCell>
-                    </div>
-
-                    <div className="space-y-2 text-sm text-[var(--lt-text-muted)]">
-                      <p>State: {county.state}</p>
-                      <p>Source: {county.source_type?.toUpperCase() || "—"}</p>
-                      <p>Last scraped: {formatDate(county.last_scraped_at)}</p>
-                    </div>
-
-                    {!county.is_active && (county.contact_phone || county.contact_email || safeSourceUrl(county.source_url)) && (
-                      <div className="mt-4 space-y-2 border-t border-[var(--lt-line)] pt-4">
-                        <p className="text-xs font-medium uppercase tracking-[0.12em] text-[var(--lt-text-dim)]">
-                          Request data
-                        </p>
-                        {safeSourceUrl(county.source_url) && (
-                          <a
-                            href={safeSourceUrl(county.source_url)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 text-sm text-[var(--lt-text)] transition-colors hover:text-[var(--lt-emerald)]"
-                          >
-                            <ExternalLink size={13} />
-                            Clerk website
-                          </a>
-                        )}
-                        {county.contact_phone && (
-                          <a
-                            href={`tel:${county.contact_phone.replace(/[^\d+]/g, "")}`}
-                            className="flex items-center gap-1.5 text-sm text-[var(--lt-text)] transition-colors hover:text-[var(--lt-emerald)]"
-                          >
-                            <Phone size={13} />
-                            {county.contact_phone}
-                          </a>
-                        )}
-                        {county.contact_email && (
-                          <a
-                            href={`mailto:${county.contact_email}`}
-                            className="flex items-center gap-1.5 text-sm text-[var(--lt-text)] transition-colors hover:text-[var(--lt-emerald)]"
-                          >
-                            <Mail size={13} />
-                            {county.contact_email}
-                          </a>
-                        )}
+                {countiesInState.map((county: any) => {
+                  const card = (
+                    <ProductCard
+                      heading={county.name}
+                      subtitle={`${county.state} · ${county.source_type?.toUpperCase() || "—"}`}
+                      className="transition-transform hover:-translate-y-0.5"
+                    >
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <CountyChip variant={county.is_active ? "active" : "pending"}>
+                          {county.is_active ? "Active county" : "Request data"}
+                        </CountyChip>
+                        <MonoCell tone="emerald">{(county.lead_count ?? 0).toLocaleString()}</MonoCell>
                       </div>
-                    )}
-                  </ProductCard>
-                ))}
+
+                      <div className="space-y-2 text-sm text-[var(--lt-text-muted)]">
+                        <p>State: {county.state}</p>
+                        <p>Source: {county.source_type?.toUpperCase() || "—"}</p>
+                        <p>Last scraped: {formatDate(county.last_scraped_at)}</p>
+                      </div>
+
+                      {!county.is_active && (county.contact_phone || county.contact_email || safeSourceUrl(county.source_url)) && (
+                        <div className="mt-4 space-y-2 border-t border-[var(--lt-line)] pt-4">
+                          <p className="text-xs font-medium uppercase tracking-[0.12em] text-[var(--lt-text-dim)]">
+                            Request data
+                          </p>
+                          {safeSourceUrl(county.source_url) && (
+                            <a
+                              href={safeSourceUrl(county.source_url)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1.5 text-sm text-[var(--lt-text)] transition-colors hover:text-[var(--lt-emerald)]"
+                            >
+                              <ExternalLink size={13} />
+                              Clerk website
+                            </a>
+                          )}
+                          {county.contact_phone && (
+                            <a
+                              href={`tel:${county.contact_phone.replace(/[^\d+]/g, "")}`}
+                              className="flex items-center gap-1.5 text-sm text-[var(--lt-text)] transition-colors hover:text-[var(--lt-emerald)]"
+                            >
+                              <Phone size={13} />
+                              {county.contact_phone}
+                            </a>
+                          )}
+                          {county.contact_email && (
+                            <a
+                              href={`mailto:${county.contact_email}`}
+                              className="flex items-center gap-1.5 text-sm text-[var(--lt-text)] transition-colors hover:text-[var(--lt-emerald)]"
+                            >
+                              <Mail size={13} />
+                              {county.contact_email}
+                            </a>
+                          )}
+                        </div>
+                      )}
+                    </ProductCard>
+                  );
+
+                  if (county.is_active && (county.lead_count ?? 0) > 0) {
+                    return (
+                      <Link
+                        key={county.id}
+                        to={`/leads?property_state=${encodeURIComponent(county.state)}&county_id=${encodeURIComponent(county.id)}`}
+                        className="block"
+                      >
+                        {card}
+                      </Link>
+                    );
+                  }
+                  return <div key={county.id}>{card}</div>;
+                })}
               </div>
             </section>
           ))}

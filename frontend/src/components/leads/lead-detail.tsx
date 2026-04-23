@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLead, useClaimLead, useReleaseLead, useQualifyLead } from "@/hooks/use-leads";
 import { useTaskPoller } from "@/hooks/use-task-poller";
@@ -9,7 +10,7 @@ import { SkipTraceResults } from "./skip-trace-results";
 import { ActivityTimeline } from "./activity-timeline";
 import { DealOutcomeDialog } from "./deal-outcome-dialog";
 import { EyebrowTag, MonoCell, StatusPill } from "@/components/landing-chrome";
-import { X, MapPin, User, DollarSign, Search, Loader2 } from "lucide-react";
+import { X, MapPin, User, DollarSign, Search, Loader2, FileSignature } from "lucide-react";
 
 interface LeadDetailProps {
   leadId: string;
@@ -23,6 +24,7 @@ const secondaryButtonClass =
 
 export function LeadDetail({ leadId, onClose }: LeadDetailProps) {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const { data: lead, isLoading } = useLead(leadId);
   const claimMutation = useClaimLead();
   const releaseMutation = useReleaseLead();
@@ -168,6 +170,14 @@ export function LeadDetail({ leadId, onClose }: LeadDetailProps) {
                 ) : (
                   "Qualify with AI"
                 )}
+              </button>
+              <button
+                onClick={() => navigate(`/contracts?lead_id=${encodeURIComponent(leadId)}`)}
+                className={secondaryButtonClass}
+              >
+                <span className="flex items-center gap-1.5">
+                  <FileSignature size={14} /> Generate Contract
+                </span>
               </button>
               <button
                 onClick={() => releaseMutation.mutate(leadId)}

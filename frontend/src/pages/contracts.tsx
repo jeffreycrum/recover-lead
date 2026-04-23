@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@clerk/clerk-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useMyLeads } from "@/hooks/use-leads";
 import { EmptyState } from "@/components/common/empty-state";
 import { formatDate } from "@/lib/utils";
 import { FileSignature, Download, Check, Plus } from "lucide-react";
@@ -36,12 +38,12 @@ interface GenerateFormState {
   lead_id: string;
   fee_percentage: string;
   agent_name: string;
-  contract_type: string;
 }
 
 export function ContractsPage() {
   const { getToken } = useAuth();
   const qc = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     api.setTokenFn(getToken);
@@ -58,9 +60,24 @@ export function ContractsPage() {
     lead_id: "",
     fee_percentage: "25",
     agent_name: "",
-    contract_type: "recovery_agreement",
   });
   const [genError, setGenError] = useState<string | null>(null);
+
+  const { data: myLeadsData } = useMyLeads({});
+  const myLeads: any[] = myLeadsData?.items ?? [];
+  const selectedLead = myLeads.find((l) => l.lead_id === genForm.lead_id);
+
+  // Open dialog with a pre-selected lead when navigated with ?lead_id=...
+  useEffect(() => {
+    const preselectId = searchParams.get("lead_id");
+    if (preselectId) {
+      setGenForm((form) => ({ ...form, lead_id: preselectId }));
+      setShowGenDialog(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("lead_id");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [allContracts, setAllContracts] = useState<any[]>([]);
   const knownContractIdsRef = useRef<Set<string>>(new Set());
@@ -110,7 +127,6 @@ export function ContractsPage() {
         lead_id: "",
         fee_percentage: "25",
         agent_name: "",
-        contract_type: "recovery_agreement",
       });
       setGenError(null);
       knownContractIdsRef.current = new Set(allContracts.map((contract: any) => contract.id));
@@ -173,13 +189,13 @@ export function ContractsPage() {
   const handleGenerate = () => {
     setGenError(null);
     const feeNum = parseFloat(genForm.fee_percentage);
-    if (!genForm.lead_id.trim()) return setGenError("Lead ID is required");
+    if (!genForm.lead_id.trim()) return setGenError("Please select a lead");
     if (isNaN(feeNum) || feeNum < 0 || feeNum > 100) return setGenError("Fee must be 0–100");
     if (!genForm.agent_name.trim()) return setGenError("Agent name is required");
 
     generateMutation.mutate({
       lead_id: genForm.lead_id.trim(),
-      contract_type: genForm.contract_type,
+      contract_type: "recovery_agreement",
       fee_percentage: feeNum,
       agent_name: genForm.agent_name.trim(),
     });
@@ -345,16 +361,37 @@ export function ContractsPage() {
               before sending.
             </p>
             <div className="space-y-2">
-              <Label htmlFor="lead-id">Lead ID</Label>
-              <Input
-                id="lead-id"
-                placeholder="Paste the lead UUID"
-                value={genForm.lead_id}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setGenForm((form) => ({ ...form, lead_id: e.target.value }))
-                }
-                className={inputClass}
-              />
+              <Label htmlFor="lead-id">Lead</Label>
+              {myLeads.length > 0 ? (
+                <Select
+                  value={genForm.lead_id || undefined}
+                  onValueChange={(value) =>
+                    setGenForm((form) => ({ ...form, lead_id: value ?? "" }))
+                  }
+                >
+                  <SelectTrigger
+                    id="lead-id"
+                    className="border-[var(--lt-line)] bg-[rgba(7,11,21,0.75)] text-[var(--lt-text)]"
+                  >
+                    <SelectValue placeholder="Select a claimed lead">
+                      {selectedLead
+                        ? `Case #${selectedLead.case_number} — ${selectedLead.owner_name || "Unknown"} (${selectedLead.county_name})`
+                        : undefined}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[260px] border border-[var(--lt-line)] bg-[var(--lt-surface)] text-[var(--lt-text)]">
+                    {myLeads.map((l) => (
+                      <SelectItem key={l.lead_id} value={l.lead_id}>
+                        Case #{l.case_number} — {l.owner_name || "Unknown"} ({l.county_name})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="text-sm text-[var(--lt-text-muted)]">
+                  Claim a lead first — only your claimed leads are eligible for contracts.
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="agent-name">Your Name (Agent)</Label>
@@ -383,25 +420,17 @@ export function ContractsPage() {
                 className={inputClass}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="contract-type">Contract Type</Label>
-              <Select
-                value={genForm.contract_type}
-                onValueChange={(value) =>
-                  setGenForm((form) => ({
-                    ...form,
-                    contract_type: value ?? form.contract_type,
-                  }))
-                }
-              >
-                <SelectTrigger id="contract-type" className="border-[var(--lt-line)] bg-[rgba(7,11,21,0.75)] text-[var(--lt-text)]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="border border-[var(--lt-line)] bg-[var(--lt-surface)] text-[var(--lt-text)]">
-                  <SelectItem value="recovery_agreement">FL Recovery Agreement</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {selectedLead && (
+              <div className="space-y-1">
+                <Label>Contract Template</Label>
+                <p className="text-sm text-[var(--lt-text-muted)]">
+                  Recovery Agreement — auto-selected for{" "}
+                  <span className="font-medium text-[var(--lt-text)]">
+                    {selectedLead.property_state || "—"}
+                  </span>
+                </p>
+              </div>
+            )}
             {genError && <p className="text-sm text-[#fca5a5]">{genError}</p>}
             <div className="rounded-[18px] border border-[rgba(245,158,11,0.16)] bg-[var(--lt-amber-dim)] p-3 text-xs text-[#fcd34d]">
               Review all contract content carefully before approving. This is not legal advice.
