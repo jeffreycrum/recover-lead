@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { EmptyState } from "@/components/common/empty-state";
 import { formatDate } from "@/lib/utils";
-import { FileText, Download, Trash2, Check, Plus, Send } from "lucide-react";
+import { FileText, Download, Trash2, Check, Plus, Send, RefreshCw } from "lucide-react";
 import { LetterBatchDialog } from "@/components/letters/letter-batch-dialog";
 import { MailDialog } from "@/components/letters/mail-dialog";
 import { EyebrowTag, MonoCell, ProductCard, StatusPill } from "@/components/landing-chrome";
@@ -33,9 +33,12 @@ export function LettersPage() {
   const [selectedLetter, setSelectedLetter] = useState<any>(null);
   const [editContent, setEditContent] = useState("");
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ["letters"],
     queryFn: () => api.getLetters(),
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
   });
 
   const { data: me } = useQuery({
@@ -87,12 +90,23 @@ export function LettersPage() {
             Generate, approve, and mail outbound outreach from one queue
           </p>
         </div>
-        <button
-          onClick={() => setShowBatchDialog(true)}
-          className={primaryButtonClass}
-        >
-          <Plus size={16} /> Batch Generate
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className={secondaryButtonClass}
+            aria-label="Refresh letters"
+          >
+            <RefreshCw size={14} className={isFetching ? "animate-spin" : ""} />
+            Refresh
+          </button>
+          <button
+            onClick={() => setShowBatchDialog(true)}
+            className={primaryButtonClass}
+          >
+            <Plus size={16} /> Batch Generate
+          </button>
+        </div>
       </div>
 
       <LetterBatchDialog open={showBatchDialog} onClose={() => setShowBatchDialog(false)} />

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useBrowseLeads, useClaimLead } from "@/hooks/use-leads";
 import { useCounties } from "@/hooks/use-subscription";
 import { LeadTable } from "@/components/leads/lead-table";
@@ -17,11 +18,30 @@ import {
 
 export function LeadsPage() {
   const allValue = "__all__";
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedLead, setSelectedLead] = useState<string | null>(null);
-  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [filters, setFilters] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    const state = searchParams.get("property_state");
+    const countyId = searchParams.get("county_id");
+    if (state) initial.property_state = state;
+    if (countyId) initial.county_id = countyId;
+    return initial;
+  });
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const [allLeads, setAllLeads] = useState<any[]>([]);
   const appendRef = useRef(false);
+
+  // Clear the URL once the filter state is seeded so a page reload
+  // doesn't re-apply stale params after the user changes filters.
+  useEffect(() => {
+    if (searchParams.has("property_state") || searchParams.has("county_id")) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("property_state");
+      next.delete("county_id");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const { data, isLoading } = useBrowseLeads(
     cursor ? { ...filters, cursor } : filters,
@@ -82,7 +102,7 @@ export function LeadsPage() {
       <ProductCard heading="Filters" bodyClassName="pt-4">
         <div className="flex flex-wrap gap-3">
           <Select
-            value={filters.property_state || allValue}
+            value={filters.property_state || undefined}
             onValueChange={(value) =>
               updateFilter((f) => {
                 const { county_id: _dropped, ...rest } = f;
@@ -106,7 +126,7 @@ export function LeadsPage() {
           </Select>
 
           <Select
-            value={filters.county_id || allValue}
+            value={filters.county_id || undefined}
             onValueChange={(value) =>
               updateFilter((f) => {
                 const { county_id: _dropped, ...rest } = f;
@@ -115,7 +135,11 @@ export function LeadsPage() {
             }
           >
             <SelectTrigger className={selectTriggerClass}>
-              <SelectValue placeholder="All Counties" />
+              <SelectValue placeholder="All Counties">
+                {filters.county_id
+                  ? (visibleCounties.find((c: any) => c.id === filters.county_id)?.name ?? "County")
+                  : undefined}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent className={selectContentClass}>
               <SelectItem value={allValue} className={selectItemClass}>
@@ -155,7 +179,7 @@ export function LeadsPage() {
           />
 
           <Select
-            value={filters.sale_type || allValue}
+            value={filters.sale_type || undefined}
             onValueChange={(value) =>
               updateFilter((f) => {
                 const { sale_type: _dropped, ...rest } = f;

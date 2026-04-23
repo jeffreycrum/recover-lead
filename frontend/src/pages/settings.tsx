@@ -202,7 +202,6 @@ export function SettingsPage() {
                 <li>{plan.qualifications} qualifications</li>
                 <li>{plan.letters} letters</li>
                 <li>{plan.skipTraces} skip traces</li>
-                <li>All FL counties</li>
               </ul>
               {plan.plan && sub?.plan !== plan.plan && (
                 <button

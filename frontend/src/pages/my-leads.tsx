@@ -56,7 +56,7 @@ export function MyLeadsPage() {
       <ProductCard heading="Filters" bodyClassName="pt-4">
         <div className="flex flex-wrap gap-3">
           <Select
-            value={filters.status || allValue}
+            value={filters.status || undefined}
             onValueChange={(value) =>
               setFilters((f) => {
                 const { status: _dropped, ...rest } = f;
