@@ -9,6 +9,7 @@ interface Lead {
   id: string;
   county_name: string;
   case_number: string;
+  parcel_id?: string | null;
   property_address: string | null;
   property_city: string | null;
   surplus_amount: number;
@@ -109,6 +110,9 @@ export function LeadTable({
               <Th col="owner_name" label="Owner" />
               <Th col="surplus_amount" label="Surplus" align="right" />
               <th className={cn(headerCellClass, "text-left")}>
+                <span className="mono">Parcel / APN</span>
+              </th>
+              <th className={cn(headerCellClass, "text-left")}>
                 <span className="mono">Property</span>
               </th>
               <Th col="sale_date" label="Sale Date" />
@@ -141,6 +145,15 @@ export function LeadTable({
                   <MonoCell size="md" tone="emerald">
                     {formatCurrency(lead.surplus_amount)}
                   </MonoCell>
+                </td>
+                <td className="px-4 py-3.5">
+                  {lead.parcel_id ? (
+                    <MonoCell size="sm" tone="muted">
+                      {lead.parcel_id}
+                    </MonoCell>
+                  ) : (
+                    <span className="text-[var(--lt-text-muted)]">—</span>
+                  )}
                 </td>
                 <td className="px-4 py-3.5 text-[var(--lt-text-muted)]">
                   {lead.property_address

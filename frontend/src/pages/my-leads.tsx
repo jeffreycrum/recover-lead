@@ -26,6 +26,7 @@ export function MyLeadsPage() {
       id: item.lead_id,
       county_name: item.county_name,
       case_number: item.case_number,
+      parcel_id: item.parcel_id,
       property_address: item.property_address,
       property_city: item.property_city,
       surplus_amount: item.surplus_amount,
