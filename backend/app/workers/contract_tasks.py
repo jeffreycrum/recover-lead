@@ -1,5 +1,6 @@
 import asyncio
 import uuid
+from typing import Any
 
 import structlog
 from sqlalchemy import select
@@ -8,6 +9,7 @@ from app.db.engine import async_session_factory
 from app.models.contract import Contract
 from app.models.county import County
 from app.models.lead import Lead, UserLead
+from app.models.skip_trace import SkipTraceResult
 from app.rag.contract_generator import generate_contract_content
 from app.rag.state_registry import DEFAULT_STATE
 from app.workers.celery_app import celery_app
@@ -63,6 +65,46 @@ def generate_contract_task(
         raise
 
 
+def _format_address_dict(addr: Any) -> str | None:
+    """Compose a one-line mailing address from a skip-trace address dict.
+
+    Accepts {street, city, state, zip_code} with any subset populated.
+    Returns a comma-formatted string or None if there's nothing usable.
+    """
+    if not isinstance(addr, dict):
+        return None
+    street = (addr.get("street") or "").strip()
+    city = (addr.get("city") or "").strip()
+    state = (addr.get("state") or "").strip()
+    zip_code = (addr.get("zip_code") or addr.get("zip") or "").strip()
+    if not (street or city or state or zip_code):
+        return None
+    city_state_zip = " ".join(p for p in [f"{city}," if city else "", state, zip_code] if p).strip()
+    parts = [p for p in [street, city_state_zip] if p]
+    return ", ".join(parts) if parts else None
+
+
+def _resolve_claimant_address(
+    skip_trace: SkipTraceResult | None, fallback: str | None
+) -> str | None:
+    """Pick the best-known mailing address for the contract CLAIMANT block.
+
+    Priority order:
+    1. Most recent skip-trace result's first person's mailing_address
+    2. The scraper's owner_last_known_address (rarely populated)
+    3. None — caller falls back to property_address in the template
+    """
+    if skip_trace and isinstance(skip_trace.persons, list) and skip_trace.persons:
+        first_person = skip_trace.persons[0]
+        if isinstance(first_person, dict):
+            formatted = _format_address_dict(first_person.get("mailing_address"))
+            if formatted:
+                return formatted
+    if fallback and fallback.strip():
+        return fallback.strip()
+    return None
+
+
 async def _generate_contract(
     user_id: str,
     lead_id: str,
@@ -104,12 +146,33 @@ async def _generate_contract(
                 return {"error": "Lead not claimed"}
 
             state = county_state or lead.property_state or DEFAULT_STATE
+
+            # Prefer the most recent skip-trace mailing address for this
+            # lead+user; fall back to the scraper's owner_last_known_address
+            # if no skip trace has been run. Falls back to None — the
+            # template then uses property_address so the contract still
+            # renders with *something* in the CLAIMANT block.
+            st_result = await session.execute(
+                select(SkipTraceResult)
+                .where(
+                    SkipTraceResult.lead_id == uuid.UUID(lead_id),
+                    SkipTraceResult.user_id == uuid.UUID(user_id),
+                )
+                .order_by(SkipTraceResult.created_at.desc())
+                .limit(1)
+            )
+            latest_skip_trace = st_result.scalar_one_or_none()
+            claimant_address = _resolve_claimant_address(
+                latest_skip_trace, lead.owner_last_known_address
+            )
+
             lead_data = {
                 "case_number": lead.case_number,
                 "owner_name": lead.owner_name,
                 "property_address": lead.property_address,
                 "property_city": lead.property_city,
                 "surplus_amount": lead.surplus_amount,
+                "claimant_address": claimant_address,
             }
         # Phase 1 transaction committed; DB connection returned to pool.
 

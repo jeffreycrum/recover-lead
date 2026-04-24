@@ -99,6 +99,7 @@ async def generate_contract_content(
         case_number=lead_data.get("case_number"),
         owner_name=lead_data.get("owner_name"),
         property_address=lead_data.get("property_address"),
+        claimant_address=lead_data.get("claimant_address"),
         surplus_amount=lead_data.get("surplus_amount") or 0,
         county_name=county_name,
         agent_name=agent_name,

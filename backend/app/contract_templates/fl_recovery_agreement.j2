@@ -8,7 +8,7 @@ AGENT: {{ agent_name }}
 and
 
 CLAIMANT: {{ owner_name or "Property Owner / Heir" }}
-Last Known Address: {{ property_address or "Address on File" }}
+Last Known Address: {{ claimant_address or property_address or "Address on File" }}
 ("Client")
 
 RECITALS
