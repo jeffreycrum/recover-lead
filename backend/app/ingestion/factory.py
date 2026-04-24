@@ -68,7 +68,11 @@ def _ensure_scrapers_imported() -> None:
 
     # Cloudscraper is optional — import separately so missing dep doesn't break
     try:
-        from app.ingestion import cloudscraper_html, cloudscraper_xlsx  # noqa: F401
+        from app.ingestion import (  # noqa: F401
+            cloudscraper_html,
+            cloudscraper_xlsx,
+            riverside_proceedings,
+        )
     except ModuleNotFoundError as exc:
         if exc.name and exc.name.startswith("cloudscraper"):
             logger.debug("cloudscraper_not_available")
