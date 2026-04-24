@@ -235,10 +235,16 @@ async def get_lead(
     )
     user_lead = ul_result.scalar_one_or_none()
 
-    # Load skip trace results for this lead (shared across all claimants)
+    # Load skip trace results for this lead (shared across all claimants).
+    # Include both hit and miss so the user can see *why* the cooldown is
+    # active when a previous lookup found no contact info — otherwise the
+    # UI shows an empty section while the cooldown error blocks retries.
     st_result = await session.execute(
         select(SkipTraceResult)
-        .where(SkipTraceResult.lead_id == lead_id, SkipTraceResult.status == "hit")
+        .where(
+            SkipTraceResult.lead_id == lead_id,
+            SkipTraceResult.status.in_(("hit", "miss")),
+        )
         .order_by(SkipTraceResult.created_at.desc())
         .limit(5)
     )
