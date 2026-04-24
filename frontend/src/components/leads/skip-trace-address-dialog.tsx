@@ -67,11 +67,16 @@ export function SkipTraceAddressDialog({
   const [parcel, setParcel] = useState("");
 
   // Re-seed whenever the dialog opens against a different lead so a
-  // second attempt doesn't inherit stale values.
+  // second attempt doesn't inherit stale values. Scraped fields like
+  // "SITUS NA, CITY" (Orange CA) are placeholders meaning "no address
+  // on record" — clearing them instead of pre-filling forces the user
+  // to type real data rather than accidentally submit the placeholder.
   useEffect(() => {
     if (!open) return;
+    const rawStreet = (lead.property_address || "").trim();
+    const streetIsPlaceholder = /^SITUS\s*NA\b/i.test(rawStreet);
     setMode("address");
-    setStreet((lead.property_address || "").trim());
+    setStreet(streetIsPlaceholder ? "" : rawStreet);
     setCity((lead.property_city || "").trim());
     setState((lead.property_state || "").trim().toUpperCase());
     setZip((lead.property_zip || "").trim());
