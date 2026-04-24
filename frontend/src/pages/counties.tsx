@@ -16,15 +16,16 @@ import {
 export function CountiesPage() {
   const allValue = "__all__";
   const [stateFilter, setStateFilter] = useState("");
+  const [hideEmpty, setHideEmpty] = useState(true);
   const { data: counties, isLoading } = useCounties();
 
   const allStates = Array.from(
     new Set((counties ?? []).map((c: any) => c.state as string))
   ).sort();
 
-  const visibleCounties = stateFilter
-    ? (counties ?? []).filter((c: any) => c.state === stateFilter)
-    : (counties ?? []);
+  const visibleCounties = (counties ?? [])
+    .filter((c: any) => !stateFilter || c.state === stateFilter)
+    .filter((c: any) => !hideEmpty || (c.lead_count ?? 0) > 0);
 
   const stateGroups = visibleCounties.reduce<Record<string, any[]>>((groups, county: any) => {
     const key = county.state || "Unknown";
@@ -51,28 +52,39 @@ export function CountiesPage() {
       </div>
 
       <ProductCard heading="Filters" bodyClassName="pt-4">
-        <Select
-          value={stateFilter || undefined}
-          onValueChange={(value) => setStateFilter(!value || value === allValue ? "" : value)}
-        >
-          <SelectTrigger className="h-10 w-full max-w-[220px] rounded-full border-[var(--lt-line)] bg-[var(--lt-surface)] px-4 text-[var(--lt-text)] hover:bg-[var(--lt-surface-2)]">
-            <SelectValue placeholder="All States" />
-          </SelectTrigger>
-          <SelectContent className="border border-[var(--lt-line)] bg-[var(--lt-surface)] text-[var(--lt-text)] shadow-[0_18px_50px_-24px_rgba(0,0,0,0.8)]">
-            <SelectItem value={allValue} className="text-[var(--lt-text)] focus:bg-[var(--lt-surface-2)] focus:text-[var(--lt-text)]">
-              All States
-            </SelectItem>
-            {allStates.map((s) => (
-              <SelectItem
-                key={s}
-                value={s}
-                className="text-[var(--lt-text)] focus:bg-[var(--lt-surface-2)] focus:text-[var(--lt-text)]"
-              >
-                {s}
+        <div className="flex flex-wrap items-center gap-3">
+          <Select
+            value={stateFilter || undefined}
+            onValueChange={(value) => setStateFilter(!value || value === allValue ? "" : value)}
+          >
+            <SelectTrigger className="h-10 w-full max-w-[220px] rounded-full border-[var(--lt-line)] bg-[var(--lt-surface)] px-4 text-[var(--lt-text)] hover:bg-[var(--lt-surface-2)]">
+              <SelectValue placeholder="All States" />
+            </SelectTrigger>
+            <SelectContent className="border border-[var(--lt-line)] bg-[var(--lt-surface)] text-[var(--lt-text)] shadow-[0_18px_50px_-24px_rgba(0,0,0,0.8)]">
+              <SelectItem value={allValue} className="text-[var(--lt-text)] focus:bg-[var(--lt-surface-2)] focus:text-[var(--lt-text)]">
+                All States
               </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+              {allStates.map((s) => (
+                <SelectItem
+                  key={s}
+                  value={s}
+                  className="text-[var(--lt-text)] focus:bg-[var(--lt-surface-2)] focus:text-[var(--lt-text)]"
+                >
+                  {s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[var(--lt-line)] bg-[var(--lt-surface)] px-4 py-2 text-sm text-[var(--lt-text)] hover:bg-[var(--lt-surface-2)]">
+            <input
+              type="checkbox"
+              checked={hideEmpty}
+              onChange={(e) => setHideEmpty(e.target.checked)}
+              className="h-4 w-4 accent-[var(--lt-emerald)]"
+            />
+            Hide counties with no leads
+          </label>
+        </div>
       </ProductCard>
 
       {isLoading ? (
@@ -163,8 +175,20 @@ export function CountiesPage() {
         <ProductCard bodyClassName="py-10">
           <EmptyState
             icon={<Map size={48} />}
-            title={stateFilter ? `No counties found for ${stateFilter}` : "No counties available"}
-            description={stateFilter ? "Try selecting a different state." : "County data is being loaded. Check back shortly."}
+            title={
+              hideEmpty && (counties ?? []).length > 0
+                ? "No counties with leads match this filter"
+                : stateFilter
+                ? `No counties found for ${stateFilter}`
+                : "No counties available"
+            }
+            description={
+              hideEmpty && (counties ?? []).length > 0
+                ? "Uncheck \"Hide counties with no leads\" to see pending counties."
+                : stateFilter
+                ? "Try selecting a different state."
+                : "County data is being loaded. Check back shortly."
+            }
             className="text-[var(--lt-text)]"
           />
         </ProductCard>
