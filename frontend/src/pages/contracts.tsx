@@ -420,17 +420,6 @@ export function ContractsPage() {
                 className={inputClass}
               />
             </div>
-            {selectedLead && (
-              <div className="space-y-1">
-                <Label>Contract Template</Label>
-                <p className="text-sm text-[var(--lt-text-muted)]">
-                  Recovery Agreement — auto-selected for{" "}
-                  <span className="font-medium text-[var(--lt-text)]">
-                    {selectedLead.property_state || "—"}
-                  </span>
-                </p>
-              </div>
-            )}
             {genError && <p className="text-sm text-[#fca5a5]">{genError}</p>}
             <div className="rounded-[18px] border border-[rgba(245,158,11,0.16)] bg-[var(--lt-amber-dim)] p-3 text-xs text-[#fcd34d]">
               Review all contract content carefully before approving. This is not legal advice.
