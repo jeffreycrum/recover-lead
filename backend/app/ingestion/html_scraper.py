@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from bs4 import BeautifulSoup
 
-from app.ingestion.base_scraper import BaseScraper, RawLead
+from app.ingestion.base_scraper import BaseScraper, RawLead, sanitize_text
 from app.ingestion.factory import register_scraper
 from app.ingestion.tls import scraper_client
 
@@ -76,7 +76,7 @@ class HtmlTableScraper(BaseScraper):
             property_address = row[col_address].strip() if len(row) > col_address else None
             parcel_id: str | None = None
             if col_parcel is not None and len(row) > col_parcel:
-                parcel_id = row[col_parcel].strip() or None
+                parcel_id = sanitize_text(row[col_parcel])
 
             surplus_amount = self._parse_amount(surplus_str)
 

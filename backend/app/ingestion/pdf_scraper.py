@@ -5,7 +5,7 @@ from io import BytesIO
 import pdfplumber
 import structlog
 
-from app.ingestion.base_scraper import BaseScraper, RawLead
+from app.ingestion.base_scraper import BaseScraper, RawLead, sanitize_text
 from app.ingestion.factory import register_scraper
 from app.ingestion.tls import scraper_client
 
@@ -173,7 +173,15 @@ class PdfScraper(BaseScraper):
                 "owner_last_known_address",
             }:
                 continue
-            value = (groups.get(group_name) or "").strip() or None
+            raw_value = groups.get(group_name) or ""
+            # sanitize_text strips control chars and caps length; use it
+            # for parcel_id so PDF extraction artifacts don't flow into
+            # the DB as garbage.
+            value = (
+                sanitize_text(raw_value)
+                if field_name == "parcel_id"
+                else (raw_value.strip() or None)
+            )
             if value is not None:
                 kwargs[field_name] = value
 
@@ -217,7 +225,7 @@ class PdfScraper(BaseScraper):
             )
             parcel_id: str | None = None
             if parcel_col is not None and parcel_col < len(row):
-                parcel_id = (row[parcel_col] or "").strip() or None
+                parcel_id = sanitize_text(row[parcel_col] or "")
 
             surplus_amount = self._parse_amount(surplus_str)
 

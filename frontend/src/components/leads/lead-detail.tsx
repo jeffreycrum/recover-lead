@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLead, useClaimLead, useReleaseLead, useQualifyLead } from "@/hooks/use-leads";
 import { useTaskPoller } from "@/hooks/use-task-poller";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -242,12 +242,15 @@ function SkipTraceSection({
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const { data: results = [] } = useQuery<any[]>({
-    queryKey: ["skip-trace", leadId],
-    queryFn: () => Promise.resolve(skipTraceResults || []),
-    initialData: skipTraceResults || [],
-    staleTime: Infinity,
-  });
+  // Source of truth: the parent lead-detail query (already fetched).
+  // Previously used a synthetic useQuery with staleTime: Infinity +
+  // initialData, which silently held onto stale data across re-mounts
+  // for the same leadId. Local state seeded from the prop avoids that
+  // trap and prepends new mutation results cleanly.
+  const [results, setResults] = useState<any[]>(skipTraceResults || []);
+  useEffect(() => {
+    setResults(skipTraceResults || []);
+  }, [skipTraceResults]);
 
   const mutation = useMutation({
     mutationFn: (payload: {
@@ -255,10 +258,11 @@ function SkipTraceSection({
       city?: string;
       state?: string;
       zip_code?: string;
+      parcel_number?: string;
       name_only: boolean;
     }) => api.skipTraceLead(leadId, payload),
     onSuccess: (data) => {
-      qc.setQueryData(["skip-trace", leadId], (old: any[] = []) => [data, ...old]);
+      setResults((prev) => [data, ...prev]);
       qc.invalidateQueries({ queryKey: ["leads", leadId] });
       setDialogOpen(false);
     },

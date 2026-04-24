@@ -57,99 +57,142 @@ depends_on: str | Sequence[str] | None = None
 # Per-county config deltas. Each entry is (name, state, up_fn, down_fn)
 # operating on a Python dict of the existing config.
 
-def _set_col_parcel_5_and_skip_address(cfg: dict) -> dict:
+class MigrationDriftError(RuntimeError):
+    """Raised when the pre-image of a county config diverges from what
+    this migration was authored against. Fail loudly instead of silently
+    overwriting fields another migration may have introduced.
+    """
+
+
+def _assert(cond: bool, name: str, detail: str) -> None:
+    if not cond:
+        raise MigrationDriftError(
+            f"{name}: pre-image drift — {detail}. Resolve manually before upgrading."
+        )
+
+
+def _set_col_parcel_5_and_skip_address(name: str, cfg: dict) -> dict:
     """RealTDM pattern: col_address repurposed for parcel → move to col_parcel, skip address."""
+    _assert(cfg.get("col_address") == 5, name, f"expected col_address=5, got {cfg.get('col_address')!r}")
+    _assert("col_parcel" not in cfg, name, "col_parcel already set — another migration reshaped this config")
     new = dict(cfg)
     new["col_parcel"] = 5
     new["col_address"] = 99
     return new
 
 
-def _undo_col_parcel_5_and_skip_address(cfg: dict) -> dict:
+def _undo_col_parcel_5_and_skip_address(name: str, cfg: dict) -> dict:
+    _assert(cfg.get("col_parcel") == 5, name, f"expected col_parcel=5, got {cfg.get('col_parcel')!r}")
     new = dict(cfg)
     new.pop("col_parcel", None)
     new["col_address"] = 5
     return new
 
 
-def _santa_clara_up(cfg: dict) -> dict:
+def _santa_clara_up(name: str, cfg: dict) -> dict:
+    columns = cfg.get("columns") or {}
+    _assert("parcel_id" not in columns, name, "columns.parcel_id already set")
+    _assert(columns.get("case_number") == 1, name, "expected columns.case_number=1 (APN/ASMNT)")
     new = dict(cfg)
-    columns = dict(new.get("columns") or {})
-    columns["parcel_id"] = 1  # APN/ASMNT column
-    new["columns"] = columns
+    new_columns = dict(columns)
+    new_columns["parcel_id"] = 1  # APN/ASMNT column
+    new["columns"] = new_columns
     return new
 
 
-def _santa_clara_down(cfg: dict) -> dict:
+def _santa_clara_down(name: str, cfg: dict) -> dict:
     new = dict(cfg)
-    columns = dict(new.get("columns") or {})
-    columns.pop("parcel_id", None)
-    new["columns"] = columns
+    new_columns = dict(new.get("columns") or {})
+    new_columns.pop("parcel_id", None)
+    new["columns"] = new_columns
     return new
 
 
-def _baker_up(cfg: dict) -> dict:
-    new = dict(cfg)
-    new["line_pattern"] = (
-        r"^(?P<case>\d{4}-TD-\d+)\s+(?P<parcel>\S+)\s+\$\s*(?P<amt>[\d,]+\.\d{2})"
+_BAKER_OLD_PATTERN = r"^(?P<case>\d{4}-TD-\d+)\s+\S+\s+\$\s*(?P<amt>[\d,]+\.\d{2})"
+_BAKER_NEW_PATTERN = (
+    r"^(?P<case>\d{4}-TD-\d+)\s+(?P<parcel>\S+)\s+\$\s*(?P<amt>[\d,]+\.\d{2})"
+)
+
+
+def _baker_up(name: str, cfg: dict) -> dict:
+    _assert(
+        cfg.get("line_pattern") == _BAKER_OLD_PATTERN,
+        name,
+        f"line_pattern drift; expected known pre-image, got {cfg.get('line_pattern')!r}",
     )
+    new = dict(cfg)
+    new["line_pattern"] = _BAKER_NEW_PATTERN
     return new
 
 
-def _baker_down(cfg: dict) -> dict:
-    new = dict(cfg)
-    new["line_pattern"] = (
-        r"^(?P<case>\d{4}-TD-\d+)\s+\S+\s+\$\s*(?P<amt>[\d,]+\.\d{2})"
+def _baker_down(name: str, cfg: dict) -> dict:
+    _assert(
+        cfg.get("line_pattern") == _BAKER_NEW_PATTERN,
+        name,
+        f"line_pattern drift; cannot revert, got {cfg.get('line_pattern')!r}",
     )
+    new = dict(cfg)
+    new["line_pattern"] = _BAKER_OLD_PATTERN
     return new
 
 
-def _desoto_up(cfg: dict) -> dict:
+def _desoto_up(name: str, cfg: dict) -> dict:
+    columns = cfg.get("columns") or {}
+    _assert(columns.get("property_address") == 2, name, "expected columns.property_address=2 (mis-mapped parcel col)")
+    _assert("parcel_id" not in columns, name, "columns.parcel_id already set")
     new = dict(cfg)
-    columns = dict(new.get("columns") or {})
-    columns["parcel_id"] = 2
+    new_columns = dict(columns)
+    new_columns["parcel_id"] = 2
     # The pre-existing property_address: 2 was a bug — column 2 is parcel.
-    columns.pop("property_address", None)
-    new["columns"] = columns
+    new_columns.pop("property_address", None)
+    new["columns"] = new_columns
     return new
 
 
-def _desoto_down(cfg: dict) -> dict:
+def _desoto_down(name: str, cfg: dict) -> dict:
+    columns = cfg.get("columns") or {}
+    _assert(columns.get("parcel_id") == 2, name, "expected columns.parcel_id=2")
     new = dict(cfg)
-    columns = dict(new.get("columns") or {})
-    columns.pop("parcel_id", None)
-    columns["property_address"] = 2
-    new["columns"] = columns
+    new_columns = dict(columns)
+    new_columns.pop("parcel_id", None)
+    new_columns["property_address"] = 2
+    new["columns"] = new_columns
     return new
 
 
 def _simple_add_columns_parcel(idx: int):
     """Factory: add ``columns.parcel_id: idx`` (and remove on downgrade)."""
 
-    def up(cfg: dict) -> dict:
+    def up(name: str, cfg: dict) -> dict:
+        columns = cfg.get("columns") or {}
+        _assert("parcel_id" not in columns, name, "columns.parcel_id already set")
         new = dict(cfg)
-        columns = dict(new.get("columns") or {})
-        columns["parcel_id"] = idx
-        new["columns"] = columns
+        new_columns = dict(columns)
+        new_columns["parcel_id"] = idx
+        new["columns"] = new_columns
         return new
 
-    def down(cfg: dict) -> dict:
+    def down(name: str, cfg: dict) -> dict:
+        columns = cfg.get("columns") or {}
+        _assert(columns.get("parcel_id") == idx, name, f"expected columns.parcel_id={idx}")
         new = dict(cfg)
-        columns = dict(new.get("columns") or {})
-        columns.pop("parcel_id", None)
-        new["columns"] = columns
+        new_columns = dict(columns)
+        new_columns.pop("parcel_id", None)
+        new["columns"] = new_columns
         return new
 
     return up, down
 
 
-def _taylor_up(cfg: dict) -> dict:
+def _taylor_up(name: str, cfg: dict) -> dict:
+    _assert("col_parcel" not in cfg, name, "col_parcel already set")
     new = dict(cfg)
     new["col_parcel"] = 2
     return new
 
 
-def _taylor_down(cfg: dict) -> dict:
+def _taylor_down(name: str, cfg: dict) -> dict:
+    _assert(cfg.get("col_parcel") == 2, name, f"expected col_parcel=2, got {cfg.get('col_parcel')!r}")
     new = dict(cfg)
     new.pop("col_parcel", None)
     return new
@@ -185,8 +228,13 @@ def _apply(name: str, state: str, transform) -> None:
     current_cfg = row[0] or {}
     # Column type is JSON — pgasync hands us a dict, psycopg a string.
     if isinstance(current_cfg, str):
-        current_cfg = json.loads(current_cfg) if current_cfg else {}
-    new_cfg = transform(current_cfg)
+        try:
+            current_cfg = json.loads(current_cfg) if current_cfg else {}
+        except json.JSONDecodeError as e:
+            raise RuntimeError(
+                f"{name}, {state}: existing config is not valid JSON — {e}"
+            ) from e
+    new_cfg = transform(name, current_cfg)
     result = conn.execute(
         sa.text(
             "UPDATE counties "
