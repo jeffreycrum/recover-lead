@@ -1,9 +1,11 @@
 import asyncio
 import hashlib
 import json as _json
+import re
 import uuid
 from decimal import Decimal
 
+import sqlalchemy as sa
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
@@ -43,7 +45,7 @@ from app.schemas.lead import (
     SkipTraceResultSummary,
     UserLeadResponse,
 )
-from app.schemas.skip_trace import BulkSkipTraceRequest
+from app.schemas.skip_trace import BulkSkipTraceRequest, SkipTraceRequest
 from app.services.lead_service import (
     claim_lead,
     record_activity,
@@ -235,10 +237,16 @@ async def get_lead(
     )
     user_lead = ul_result.scalar_one_or_none()
 
-    # Load skip trace results for this lead (shared across all claimants)
+    # Load skip trace results for this lead (shared across all claimants).
+    # Include both hit and miss so the user can see *why* the cooldown is
+    # active when a previous lookup found no contact info — otherwise the
+    # UI shows an empty section while the cooldown error blocks retries.
     st_result = await session.execute(
         select(SkipTraceResult)
-        .where(SkipTraceResult.lead_id == lead_id, SkipTraceResult.status == "hit")
+        .where(
+            SkipTraceResult.lead_id == lead_id,
+            SkipTraceResult.status.in_(("hit", "miss")),
+        )
         .order_by(SkipTraceResult.created_at.desc())
         .limit(5)
     )
@@ -710,11 +718,22 @@ def _is_cache_hit(row) -> bool:
 @router.post("/{lead_id}/skip-trace", dependencies=[Depends(require_rate_limit)])
 async def skip_trace(
     lead_id: uuid.UUID,
+    request: Request,
+    req: SkipTraceRequest | None = None,
     session: AsyncSession = Depends(get_async_session),
     user: User = Depends(get_current_user),
 ) -> dict:
-    """Run real-time skip trace for a lead via Tracerfy."""
-    from datetime import timedelta
+    """Run real-time skip trace for a lead.
+
+    Optional request body (``SkipTraceRequest``) lets the caller override
+    individual address fields — used when the scraped address is
+    incomplete and the user has supplied missing city/state/zip via the
+    frontend dialog. Any field left None falls back to the lead's
+    stored value.
+
+    Supports an ``Idempotency-Key`` request header so network retries /
+    duplicate submissions don't double-charge credits.
+    """
     from decimal import Decimal
 
     from app.models.skip_trace import SkipTraceResult
@@ -729,6 +748,37 @@ async def skip_trace(
     from app.services.skip_trace import SkipTraceLookupRequest
     from app.services.skip_trace.factory import get_skip_trace_provider
 
+    # Pydantic coerces None from a missing body into the default — but when
+    # FastAPI receives "{}" we get an empty SkipTraceRequest object. Both
+    # cases should behave identically: no overrides.
+    req = req or SkipTraceRequest()
+
+    # Idempotency: a failed claim (key in use) or cached response is
+    # handled up-front so nothing below runs twice for the same retry.
+    idem_key = get_idempotency_key(request)
+    scoped_key: str | None = None
+    if idem_key:
+        body_hash = hashlib.sha256(
+            _json.dumps(req.model_dump(), sort_keys=True, default=str).encode()
+        ).hexdigest()[:16]
+        scoped_key = f"{user.id}:POST/leads/{lead_id}/skip-trace:{idem_key}:{body_hash}"
+        cached = await get_cached_response(scoped_key)
+        if cached:
+            return JSONResponse(status_code=cached["status_code"], content=cached["body"])
+        claimed = await claim_idempotency_key(scoped_key)
+        if not claimed:
+            await asyncio.sleep(0.5)
+            cached = await get_cached_response(scoped_key)
+            if cached:
+                return JSONResponse(status_code=cached["status_code"], content=cached["body"])
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "IDEMPOTENCY_CONFLICT",
+                    "message": "Another skip-trace with the same idempotency key is in progress",
+                },
+            )
+
     # Verify claimed
     result = await session.execute(
         select(UserLead).where(
@@ -737,35 +787,21 @@ async def skip_trace(
         )
     )
     if not result.scalar_one_or_none():
+        if scoped_key:
+            await release_idempotency_key(scoped_key)
         raise NotFoundError("Claimed lead")
 
-    # Block re-trace if any claimant ran it within the last 7 days
-    from datetime import UTC
-    from datetime import datetime as _dt
-    week_ago = _dt.now(UTC).replace(tzinfo=None) - timedelta(days=7)
-    recent = await session.execute(
-        select(SkipTraceResult.id)
-        .where(
-            SkipTraceResult.lead_id == lead_id,
-            SkipTraceResult.created_at >= week_ago,
-        )
-        .limit(1)
-    )
-    if recent.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail={
-                "code": "SKIP_TRACE_COOLDOWN",
-                "message": (
-                    "This lead was traced in the last 7 days. "
-                    "Results are shared with all claimants."
-                ),
-            },
-        )
+    # No per-lead cooldown — a single user may want to run multiple
+    # lookups (e.g. address mode + name-only) to gather different
+    # results, and the credit reservation below already prevents
+    # runaway cost. Past results for this lead remain visible in the
+    # lead-detail response so users can see what's been tried.
 
     # Reserve credit
     reservation = await reserve_usage(session, user.id, "skip_trace", count=1)
     if not reservation.allowed:
+        if scoped_key:
+            await release_idempotency_key(scoped_key)
         raise InsufficientCreditsError()
 
     # Load lead data
@@ -776,22 +812,95 @@ async def skip_trace(
     # Call configured skip trace provider
     from app.config import settings as _settings
 
-    provider_name = (_settings.skip_trace_provider or "tracerfy").lower().strip()
+    raw_provider = (_settings.skip_trace_provider or "").lower().strip()
+    # Allowlist so a misconfigured env var can't land arbitrary strings
+    # in the SkipTraceResult.provider column.
+    provider_name = raw_provider if raw_provider in {"tracerfy", "skipsherpa"} else "skipsherpa"
+
+    parcel_number = (req.parcel_number or "").strip() or (lead.parcel_id or "").strip()
+    # Parcel and name-only modes both skip address validation. Parcel
+    # mode is currently equivalent to name-only at the provider layer
+    # (SkipSherpa has no parcel field), but we record the parcel in the
+    # result's raw_data so a future parcel-aware provider can be wired
+    # in without a schema change.
+    parcel_mode = bool(req.parcel_number and parcel_number)
+
+    if req.name_only or parcel_mode:
+        # Name-based lookups still need a non-empty owner name — without
+        # one the provider receives blank first/last and returns
+        # garbage. Frontend's dialog guards this; mirror on the API so
+        # direct callers can't skip it.
+        if not (lead.owner_name or "").strip():
+            release_reservation(user.id, "skip_trace", 1, reservation.period_start_iso)
+            if scoped_key:
+                await release_idempotency_key(scoped_key)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "OWNER_NAME_MISSING",
+                    "message": (
+                        "Skip trace by name / parcel requires an owner name "
+                        "on the lead."
+                    ),
+                },
+            )
+        override_street = ""
+        override_city = ""
+        override_state = ""
+        override_zip = ""
+    else:
+        # Address mode: merge user overrides with lead data (user wins)
+        # and enforce SkipSherpa's completeness rule. Reject 400 if not
+        # satisfied — name-only / parcel are explicit choices, not a
+        # silent fallback that burns credits on thousands of false
+        # matches.
+        override_street = (req.street or "").strip() or (lead.property_address or "").strip()
+        override_city = (req.city or "").strip() or (lead.property_city or "").strip()
+        override_state = (req.state or "").strip() or (lead.property_state or "").strip()
+        override_zip = (req.zip_code or "").strip() or (lead.property_zip or "").strip()
+
+        has_city_state = bool(override_city) and bool(override_state)
+        has_zip = len(override_zip) >= 5
+        # Orange CA (and similar) publish street blobs like "SITUS NA,
+        # CITY" as a placeholder meaning "no property address on
+        # record". Treat as incomplete so the user is forced to provide
+        # real data or switch modes.
+        street_placeholder = bool(re.match(r"^\s*SITUS\s*NA\b", override_street, re.I))
+        if not (len(override_street) >= 3 and (has_city_state or has_zip)) or street_placeholder:
+            release_reservation(user.id, "skip_trace", 1, reservation.period_start_iso)
+            if scoped_key:
+                await release_idempotency_key(scoped_key)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "ADDRESS_INCOMPLETE",
+                    "message": (
+                        "Skip trace requires a complete, real address: "
+                        "street plus either (city AND state) or a 5+ digit "
+                        "zip code. Placeholder streets like 'SITUS NA' are "
+                        "rejected. Pass name_only=true or a parcel_number "
+                        "to do a name / parcel lookup instead."
+                    ),
+                },
+            )
+
     try:
         provider = get_skip_trace_provider()
         lookup_result = await provider.lookup(
             SkipTraceLookupRequest(
                 first_name=(lead.owner_name or "").split()[0] if lead.owner_name else "",
                 last_name=(lead.owner_name or "").split()[-1] if lead.owner_name else "",
-                address=lead.property_address or "",
-                city=lead.property_city or "",
-                state=lead.property_state or "FL",
-                zip_code=lead.property_zip or "",
+                address=override_street,
+                city=override_city,
+                state=override_state,
+                zip_code=override_zip,
                 find_owner=True,
             )
         )
     except Exception as e:
         release_reservation(user.id, "skip_trace", 1, reservation.period_start_iso)
+        if scoped_key:
+            await release_idempotency_key(scoped_key)
         logger.error("skip_trace_failed", lead_id=str(lead_id), error=str(e))
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -834,13 +943,25 @@ async def skip_trace(
         for p in lookup_result.persons
     ]
 
+    # Capture lookup-mode metadata so audits / a future parcel-aware
+    # provider can reconstruct what was asked. Intentionally excludes
+    # the typed address fields — those are already on the Lead record,
+    # and per CLAUDE.md skip-trace contact data is flagged for
+    # encryption in Phase 2, so we avoid duplicating PII into this blob.
+    # Parcel numbers are public APNs (not PII) and are useful for audit.
+    raw_with_request = dict(lookup_result.raw or {})
+    raw_with_request["__recoverlead_request"] = {
+        "mode": "parcel" if parcel_mode else ("name_only" if req.name_only else "address"),
+        "parcel_number": parcel_number if parcel_mode else None,
+    }
+
     skip_result = SkipTraceResult(
         lead_id=lead_id,
         user_id=user.id,
         provider=provider_name,
         status=status_val,
         persons=persons_data,
-        raw_response=lookup_result.raw,
+        raw_response=raw_with_request,
         hit_count=len(lookup_result.persons),
         cost=cost,
     )
@@ -880,18 +1001,21 @@ async def skip_trace(
 
         await record_overage_usage(session, user.id, "skip_trace")
 
-    # Deduct from credits
-    from app.models.billing import SkipTraceCredits
+    # Deduct from credits atomically — read-then-write is racy under
+    # concurrent lookups for the same user. Only deduct on a hit (miss
+    # and error are free).
+    if lookup_result.hit:
+        await session.execute(
+            sa.text(
+                "UPDATE skip_trace_credits "
+                "SET credits_remaining = GREATEST(credits_remaining - 1, 0), "
+                "    credits_used_this_month = credits_used_this_month + 1 "
+                "WHERE user_id = :uid AND credits_remaining > 0"
+            ),
+            {"uid": user.id},
+        )
 
-    credits_result = await session.execute(
-        select(SkipTraceCredits).where(SkipTraceCredits.user_id == user.id)
-    )
-    credits = credits_result.scalar_one_or_none()
-    if credits and lookup_result.hit:
-        credits.credits_remaining = max(0, credits.credits_remaining - 1)
-        credits.credits_used_this_month += 1
-
-    return SkipTraceResultResponse(
+    response = SkipTraceResultResponse(
         id=skip_result.id,
         lead_id=lead_id,
         provider=provider_name,
@@ -928,6 +1052,11 @@ async def skip_trace(
         cost=float(cost),
         created_at=skip_result.created_at,
     ).model_dump()
+
+    if scoped_key:
+        await cache_response(scoped_key, status.HTTP_200_OK, response)
+
+    return response
 
 
 @router.get("/{lead_id}/activities", response_model=CursorPage)
