@@ -59,7 +59,7 @@ SOURCE_URL = "https://media.rivcocob.org/proceeds/"
 # usually posted within a few days.
 SCRAPE_SCHEDULE = "15 4 * * 6"
 CONFIG: dict = {
-    "base_url": "https://media.rivcocob.org/proceeds/",
+    "base_url": SOURCE_URL,
     "notes": (
         "Walks media.rivcocob.org/proceeds/{year}/ directory indexes via "
         "cloudscraper, parses each meeting HTML, emits one lead per APPROVED "

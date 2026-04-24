@@ -30,15 +30,28 @@ from __future__ import annotations
 
 import asyncio
 import re
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 from app.ingestion.base_scraper import BaseScraper, RawLead
-from app.ingestion.cloudscraper_fetch import CloudscraperFetchMixin
+from app.ingestion.cloudscraper_fetch import MAX_CLOUDSCRAPER_BYTES, CloudscraperFetchMixin
 from app.ingestion.factory import register_scraper
 
 PROCEEDS_BASE_URL = "https://media.rivcocob.org/proceeds/"
+
+# Sentinel framing for the multi-document fetch → parse pipeline.
+# _blocking_fetch_all writes these around each meeting's HTML; parse()
+# splits on them to recover the meeting date from the filename without
+# a second fetch.
+SENTINEL_OPEN = "<!-- riverside-meeting: "
+SENTINEL_CLOSE = " -->\n"
+SENTINEL_END = "\n<!-- /riverside-meeting -->\n"
+
+# Upper bound on meetings fetched per year. The Riverside Board meets
+# weekly-ish, so ~50/year is normal. Anything above 60 is either a
+# directory-listing bug or a compromised index; cap and log.
+MAX_MEETINGS_PER_YEAR = 60
 
 # Match an excess-proceeds agenda item.  The proceedings HTML is Word-
 # exported and full of formatting tags; we always run on text with tags
@@ -54,11 +67,15 @@ EP_ITEM_RE = re.compile(
     r"TREASURER-TAX\s+COLLECTOR\s*:\s*"
     r"Public\s+Hearing\s+on\s+the\s+Recommendation\s+for\s+Distribution\s+of\s+"
     r"Excess\s+Proceeds\s+for\s+Tax\s+Sale\s+No\.\s*(?P<sale_no>\d+)\s*,\s*"
-    r"Items?\s+(?P<item_no>[\d,\s&amp;and]+?)\s*\.\s*"
-    r"Last\s+assessed\s+to\s*:\s*(?P<owner>.+?)\.\s*"
+    # _parse_meeting decodes &amp; → & before applying this regex, so the
+    # class only needs the decoded characters.
+    r"Items?\s+(?P<item_no>[\d,\s&]+?)\s*\.\s*"
+    # Bound lazy captures so a malformed document can't trigger catastrophic
+    # backtracking across the entire meeting body.
+    r"Last\s+assessed\s+to\s*:\s*(?P<owner>.{1,200}?)\.\s*"
     r"District\s+(?P<district>\d+)\s*\.\s*"
     r"\[\$(?P<amount>[\d,]+)[^\]]*\]\s*"
-    r"\((?P<status>[^)]+)\)",
+    r"\((?P<status>[^)]{1,100})\)",
     re.IGNORECASE | re.DOTALL,
 )
 
@@ -87,7 +104,7 @@ class RiversideProceedingsScraper(CloudscraperFetchMixin, BaseScraper):
         self,
         county_name: str,
         source_url: str,
-        state: str = "FL",
+        state: str = "CA",
         config: dict | None = None,
     ):
         super().__init__(county_name, state)
@@ -110,56 +127,94 @@ class RiversideProceedingsScraper(CloudscraperFetchMixin, BaseScraper):
     def _blocking_fetch_all(self) -> bytes:
         import cloudscraper
 
+        # SSRF guard — base_url comes from DB config and a compromised /
+        # malicious operator entry could otherwise point this at internal
+        # services or the cloud metadata endpoint.
+        allowed_netloc = urlparse(PROCEEDS_BASE_URL).netloc
+        parsed = urlparse(self.base_url)
+        if parsed.scheme != "https" or parsed.netloc != allowed_netloc:
+            raise ValueError(
+                f"Riverside base_url must be https on {allowed_netloc!r}; "
+                f"got {self.base_url!r}"
+            )
+
         scraper = cloudscraper.create_scraper(
             browser={"browser": "chrome", "platform": "darwin", "mobile": False}
         )
-        years = self.config.get("years") or self._default_years()
+        try:
+            years = self.config.get("years") or self._default_years()
 
-        chunks: list[bytes] = []
-        for year in years:
-            year_url = urljoin(self.base_url, f"{year}/")
-            try:
-                idx_resp = scraper.get(year_url, timeout=60)
-                idx_resp.raise_for_status()
-            except Exception as e:
-                self.logger.warning(
-                    "riverside_year_index_failed", year=year, error=str(e)
-                )
-                continue
-
-            for meeting_date, meeting_url in self._enumerate_meetings(
-                idx_resp.text, year_url
-            ):
+            chunks: list[bytes] = []
+            for year in years:
+                year_url = urljoin(self.base_url, f"{year}/")
                 try:
-                    m_resp = scraper.get(meeting_url, timeout=60)
-                    m_resp.raise_for_status()
+                    idx_resp = scraper.get(year_url, timeout=60)
+                    idx_resp.raise_for_status()
                 except Exception as e:
                     self.logger.warning(
-                        "riverside_meeting_fetch_failed",
-                        url=meeting_url,
-                        error=str(e),
+                        "riverside_year_index_failed", year=year, error=str(e)
                     )
                     continue
-                chunks.append(
-                    f"<!-- riverside-meeting: {meeting_date.isoformat()} -->\n".encode()
-                )
-                chunks.append(m_resp.content)
-                chunks.append(b"\n<!-- /riverside-meeting -->\n")
 
-        return b"".join(chunks)
+                meetings = self._enumerate_meetings(
+                    idx_resp.text, year_url, base_url=self.base_url
+                )
+                if len(meetings) > MAX_MEETINGS_PER_YEAR:
+                    self.logger.warning(
+                        "riverside_excessive_meetings",
+                        year=year,
+                        count=len(meetings),
+                        cap=MAX_MEETINGS_PER_YEAR,
+                    )
+                    meetings = meetings[:MAX_MEETINGS_PER_YEAR]
+
+                for meeting_date, meeting_url in meetings:
+                    try:
+                        m_resp = scraper.get(meeting_url, timeout=60)
+                        m_resp.raise_for_status()
+                    except Exception as e:
+                        self.logger.warning(
+                            "riverside_meeting_fetch_failed",
+                            url=meeting_url,
+                            error=str(e),
+                        )
+                        continue
+                    if len(m_resp.content) > MAX_CLOUDSCRAPER_BYTES:
+                        self.logger.warning(
+                            "riverside_meeting_too_large",
+                            url=meeting_url,
+                            size=len(m_resp.content),
+                            cap=MAX_CLOUDSCRAPER_BYTES,
+                        )
+                        continue
+                    chunks.append(
+                        (SENTINEL_OPEN + meeting_date.isoformat() + SENTINEL_CLOSE).encode()
+                    )
+                    chunks.append(m_resp.content)
+                    chunks.append(SENTINEL_END.encode())
+
+            return b"".join(chunks)
+        finally:
+            scraper.close()
 
     @staticmethod
     def _default_years() -> list[int]:
-        from datetime import UTC, datetime
-
         now = datetime.now(UTC)
         return [now.year, now.year - 1]
 
     @staticmethod
     def _enumerate_meetings(
-        index_html: str, year_url: str
+        index_html: str,
+        year_url: str,
+        base_url: str = PROCEEDS_BASE_URL,
     ) -> list[tuple[date, str]]:
-        """Find every p{year}_{mm}_{dd}.htm in an Apache directory listing."""
+        """Find every p{year}_{mm}_{dd}.htm in an Apache directory listing.
+
+        The ``base_url`` arg pins results to the expected host — a
+        compromised or MITM'd index could inject absolute/protocol-relative
+        hrefs that urljoin would happily resolve to an attacker-controlled
+        URL; reject anything that doesn't start with ``base_url``.
+        """
         out: list[tuple[date, str]] = []
         for href in set(HREF_RE.findall(index_html)):
             m = FILENAME_RE.match(href)
@@ -169,7 +224,10 @@ class RiversideProceedingsScraper(CloudscraperFetchMixin, BaseScraper):
                 meeting_date = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
             except ValueError:
                 continue
-            out.append((meeting_date, urljoin(year_url, href)))
+            resolved = urljoin(year_url, href)
+            if not resolved.startswith(base_url):
+                continue
+            out.append((meeting_date, resolved))
         out.sort(key=lambda x: x[0])
         return out
 
@@ -183,10 +241,11 @@ class RiversideProceedingsScraper(CloudscraperFetchMixin, BaseScraper):
         leads: list[RawLead] = []
         # Split by sentinel; first chunk is anything before the first meeting.
         # Each subsequent chunk starts with " 2024-04-30 -->\n<html>...".
-        chunks = text_full.split("<!-- riverside-meeting: ")
+        chunks = text_full.split(SENTINEL_OPEN)
+        close_marker = SENTINEL_CLOSE.rstrip("\n")
         for chunk in chunks[1:]:
             try:
-                date_str, body = chunk.split(" -->", 1)
+                date_str, body = chunk.split(close_marker, 1)
                 meeting_date = date.fromisoformat(date_str.strip())
             except (ValueError, IndexError):
                 continue

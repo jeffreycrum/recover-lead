@@ -105,6 +105,15 @@ class TestRiversideProceedingsParse:
         leads = scraper.parse(PROCEEDINGS_FIXTURE.read_bytes())
         assert leads == []
 
+    def test_parse_empty_bytes(self):
+        """Zero meeting sentinels → empty list; covers the fetch-all-failed path."""
+        scraper = RiversideProceedingsScraper(
+            county_name="Riverside",
+            source_url="https://media.rivcocob.org/proceeds/",
+            state="CA",
+        )
+        assert scraper.parse(b"") == []
+
     def test_multi_item_lead_uses_first_item_in_case_number(self):
         """When an agenda item lists multiple items ('1850, 1851, & 1852'),
         the case_number is composed from the first item only, but the full
