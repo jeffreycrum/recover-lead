@@ -13,21 +13,23 @@ class BulkSkipTraceRequest(BaseModel):
 class SkipTraceRequest(BaseModel):
     """Per-lookup overrides for POST /leads/{id}/skip-trace.
 
-    Two lookup modes, chosen explicitly by the caller via ``name_only``:
+    Three lookup modes, mutually exclusive, chosen by the caller:
 
-    - **Address mode** (``name_only=False``, default): the effective
-      mailing address (merged from overrides + lead stored data) must
-      satisfy SkipSherpa's rule — street + (city AND state) OR zip.
-      The backend rejects incomplete addresses with 400 instead of
-      silently degrading to a name-only lookup, which for common names
-      produces thousands of false positives and burns credits.
-    - **Name-only mode** (``name_only=True``): the caller has opted in
-      to a name-based lookup. Common when the lead has no property
-      address at all (e.g. many FL counties). Address fields are
-      ignored; provider sees only first/last name.
+    - **Address mode** (default): the effective mailing address (merged
+      from overrides + lead stored data) must satisfy SkipSherpa's rule
+      — street + (city AND state) OR zip. The backend rejects
+      incomplete addresses with 400 instead of silently degrading to a
+      name-only lookup.
+    - **Name-only mode** (``name_only=True``): explicit opt-in to a
+      name-based lookup. Common when the lead has no property address
+      at all (e.g. many FL counties).
+    - **Parcel mode** (``parcel_number`` set): look up by APN / parcel
+      number. Many surplus lists carry a parcel even when the mailing
+      address is incomplete. Provider support varies — SkipSherpa
+      currently ignores unrecognized identifiers, so effectively this
+      mode falls back to name-only until a parcel-aware provider is
+      integrated; surfacing it now sets up the contract.
 
-    String field overrides are used when the lead's scraped data is
-    incomplete and the user has filled in missing parts via the dialog.
     Any field left None/empty falls back to the lead's stored value.
     """
 
@@ -35,6 +37,7 @@ class SkipTraceRequest(BaseModel):
     city: str | None = Field(default=None, max_length=100)
     state: str | None = Field(default=None, max_length=10)
     zip_code: str | None = Field(default=None, max_length=20)
+    parcel_number: str | None = Field(default=None, max_length=100)
     name_only: bool = False
 
 

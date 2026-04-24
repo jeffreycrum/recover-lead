@@ -207,6 +207,8 @@ export class ApiClient {
       city?: string;
       state?: string;
       zip_code?: string;
+      parcel_number?: string;
+      name_only?: boolean;
     },
   ) {
     return this.request<any>(`/leads/${leadId}/skip-trace`, {

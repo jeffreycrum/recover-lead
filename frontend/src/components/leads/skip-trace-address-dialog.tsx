@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type Mode = "address" | "name_only";
+type Mode = "address" | "name_only" | "parcel";
 
 interface SkipTraceAddressDialogProps {
   open: boolean;
@@ -12,6 +12,7 @@ interface SkipTraceAddressDialogProps {
     property_city?: string | null;
     property_state?: string | null;
     property_zip?: string | null;
+    parcel_id?: string | null;
     owner_name?: string | null;
   };
   onClose: () => void;
@@ -20,6 +21,7 @@ interface SkipTraceAddressDialogProps {
     city?: string;
     state?: string;
     zip_code?: string;
+    parcel_number?: string;
     name_only: boolean;
   }) => void;
   isSubmitting?: boolean;
@@ -62,6 +64,7 @@ export function SkipTraceAddressDialog({
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [zip, setZip] = useState("");
+  const [parcel, setParcel] = useState("");
 
   // Re-seed whenever the dialog opens against a different lead so a
   // second attempt doesn't inherit stale values.
@@ -72,18 +75,28 @@ export function SkipTraceAddressDialog({
     setCity((lead.property_city || "").trim());
     setState((lead.property_state || "").trim().toUpperCase());
     setZip((lead.property_zip || "").trim());
+    setParcel((lead.parcel_id || "").trim());
   }, [open, lead]);
 
   const addressValid = isAddressComplete({ street, city, state, zip_code: zip });
   const hasOwnerName = !!(lead.owner_name && lead.owner_name.trim().length > 0);
-  const canSubmit = !isSubmitting && (
-    mode === "address" ? addressValid : hasOwnerName
-  );
+  const parcelValid = parcel.trim().length >= 3;
+  const canSubmit =
+    !isSubmitting &&
+    (mode === "address"
+      ? addressValid
+      : mode === "parcel"
+      ? parcelValid && hasOwnerName
+      : hasOwnerName);
 
   const handleSubmit = () => {
     if (!canSubmit) return;
     if (mode === "name_only") {
       onSubmit({ name_only: true });
+      return;
+    }
+    if (mode === "parcel") {
+      onSubmit({ parcel_number: parcel.trim(), name_only: false });
       return;
     }
     onSubmit({
@@ -105,28 +118,26 @@ export function SkipTraceAddressDialog({
         </DialogHeader>
         <div className="space-y-4 pt-2">
           <div className="inline-flex rounded-full border border-[var(--lt-line)] bg-[var(--lt-surface)] p-1">
-            <button
-              type="button"
-              onClick={() => setMode("address")}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                mode === "address"
-                  ? "bg-[var(--lt-emerald)] text-[#042014]"
-                  : "text-[var(--lt-text-muted)] hover:text-[var(--lt-text)]"
-              }`}
-            >
-              By address
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("name_only")}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                mode === "name_only"
-                  ? "bg-[var(--lt-emerald)] text-[#042014]"
-                  : "text-[var(--lt-text-muted)] hover:text-[var(--lt-text)]"
-              }`}
-            >
-              By name only
-            </button>
+            {(
+              [
+                ["address", "By address"],
+                ["parcel", "By parcel"],
+                ["name_only", "By name only"],
+              ] as const
+            ).map(([val, label]) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => setMode(val)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  mode === val
+                    ? "bg-[var(--lt-emerald)] text-[#042014]"
+                    : "text-[var(--lt-text-muted)] hover:text-[var(--lt-text)]"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
           {mode === "address" ? (
@@ -185,6 +196,39 @@ export function SkipTraceAddressDialog({
                 Provide either (city + state) OR a 5-digit zip — either combination is enough.
               </p>
             </>
+          ) : mode === "parcel" ? (
+            <div className="space-y-3">
+              <p className="text-sm text-[var(--lt-text-muted)]">
+                Look up by parcel / APN. Prefilled from the county data when available — edit if
+                yours is formatted differently.
+              </p>
+              <div className="space-y-2">
+                <Label htmlFor="st-parcel">Parcel / APN</Label>
+                <Input
+                  id="st-parcel"
+                  value={parcel}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setParcel(e.target.value)}
+                  placeholder="105-131-04-00-0000"
+                  className={inputClass}
+                />
+              </div>
+              <div className="rounded-[14px] border border-[var(--lt-line)] bg-[rgba(255,255,255,0.02)] px-3 py-2 text-sm">
+                <span className="text-[var(--lt-text-dim)]">Owner: </span>
+                <span className="font-medium text-[var(--lt-text)]">
+                  {lead.owner_name || "(unknown)"}
+                </span>
+              </div>
+              <p className="text-xs text-[var(--lt-text-dim)]">
+                Current provider (SkipSherpa) doesn't match by parcel natively — this mode records
+                the parcel with the lookup and currently runs a name-based match. A parcel-aware
+                provider will be wired in separately.
+              </p>
+              {!hasOwnerName && (
+                <p className="text-xs text-[#fca5a5]">
+                  No owner name on file — parcel lookup can't run without a name to match.
+                </p>
+              )}
+            </div>
           ) : (
             <div className="space-y-2">
               <p className="text-sm text-[var(--lt-text-muted)]">

@@ -74,6 +74,7 @@ class GeorgiaExcessFundsHtmlScraper(HtmlTableScraper):
         property_address: str | None = None,
         owner_last_known_address: str | None = None,
         sale_date: str | None = None,
+        parcel_id: str | None = None,
         raw_row: list[str],
     ) -> RawLead | None:
         case_number = sanitize_text(case_number) or ""
@@ -86,6 +87,7 @@ class GeorgiaExcessFundsHtmlScraper(HtmlTableScraper):
 
         return RawLead(
             case_number=case_number,
+            parcel_id=sanitize_text(parcel_id),
             owner_name=sanitize_text(owner_name),
             surplus_amount=amount,
             property_address=sanitize_text(property_address),
@@ -116,6 +118,7 @@ class GeorgiaExcessFundsHtmlScraper(HtmlTableScraper):
 
         return self._build_lead(
             case_number=row[1],
+            parcel_id=row[1],
             owner_name=row[2],
             surplus_amount=row[7],
             property_address=row[4],

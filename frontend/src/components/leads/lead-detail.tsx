@@ -120,6 +120,12 @@ export function LeadDetail({ leadId, onClose }: LeadDetailProps) {
                 {lead.property_city}, {lead.property_state} {lead.property_zip}
               </p>
             )}
+            {lead.parcel_id && (
+              <p className="text-[var(--lt-text-muted)]">
+                <span className="text-[var(--lt-text-dim)]">Parcel / APN: </span>
+                <span className="font-mono text-[var(--lt-text)]">{lead.parcel_id}</span>
+              </p>
+            )}
           </div>
         </section>
 

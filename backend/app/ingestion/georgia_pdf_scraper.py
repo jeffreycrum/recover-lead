@@ -121,6 +121,7 @@ class GeorgiaExcessFundsPdfScraper(PdfScraper):
         property_city: str | None = None,
         property_zip: str | None = None,
         sale_date: str | None = None,
+        parcel_id: str | None = None,
         raw_row: list[str],
     ) -> RawLead | None:
         case_number = case_number.strip()
@@ -133,6 +134,7 @@ class GeorgiaExcessFundsPdfScraper(PdfScraper):
 
         return RawLead(
             case_number=case_number,
+            parcel_id=parcel_id.strip() if parcel_id else None,
             owner_name=owner_name.strip() if owner_name else None,
             surplus_amount=amount,
             property_address=property_address.strip() if property_address else None,
@@ -307,6 +309,7 @@ class GeorgiaExcessFundsPdfScraper(PdfScraper):
 
         return self._build_lead(
             case_number=parcel_id,
+            parcel_id=parcel_id,
             owner_name=owner_name,
             surplus_amount=amount,
             sale_date=sale_date,

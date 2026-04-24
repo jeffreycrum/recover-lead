@@ -778,11 +778,15 @@ async def skip_trace(
 
     provider_name = (_settings.skip_trace_provider or "tracerfy").lower().strip()
 
-    if req.name_only:
-        # User explicitly opted into a name-only lookup — common when the
-        # lead has no address at all (e.g. many FL counties). Provider
-        # sees blank address fields so `_build_address_dict` returns None
-        # and the request goes out with name only.
+    parcel_number = (req.parcel_number or "").strip() or (lead.parcel_id or "").strip()
+    # Parcel and name-only modes both skip address validation. Parcel
+    # mode is currently equivalent to name-only at the provider layer
+    # (SkipSherpa has no parcel field), but we record the parcel in the
+    # result's raw_data so a future parcel-aware provider can be wired
+    # in without a schema change.
+    parcel_mode = bool(req.parcel_number and parcel_number)
+
+    if req.name_only or parcel_mode:
         override_street = ""
         override_city = ""
         override_state = ""
@@ -790,8 +794,9 @@ async def skip_trace(
     else:
         # Address mode: merge user overrides with lead data (user wins)
         # and enforce SkipSherpa's completeness rule. Reject 400 if not
-        # satisfied — name-only is an explicit choice, not a silent
-        # fallback that burns credits on thousands of false matches.
+        # satisfied — name-only / parcel are explicit choices, not a
+        # silent fallback that burns credits on thousands of false
+        # matches.
         override_street = (req.street or "").strip() or (lead.property_address or "").strip()
         override_city = (req.city or "").strip() or (lead.property_city or "").strip()
         override_state = (req.state or "").strip() or (lead.property_state or "").strip()
@@ -808,7 +813,8 @@ async def skip_trace(
                     "message": (
                         "Skip trace requires a complete address: street plus "
                         "either (city AND state) or a 5+ digit zip code. Pass "
-                        "name_only=true to do a name-based lookup instead."
+                        "name_only=true or a parcel_number to do a name / "
+                        "parcel lookup instead."
                     ),
                 },
             )
@@ -870,13 +876,26 @@ async def skip_trace(
         for p in lookup_result.persons
     ]
 
+    # Fold the lookup-mode inputs into raw_response so audits / a future
+    # parcel-aware provider can reconstruct what was asked, not just
+    # what was returned.
+    raw_with_request = dict(lookup_result.raw or {})
+    raw_with_request["_request"] = {
+        "mode": "parcel" if parcel_mode else ("name_only" if req.name_only else "address"),
+        "parcel_number": parcel_number if parcel_mode else None,
+        "street": override_street or None,
+        "city": override_city or None,
+        "state": override_state or None,
+        "zip_code": override_zip or None,
+    }
+
     skip_result = SkipTraceResult(
         lead_id=lead_id,
         user_id=user.id,
         provider=provider_name,
         status=status_val,
         persons=persons_data,
-        raw_response=lookup_result.raw,
+        raw_response=raw_with_request,
         hit_count=len(lookup_result.persons),
         cost=cost,
     )
