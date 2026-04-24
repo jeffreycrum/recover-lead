@@ -44,6 +44,13 @@ class TestFormatAddressDict:
         assert _format_address_dict("123 Main St") is None
         assert _format_address_dict([]) is None
 
+    def test_non_string_components_are_coerced(self):
+        """Skip-trace JSON can surface numeric zip codes etc.; coerce before strip."""
+        result = _format_address_dict(
+            {"street": "123 Main St", "city": "Tampa", "state": "FL", "zip_code": 33601}
+        )
+        assert result == "123 Main St, Tampa, FL 33601"
+
 
 class TestResolveClaimantAddress:
     def test_prefers_skip_trace_person_mailing_address(self):

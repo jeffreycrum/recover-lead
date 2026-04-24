@@ -73,10 +73,12 @@ def _format_address_dict(addr: Any) -> str | None:
     """
     if not isinstance(addr, dict):
         return None
-    street = (addr.get("street") or "").strip()
-    city = (addr.get("city") or "").strip()
-    state = (addr.get("state") or "").strip()
-    zip_code = (addr.get("zip_code") or addr.get("zip") or "").strip()
+    # Coerce to str before strip — external JSON can surface numeric zips
+    # or other non-string values; `.strip()` on an int would raise.
+    street = str(addr.get("street") or "").strip()
+    city = str(addr.get("city") or "").strip()
+    state = str(addr.get("state") or "").strip()
+    zip_code = str(addr.get("zip_code") or addr.get("zip") or "").strip()
     if not (street or city or state or zip_code):
         return None
     city_state_zip = " ".join(p for p in [f"{city}," if city else "", state, zip_code] if p).strip()
