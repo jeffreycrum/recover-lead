@@ -7,6 +7,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { LeadScoreBadge } from "./lead-score-badge";
 import { SkipTraceResults } from "./skip-trace-results";
+import { SkipTraceAddressDialog } from "./skip-trace-address-dialog";
 import { ActivityTimeline } from "./activity-timeline";
 import { DealOutcomeDialog } from "./deal-outcome-dialog";
 import { EyebrowTag, MonoCell, StatusPill } from "@/components/landing-chrome";
@@ -202,7 +203,11 @@ export function LeadDetail({ leadId, onClose }: LeadDetailProps) {
         </div>
 
         {isClaimed && (
-          <SkipTraceSection leadId={leadId} skipTraceResults={lead.skip_trace_results} />
+          <SkipTraceSection
+            leadId={leadId}
+            lead={lead}
+            skipTraceResults={lead.skip_trace_results}
+          />
         )}
 
         {isClaimed && <ActivityTimeline leadId={leadId} />}
@@ -221,12 +226,15 @@ export function LeadDetail({ leadId, onClose }: LeadDetailProps) {
 
 function SkipTraceSection({
   leadId,
+  lead,
   skipTraceResults,
 }: {
   leadId: string;
+  lead: any;
   skipTraceResults?: any[];
 }) {
   const qc = useQueryClient();
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const { data: results = [] } = useQuery<any[]>({
     queryKey: ["skip-trace", leadId],
@@ -236,10 +244,17 @@ function SkipTraceSection({
   });
 
   const mutation = useMutation({
-    mutationFn: () => api.skipTraceLead(leadId),
+    mutationFn: (payload: {
+      street?: string;
+      city?: string;
+      state?: string;
+      zip_code?: string;
+      name_only: boolean;
+    }) => api.skipTraceLead(leadId, payload),
     onSuccess: (data) => {
       qc.setQueryData(["skip-trace", leadId], (old: any[] = []) => [data, ...old]);
       qc.invalidateQueries({ queryKey: ["leads", leadId] });
+      setDialogOpen(false);
     },
   });
 
@@ -260,7 +275,7 @@ function SkipTraceSection({
           <Search size={14} className="text-[var(--lt-text-dim)]" />
         </div>
         <button
-          onClick={() => mutation.mutate()}
+          onClick={() => setDialogOpen(true)}
           disabled={mutation.isPending}
           className={primaryButtonClass}
         >
@@ -269,7 +284,7 @@ function SkipTraceSection({
               <Loader2 size={12} className="animate-spin" /> Running...
             </span>
           ) : results.length > 0 ? (
-            "Re-run Skip Trace"
+            "Run another Skip Trace"
           ) : (
             "Run Skip Trace"
           )}
@@ -279,6 +294,13 @@ function SkipTraceSection({
         <p className="text-xs text-[#fca5a5]">{errorMessage}</p>
       )}
       <SkipTraceResults results={results} />
+      <SkipTraceAddressDialog
+        open={dialogOpen}
+        lead={lead}
+        onClose={() => setDialogOpen(false)}
+        onSubmit={(payload) => mutation.mutate(payload)}
+        isSubmitting={mutation.isPending}
+      />
     </div>
   );
 }

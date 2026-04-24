@@ -43,7 +43,7 @@ from app.schemas.lead import (
     SkipTraceResultSummary,
     UserLeadResponse,
 )
-from app.schemas.skip_trace import BulkSkipTraceRequest
+from app.schemas.skip_trace import BulkSkipTraceRequest, SkipTraceRequest
 from app.services.lead_service import (
     claim_lead,
     record_activity,
@@ -716,11 +716,18 @@ def _is_cache_hit(row) -> bool:
 @router.post("/{lead_id}/skip-trace", dependencies=[Depends(require_rate_limit)])
 async def skip_trace(
     lead_id: uuid.UUID,
+    req: SkipTraceRequest | None = None,
     session: AsyncSession = Depends(get_async_session),
     user: User = Depends(get_current_user),
 ) -> dict:
-    """Run real-time skip trace for a lead via Tracerfy."""
-    from datetime import timedelta
+    """Run real-time skip trace for a lead.
+
+    Optional request body (``SkipTraceRequest``) lets the caller override
+    individual address fields — used when the scraped address is
+    incomplete and the user has supplied missing city/state/zip via the
+    frontend dialog. Any field left None falls back to the lead's
+    stored value.
+    """
     from decimal import Decimal
 
     from app.models.skip_trace import SkipTraceResult
@@ -735,6 +742,11 @@ async def skip_trace(
     from app.services.skip_trace import SkipTraceLookupRequest
     from app.services.skip_trace.factory import get_skip_trace_provider
 
+    # Pydantic coerces None from a missing body into the default — but when
+    # FastAPI receives "{}" we get an empty SkipTraceRequest object. Both
+    # cases should behave identically: no overrides.
+    req = req or SkipTraceRequest()
+
     # Verify claimed
     result = await session.execute(
         select(UserLead).where(
@@ -745,29 +757,11 @@ async def skip_trace(
     if not result.scalar_one_or_none():
         raise NotFoundError("Claimed lead")
 
-    # Block re-trace if any claimant ran it within the last 7 days
-    from datetime import UTC
-    from datetime import datetime as _dt
-    week_ago = _dt.now(UTC).replace(tzinfo=None) - timedelta(days=7)
-    recent = await session.execute(
-        select(SkipTraceResult.id)
-        .where(
-            SkipTraceResult.lead_id == lead_id,
-            SkipTraceResult.created_at >= week_ago,
-        )
-        .limit(1)
-    )
-    if recent.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail={
-                "code": "SKIP_TRACE_COOLDOWN",
-                "message": (
-                    "This lead was traced in the last 7 days. "
-                    "Results are shared with all claimants."
-                ),
-            },
-        )
+    # No per-lead cooldown — a single user may want to run multiple
+    # lookups (e.g. address mode + name-only) to gather different
+    # results, and the credit reservation below already prevents
+    # runaway cost. Past results for this lead remain visible in the
+    # lead-detail response so users can see what's been tried.
 
     # Reserve credit
     reservation = await reserve_usage(session, user.id, "skip_trace", count=1)
@@ -783,16 +777,52 @@ async def skip_trace(
     from app.config import settings as _settings
 
     provider_name = (_settings.skip_trace_provider or "tracerfy").lower().strip()
+
+    if req.name_only:
+        # User explicitly opted into a name-only lookup — common when the
+        # lead has no address at all (e.g. many FL counties). Provider
+        # sees blank address fields so `_build_address_dict` returns None
+        # and the request goes out with name only.
+        override_street = ""
+        override_city = ""
+        override_state = ""
+        override_zip = ""
+    else:
+        # Address mode: merge user overrides with lead data (user wins)
+        # and enforce SkipSherpa's completeness rule. Reject 400 if not
+        # satisfied — name-only is an explicit choice, not a silent
+        # fallback that burns credits on thousands of false matches.
+        override_street = (req.street or "").strip() or (lead.property_address or "").strip()
+        override_city = (req.city or "").strip() or (lead.property_city or "").strip()
+        override_state = (req.state or "").strip() or (lead.property_state or "").strip()
+        override_zip = (req.zip_code or "").strip() or (lead.property_zip or "").strip()
+
+        has_city_state = bool(override_city) and bool(override_state)
+        has_zip = len(override_zip) >= 5
+        if not (len(override_street) >= 3 and (has_city_state or has_zip)):
+            release_reservation(user.id, "skip_trace", 1, reservation.period_start_iso)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "ADDRESS_INCOMPLETE",
+                    "message": (
+                        "Skip trace requires a complete address: street plus "
+                        "either (city AND state) or a 5+ digit zip code. Pass "
+                        "name_only=true to do a name-based lookup instead."
+                    ),
+                },
+            )
+
     try:
         provider = get_skip_trace_provider()
         lookup_result = await provider.lookup(
             SkipTraceLookupRequest(
                 first_name=(lead.owner_name or "").split()[0] if lead.owner_name else "",
                 last_name=(lead.owner_name or "").split()[-1] if lead.owner_name else "",
-                address=lead.property_address or "",
-                city=lead.property_city or "",
-                state=lead.property_state or "FL",
-                zip_code=lead.property_zip or "",
+                address=override_street,
+                city=override_city,
+                state=override_state,
+                zip_code=override_zip,
                 find_owner=True,
             )
         )

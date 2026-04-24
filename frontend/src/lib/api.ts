@@ -200,8 +200,19 @@ export class ApiClient {
   }
 
   // Skip Trace
-  skipTraceLead(leadId: string) {
-    return this.request<any>(`/leads/${leadId}/skip-trace`, { method: "POST" });
+  skipTraceLead(
+    leadId: string,
+    override?: {
+      street?: string;
+      city?: string;
+      state?: string;
+      zip_code?: string;
+    },
+  ) {
+    return this.request<any>(`/leads/${leadId}/skip-trace`, {
+      method: "POST",
+      body: override ? JSON.stringify(override) : undefined,
+    });
   }
 
   bulkSkipTrace(leadIds: string[]) {
