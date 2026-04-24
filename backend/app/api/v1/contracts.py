@@ -290,6 +290,10 @@ async def update_contract(
         contract.status = req.status
 
     await session.flush()
+    # `updated_at` has `onupdate=func.now()`, so SQLAlchemy expires it after
+    # flush. In async mode, touching an expired attribute triggers a lazy
+    # DB load that crashes with MissingGreenlet. Refresh it explicitly.
+    await session.refresh(contract, ["updated_at"])
 
     return ContractResponse(
         id=contract.id,
