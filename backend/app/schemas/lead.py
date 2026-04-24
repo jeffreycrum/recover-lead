@@ -14,6 +14,7 @@ class LeadBrowseResponse(BaseModel):
     id: uuid.UUID
     county_name: str
     case_number: str
+    parcel_id: str | None = None
     property_address: str | None
     property_city: str | None
     property_state: str | None
@@ -94,6 +95,7 @@ class MyLeadResponse(BaseModel):
     # Inline lead fields
     county_name: str
     case_number: str
+    parcel_id: str | None = None
     property_address: str | None
     property_city: str | None
     surplus_amount: Decimal
