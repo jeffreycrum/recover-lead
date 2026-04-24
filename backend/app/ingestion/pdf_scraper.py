@@ -193,6 +193,7 @@ class PdfScraper(BaseScraper):
         owner_col = col_map.get("owner_name", 1)
         surplus_col = col_map.get("surplus_amount", 2)
         address_col = col_map.get("property_address", 3)
+        parcel_col = col_map.get("parcel_id")
         skip_rows_containing = self.config.get("skip_rows_containing", [])
 
         try:
@@ -214,6 +215,9 @@ class PdfScraper(BaseScraper):
                 if address_col is not None and address_col < len(row)
                 else None
             )
+            parcel_id: str | None = None
+            if parcel_col is not None and parcel_col < len(row):
+                parcel_id = (row[parcel_col] or "").strip() or None
 
             surplus_amount = self._parse_amount(surplus_str)
 
@@ -223,6 +227,7 @@ class PdfScraper(BaseScraper):
             return RawLead(
                 case_number=case_number,
                 owner_name=owner_name,
+                parcel_id=parcel_id,
                 surplus_amount=surplus_amount,
                 property_address=property_address,
                 property_state=self.state,
