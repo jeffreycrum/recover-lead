@@ -48,13 +48,21 @@ export function LeadsPage() {
   );
   const { data: counties } = useCounties();
 
+  // Hide counties without any leads from the dropdowns. The full list
+  // (including pending counties with 0 leads) lives on the Counties
+  // page where the user can request data; the Browse Leads filter
+  // should only surface counties that actually contribute leads.
+  const integratedCounties = (counties ?? []).filter(
+    (c: any) => (c.lead_count ?? 0) > 0,
+  );
+
   const allStates = Array.from(
-    new Set((counties ?? []).map((c: any) => c.state as string))
+    new Set(integratedCounties.map((c: any) => c.state as string))
   ).sort();
 
   const visibleCounties = filters.property_state
-    ? (counties ?? []).filter((c: any) => c.state === filters.property_state)
-    : (counties ?? []);
+    ? integratedCounties.filter((c: any) => c.state === filters.property_state)
+    : integratedCounties;
   const claimMutation = useClaimLead();
   const selectTriggerClass =
     "h-10 min-w-[160px] rounded-full border-[var(--lt-line)] bg-[var(--lt-surface)] px-4 text-[var(--lt-text)] hover:bg-[var(--lt-surface-2)]";
