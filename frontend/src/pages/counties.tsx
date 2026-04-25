@@ -16,16 +16,23 @@ import {
 export function CountiesPage() {
   const allValue = "__all__";
   const [stateFilter, setStateFilter] = useState("");
-  const [hideEmpty, setHideEmpty] = useState(true);
   const { data: counties, isLoading } = useCounties();
 
+  // Only surface counties we actually scrape (lead_count > 0). The DB
+  // still carries pending counties for the future request-data flow,
+  // but they create UI noise here — every state seeded with all 67/58
+  // counties shows mostly zeros.
+  const integratedCounties = (counties ?? []).filter(
+    (c: any) => (c.lead_count ?? 0) > 0,
+  );
+
   const allStates = Array.from(
-    new Set((counties ?? []).map((c: any) => c.state as string))
+    new Set(integratedCounties.map((c: any) => c.state as string))
   ).sort();
 
-  const visibleCounties = (counties ?? [])
-    .filter((c: any) => !stateFilter || c.state === stateFilter)
-    .filter((c: any) => !hideEmpty || (c.lead_count ?? 0) > 0);
+  const visibleCounties = integratedCounties.filter(
+    (c: any) => !stateFilter || c.state === stateFilter,
+  );
 
   const stateGroups = visibleCounties.reduce<Record<string, any[]>>((groups, county: any) => {
     const key = county.state || "Unknown";
@@ -47,7 +54,7 @@ export function CountiesPage() {
           Counties
         </h1>
         <p className="mt-2 text-[var(--lt-text-muted)]">
-          All counties with surplus fund data and request channels
+          Counties currently producing surplus-fund leads
         </p>
       </div>
 
@@ -75,15 +82,6 @@ export function CountiesPage() {
               ))}
             </SelectContent>
           </Select>
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[var(--lt-line)] bg-[var(--lt-surface)] px-4 py-2 text-sm text-[var(--lt-text)] hover:bg-[var(--lt-surface-2)]">
-            <input
-              type="checkbox"
-              checked={hideEmpty}
-              onChange={(e) => setHideEmpty(e.target.checked)}
-              className="h-4 w-4 accent-[var(--lt-emerald)]"
-            />
-            Hide counties with no leads
-          </label>
         </div>
       </ProductCard>
 
@@ -176,16 +174,12 @@ export function CountiesPage() {
           <EmptyState
             icon={<Map size={48} />}
             title={
-              hideEmpty && (counties ?? []).length > 0
-                ? "No counties with leads match this filter"
-                : stateFilter
-                ? `No counties found for ${stateFilter}`
-                : "No counties available"
+              stateFilter
+                ? `No counties producing leads in ${stateFilter} yet`
+                : "No counties producing leads yet"
             }
             description={
-              hideEmpty && (counties ?? []).length > 0
-                ? "Uncheck \"Hide counties with no leads\" to see pending counties."
-                : stateFilter
+              stateFilter
                 ? "Try selecting a different state."
                 : "County data is being loaded. Check back shortly."
             }
